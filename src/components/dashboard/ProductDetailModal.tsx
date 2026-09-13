@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  Archive,
   Boxes,
   CheckCircle2,
   Eye,
@@ -11,6 +12,7 @@ import {
   Pencil,
   Plus,
   ShoppingBag,
+  Trash2,
   X,
 } from "lucide-react";
 import SelectDropdown from "./SelectDropdown";
@@ -23,13 +25,20 @@ export default function ProductDetailModal({
   product,
   onClose,
   onEdit,
+  onArchiveToggle,
+  onDelete,
+  onStockApplied,
 }: {
   product: Product;
   onClose: () => void;
   onEdit: () => void;
+  onArchiveToggle: () => void;
+  onDelete: () => void;
+  onStockApplied: (type: string, quantity: number) => void;
 }) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Apercu");
   const [stockModalOpen, setStockModalOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [stockMode, setStockMode] = useState<"local" | "drop" | "supplier">("local");
   const [platform, setPlatform] = useState(adPlatforms[0]);
 
@@ -47,7 +56,13 @@ export default function ProductDetailModal({
               </h2>
               <p className="font-mono text-[12px] text-gray-400">{product.sku}</p>
               <div className="mt-1.5 flex items-center gap-1.5">
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10.5px] font-medium text-emerald-600">
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10.5px] font-medium ${
+                    product.status === "Actif"
+                      ? "bg-emerald-50 text-emerald-600"
+                      : "bg-gray-100 text-gray-500"
+                  }`}
+                >
                   {product.status}
                 </span>
                 <span className="flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10.5px] font-medium text-blue-600">
@@ -71,13 +86,40 @@ export default function ProductDetailModal({
             >
               <Boxes className="h-4 w-4" />
             </button>
-            <button
-              disabled
-              title="Bientot disponible"
-              className="cursor-not-allowed rounded-lg border border-gray-200 p-2 text-gray-300"
-            >
-              <MoreVertical className="h-4 w-4" />
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setMenuOpen((v) => !v)}
+                className="rounded-lg border border-gray-200 p-2 text-gray-500 hover:bg-gray-50"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 top-full z-20 mt-1 w-52 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onArchiveToggle();
+                    }}
+                    className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-gray-700 hover:bg-gray-50"
+                  >
+                    <Archive className="h-3.5 w-3.5 text-gray-400" />
+                    {product.status === "Actif" ? "Archiver" : "Reactiver"}
+                  </button>
+                  <div className="mt-1 border-t border-gray-100 pt-1">
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onDelete();
+                      }}
+                      className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Supprimer le produit
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
             <button
               onClick={onClose}
               className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
@@ -410,7 +452,10 @@ export default function ProductDetailModal({
         <AdjustStockModal
           product={product}
           onClose={() => setStockModalOpen(false)}
-          onApply={() => setStockModalOpen(false)}
+          onApply={(type, quantity) => {
+            onStockApplied(type, quantity);
+            setStockModalOpen(false);
+          }}
         />
       )}
     </div>

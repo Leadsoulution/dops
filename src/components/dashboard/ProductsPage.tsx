@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  AlertCircle,
   Boxes,
   CheckCircle2,
   MoreVertical,
@@ -12,9 +13,11 @@ import {
   SlidersHorizontal,
   TrendingDown,
   Loader2,
+  X,
 } from "lucide-react";
 import SelectDropdown from "./SelectDropdown";
 import CreateProductModal from "./CreateProductModal";
+import EditProductModal from "./EditProductModal";
 import type { StockProduct } from "@/lib/supabase/products";
 import ProductDetailModal from "./ProductDetailModal";
 import AdjustStockModal from "./AdjustStockModal";
@@ -65,8 +68,13 @@ export default function ProductsPage() {
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const [stockProduct, setStockProduct] = useState<Product | null>(null);
   const [openMenuSku, setOpenMenuSku] = useState<string | null>(null);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [rawProducts, setRawProducts] = useState<StockProduct[]>([]);
+  const [editProduct, setEditProduct] = useState<StockProduct | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const products = rawProducts.map(toProduct);
+  const rawBySku = new Map(rawProducts.map((p) => [p.ref, p]));
 
   useEffect(() => {
     let cancelled = false;
@@ -74,7 +82,7 @@ export default function ProductsPage() {
       .then((res) => res.json())
       .then((data) => {
         if (cancelled || data.error) return;
-        setProducts((data.products as StockProduct[]).map(toProduct));
+        setRawProducts(data.products as StockProduct[]);
       })
       .catch(() => {
         /* Le catalogue reste vide, l'ecran affiche l'etat "aucun produit". */
@@ -86,6 +94,62 @@ export default function ProductsPage() {
       cancelled = true;
     };
   }, []);
+
+  function replaceProduct(updated: StockProduct) {
+    setRawProducts((prev) =>
+      prev.map((p) => (p.id === updated.id ? updated : p))
+    );
+  }
+
+  async function patchProduct(id: string, changes: Record<string, unknown>) {
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/products/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(changes),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      replaceProduct(data.product);
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : "Enregistrement impossible."
+      );
+    }
+  }
+
+  async function removeProduct(id: string) {
+    setActionError(null);
+    const previous = rawProducts;
+    setRawProducts((prev) => prev.filter((p) => p.id !== id));
+    try {
+      const res = await fetch(`/api/products/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error((await res.json()).error);
+    } catch (err) {
+      setRawProducts(previous);
+      setActionError(
+        err instanceof Error ? err.message : "Suppression impossible."
+      );
+    }
+  }
+
+  /**
+   * Applique un mouvement de stock. Entree ajoute, sortie retire,
+   * ajustement fixe la valeur : c'est la difference entre corriger un
+   * inventaire et enregistrer une reception.
+   */
+  function applyStockMovement(sku: string, type: string, qty: number) {
+    const raw = rawBySku.get(sku);
+    if (!raw) return;
+    const next =
+      type === "Entree"
+        ? raw.quantity + qty
+        : type === "Sortie"
+          ? Math.max(0, raw.quantity - qty)
+          : qty;
+    void patchProduct(raw.id, { quantity: next });
+  }
 
   const query = searchQuery.trim().toLowerCase();
   const visibleProducts = query
@@ -126,6 +190,21 @@ export default function ProductsPage() {
           Nouveau produit
         </button>
       </div>
+
+      {actionError && (
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+            <p className="text-[13px] text-red-700">{actionError}</p>
+          </div>
+          <button
+            onClick={() => setActionError(null)}
+            className="rounded-md p-0.5 text-red-400 hover:text-red-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white p-3.5">
@@ -391,11 +470,21 @@ export default function ProductsPage() {
         </>
       )}
 
+      {editProduct && (
+        <EditProductModal
+          product={editProduct}
+          onClose={() => setEditProduct(null)}
+          onSaved={(product) => {
+            replaceProduct(product);
+            setEditProduct(null);
+          }}
+        />
+      )}
       {createOpen && (
         <CreateProductModal
           onClose={() => setCreateOpen(false)}
           onCreated={(product) => {
-            setProducts((prev) => [toProduct(product), ...prev]);
+            setRawProducts((prev) => [product, ...prev]);
             setCreateOpen(false);
           }}
         />
@@ -404,14 +493,37 @@ export default function ProductsPage() {
         <ProductDetailModal
           product={detailProduct}
           onClose={() => setDetailProduct(null)}
-          onEdit={() => setDetailProduct(null)}
+          onEdit={() => {
+            const raw = rawBySku.get(detailProduct.sku);
+            setDetailProduct(null);
+            if (raw) setEditProduct(raw);
+          }}
+          onArchiveToggle={() => {
+            const raw = rawBySku.get(detailProduct.sku);
+            if (!raw) return;
+            void patchProduct(raw.id, {
+              status: raw.status === "Actif" ? "Archive" : "Actif",
+            });
+            setDetailProduct(null);
+          }}
+          onDelete={() => {
+            const raw = rawBySku.get(detailProduct.sku);
+            setDetailProduct(null);
+            if (raw) void removeProduct(raw.id);
+          }}
+          onStockApplied={(type, qty) =>
+            applyStockMovement(detailProduct.sku, type, qty)
+          }
         />
       )}
       {stockProduct && (
         <AdjustStockModal
           product={stockProduct}
           onClose={() => setStockProduct(null)}
-          onApply={() => setStockProduct(null)}
+          onApply={(type, qty) => {
+            applyStockMovement(stockProduct.sku, type, qty);
+            setStockProduct(null);
+          }}
         />
       )}
     </div>
