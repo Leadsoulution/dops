@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { AlertCircle, Loader2, Package, X } from "lucide-react";
+import Image from "next/image";
+import { AlertCircle, ImagePlus, Loader2, Package, X } from "lucide-react";
+import MediaPickerModal from "./MediaPickerModal";
 import SelectDropdown from "./SelectDropdown";
 import { suppliers } from "./products-data";
 import type { StockProduct } from "@/lib/supabase/products";
@@ -27,6 +29,8 @@ export default function EditProductModal({
     String(product.reorderThreshold)
   );
   const [status, setStatus] = useState<"Actif" | "Archive">(product.status);
+  const [image, setImage] = useState<string | null>(product.image ?? null);
+  const [mediaOpen, setMediaOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,6 +60,8 @@ export default function EditProductModal({
           quantity: Number(quantity) || 0,
           reorderThreshold: Number(reorderThreshold) || 0,
           status,
+          // Chaine vide volontaire : elle efface l'image en base.
+          image: image ?? "",
         }),
       });
       const data = await res.json();
@@ -98,6 +104,45 @@ export default function EditProductModal({
         </div>
 
         <div className="space-y-3 px-5 py-4">
+          <div>
+            <label className="mb-1 block text-[12.5px] text-gray-600">Image</label>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setMediaOpen(true)}
+                className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100"
+              >
+                {image ? (
+                  <Image
+                    src={image}
+                    alt="Image du produit"
+                    fill
+                    sizes="80px"
+                    className="object-contain"
+                    unoptimized
+                  />
+                ) : (
+                  <ImagePlus className="h-5 w-5 text-gray-400" />
+                )}
+              </button>
+              <div className="min-w-0">
+                <button
+                  onClick={() => setMediaOpen(true)}
+                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[12.5px] font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  {image ? "Changer l'image" : "Choisir une image"}
+                </button>
+                {image && (
+                  <button
+                    onClick={() => setImage(null)}
+                    className="ml-2 rounded-lg px-2 py-1.5 text-[12.5px] font-medium text-red-600 hover:bg-red-50"
+                  >
+                    Retirer
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div>
             <label className="mb-1 block text-[12.5px] text-gray-600">Nom</label>
             <input
@@ -232,6 +277,16 @@ export default function EditProductModal({
           </button>
         </div>
       </div>
+
+      {mediaOpen && (
+        <MediaPickerModal
+          onClose={() => setMediaOpen(false)}
+          onSelect={(url) => {
+            setImage(url);
+            setMediaOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -13,6 +13,8 @@ export type Product = {
   seuilReappro: number;
   dernierMouvement: string;
   status: ProductStatus;
+  /** URL publique de l'image principale, si le produit en a une. */
+  image?: string;
 };
 
 function margin(price: number, cost: number) {

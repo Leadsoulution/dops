@@ -15,6 +15,7 @@ import {
   Loader2,
   X,
 } from "lucide-react";
+import Image from "next/image";
 import SelectDropdown from "./SelectDropdown";
 import CreateProductModal from "./CreateProductModal";
 import EditProductModal from "./EditProductModal";
@@ -57,6 +58,7 @@ function toProduct(item: StockProduct): Product {
         }).format(new Date(item.updatedAt))
       : "",
     status: item.status,
+    image: item.image,
   };
 }
 
@@ -64,6 +66,8 @@ export default function ProductsPage() {
   const [activeTab, setActiveTab] = useState<"catalogue" | "imports">("catalogue");
   const [searchQuery, setSearchQuery] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [stockFilter, setStockFilter] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const [stockProduct, setStockProduct] = useState<Product | null>(null);
@@ -152,13 +156,28 @@ export default function ProductsPage() {
   }
 
   const query = searchQuery.trim().toLowerCase();
-  const visibleProducts = query
-    ? products.filter(
-        (p) =>
-          p.name.toLowerCase().includes(query) ||
-          p.sku.toLowerCase().includes(query)
-      )
-    : products;
+
+  /**
+   * "Rupture" tient a zero disponible, "Stock bas" au passage sous le
+   * seuil de reapprovisionnement du produit : le seuil est propre a
+   * chaque produit, un nombre fixe ne voudrait rien dire.
+   */
+  function matchesStock(p: Product) {
+    if (!stockFilter) return true;
+    if (stockFilter === "Rupture") return p.disponible === 0;
+    if (stockFilter === "Stock bas")
+      return p.disponible > 0 && p.disponible <= p.seuilReappro;
+    return p.disponible > p.seuilReappro;
+  }
+
+  const visibleProducts = products.filter(
+    (p) =>
+      (!query ||
+        p.name.toLowerCase().includes(query) ||
+        p.sku.toLowerCase().includes(query)) &&
+      (!statusFilter || p.status === statusFilter) &&
+      matchesStock(p)
+  );
 
   const totalProducts = products.length;
   const activeProducts = products.filter((p) => p.status === "Actif").length;
@@ -308,11 +327,27 @@ export default function ProductsPage() {
               <SelectDropdown
                 pinnedLabel="Tous Statut"
                 options={productStatusOptions}
+                value={statusFilter ?? undefined}
+                onSelect={(v) => setStatusFilter(v)}
               />
               <SelectDropdown
                 pinnedLabel="Tous Stock"
                 options={productStockOptions}
+                value={stockFilter ?? undefined}
+                onSelect={(v) => setStockFilter(v)}
               />
+              {(statusFilter || stockFilter) && (
+                <button
+                  onClick={() => {
+                    setStatusFilter(null);
+                    setStockFilter(null);
+                  }}
+                  className="flex w-fit items-center gap-1 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Reinitialiser les filtres
+                </button>
+              )}
             </div>
           )}
 
@@ -376,7 +411,20 @@ export default function ProductsPage() {
                       >
                         <td className="px-5 py-3">
                           <div className="flex items-center gap-2.5">
-                            <div className="h-8 w-8 shrink-0 rounded-md bg-gray-100" />
+                            {product.image ? (
+                              <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-md border border-gray-100 bg-gray-50">
+                                <Image
+                                  src={product.image}
+                                  alt=""
+                                  fill
+                                  sizes="32px"
+                                  className="object-cover"
+                                  unoptimized
+                                />
+                              </div>
+                            ) : (
+                              <div className="h-8 w-8 shrink-0 rounded-md bg-gray-100" />
+                            )}
                             <span className="font-medium text-gray-800">
                               {product.name}
                             </span>
@@ -514,6 +562,14 @@ export default function ProductsPage() {
           onStockApplied={(type, qty) =>
             applyStockMovement(detailProduct.sku, type, qty)
           }
+          onImageChange={(url) => {
+            const raw = rawBySku.get(detailProduct.sku);
+            if (!raw) return;
+            void patchProduct(raw.id, { image: url });
+            // La fiche affiche l'image d'un objet fige a son ouverture :
+            // la remplacer sur place evite de la rouvrir pour la voir.
+            setDetailProduct({ ...detailProduct, image: url || undefined });
+          }}
         />
       )}
       {stockProduct && (

@@ -15,8 +15,10 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import Image from "next/image";
 import SelectDropdown from "./SelectDropdown";
 import AdjustStockModal from "./AdjustStockModal";
+import MediaPickerModal from "./MediaPickerModal";
 import { adPlatforms, productMargin, type Product } from "./products-data";
 
 const tabs = ["Apercu", "Variantes", "Media", "Ads", "Stock distant"] as const;
@@ -28,6 +30,7 @@ export default function ProductDetailModal({
   onArchiveToggle,
   onDelete,
   onStockApplied,
+  onImageChange,
 }: {
   product: Product;
   onClose: () => void;
@@ -35,10 +38,12 @@ export default function ProductDetailModal({
   onArchiveToggle: () => void;
   onDelete: () => void;
   onStockApplied: (type: string, quantity: number) => void;
+  onImageChange: (url: string) => void;
 }) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Apercu");
   const [stockModalOpen, setStockModalOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mediaOpen, setMediaOpen] = useState(false);
   const [stockMode, setStockMode] = useState<"local" | "drop" | "supplier">("local");
   const [platform, setPlatform] = useState(adPlatforms[0]);
 
@@ -306,18 +311,52 @@ export default function ProductDetailModal({
                 Definissez l&apos;image principale ou gerez la galerie du
                 produit.
               </p>
-              <button className="flex w-full flex-col items-center gap-2 rounded-lg border border-dashed border-gray-300 px-4 py-8 text-center hover:bg-gray-50">
-                <ImagePlus className="h-5 w-5 text-gray-400" />
-                <span className="text-[12.5px] font-medium text-gray-600">
-                  Ajouter une image
-                </span>
-                <span className="text-[11px] text-gray-400">
-                  PNG, JPG ou WEBP &middot; 3 images max avec image principale
-                </span>
-              </button>
-              <p className="mt-3 text-center text-[12px] text-gray-400">
-                Aucune image produit pour le moment.
-              </p>
+              {product.image ? (
+                <div className="flex flex-col items-center gap-3">
+                  <div className="relative h-48 w-48 overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+                    <Image
+                      src={product.image}
+                      alt={product.name}
+                      fill
+                      sizes="192px"
+                      className="object-contain"
+                      unoptimized
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setMediaOpen(true)}
+                      className="rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-[12.5px] font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      Changer l&apos;image
+                    </button>
+                    <button
+                      onClick={() => onImageChange("")}
+                      className="rounded-lg px-3 py-2 text-[12.5px] font-medium text-red-600 hover:bg-red-50"
+                    >
+                      Retirer
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setMediaOpen(true)}
+                    className="flex w-full flex-col items-center gap-2 rounded-lg border border-dashed border-gray-300 px-4 py-8 text-center hover:bg-gray-50"
+                  >
+                    <ImagePlus className="h-5 w-5 text-gray-400" />
+                    <span className="text-[12.5px] font-medium text-gray-600">
+                      Ajouter une image
+                    </span>
+                    <span className="text-[11px] text-gray-400">
+                      PNG, JPG, WEBP, GIF ou AVIF &middot; 5 Mo maximum
+                    </span>
+                  </button>
+                  <p className="mt-3 text-center text-[12px] text-gray-400">
+                    Aucune image produit pour le moment.
+                  </p>
+                </>
+              )}
             </div>
           )}
 
@@ -393,7 +432,11 @@ export default function ProductDetailModal({
                   className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-800 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none"
                 />
               </div>
-              <button className="mt-3 flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-[12.5px] font-medium text-white hover:bg-gray-800">
+              <button
+                disabled
+                title="Bientot disponible"
+                className="mt-3 flex cursor-not-allowed items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-[12.5px] font-medium text-gray-400 opacity-60"
+              >
                 <Plus className="h-3.5 w-3.5" />
                 Ajouter
               </button>
@@ -455,6 +498,16 @@ export default function ProductDetailModal({
           onApply={(type, quantity) => {
             onStockApplied(type, quantity);
             setStockModalOpen(false);
+          }}
+        />
+      )}
+
+      {mediaOpen && (
+        <MediaPickerModal
+          onClose={() => setMediaOpen(false)}
+          onSelect={(url) => {
+            onImageChange(url);
+            setMediaOpen(false);
           }}
         />
       )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Image from "next/image";
 import { AlertCircle, ImagePlus, Loader2, Package, Plus, Trash2, X } from "lucide-react";
 import SelectDropdown from "./SelectDropdown";
 import Toggle from "./Toggle";
@@ -101,6 +102,7 @@ export default function CreateProductModal({
           quantity: Number(quantity) || 0,
           reorderThreshold: Number(reorderThreshold) || 0,
           status,
+          image: image ?? undefined,
         }),
       });
       const data = await res.json();
@@ -147,12 +149,23 @@ export default function CreateProductModal({
               className="flex w-full flex-col items-center gap-2 rounded-lg border border-dashed border-gray-300 px-4 py-6 text-center hover:bg-gray-50"
             >
               {image ? (
-                <div className="h-12 w-12 rounded-md bg-gray-100" />
+                <div className="relative h-20 w-20 overflow-hidden rounded-md border border-gray-200 bg-gray-50">
+                  <Image
+                    src={image}
+                    alt="Image du produit"
+                    fill
+                    sizes="80px"
+                    className="object-contain"
+                    unoptimized
+                  />
+                </div>
               ) : (
                 <ImagePlus className="h-5 w-5 text-gray-400" />
               )}
               <p className="text-[12.5px] text-gray-600">
-                {image ?? "Selectionnez des images depuis la bibliotheque ou televersez une image principale"}
+                {image
+                  ? "Cliquez pour changer l'image"
+                  : "Importez une image depuis votre ordinateur ou choisissez-en une dans la bibliotheque"}
               </p>
             </button>
           </div>
@@ -421,7 +434,10 @@ export default function CreateProductModal({
       {mediaOpen && (
         <MediaPickerModal
           onClose={() => setMediaOpen(false)}
-          onSelect={(name) => setImage(name)}
+          onSelect={(url) => {
+            setImage(url);
+            setMediaOpen(false);
+          }}
         />
       )}
     </div>

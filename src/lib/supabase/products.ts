@@ -86,6 +86,7 @@ export type ProductInput = {
   waitingQuantity?: number;
   reorderThreshold?: number;
   status?: "Actif" | "Archive";
+  image?: string;
 };
 
 function toRow(input: Partial<ProductInput>) {
@@ -102,6 +103,7 @@ function toRow(input: Partial<ProductInput>) {
   if (input.reorderThreshold !== undefined)
     row.reorder_threshold = input.reorderThreshold;
   if (input.status !== undefined) row.status = input.status;
+  if (input.image !== undefined) row.image = input.image || null;
   return row;
 }
 
