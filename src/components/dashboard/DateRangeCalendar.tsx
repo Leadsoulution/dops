@@ -51,15 +51,34 @@ function sameDay(a?: Date | null, b?: Date | null) {
 export default function DateRangeCalendar({
   onApply,
   onCancel,
+  initialStart,
+  initialEnd,
+  onClear,
 }: {
   onApply: (start: Date, end: Date) => void;
   onCancel: () => void;
+  /**
+   * Plage deja appliquee, reaffichee a l'ouverture : sans elle, le
+   * calendrier s'ouvre vide alors qu'un filtre est actif.
+   */
+  initialStart?: Date | null;
+  initialEnd?: Date | null;
+  /**
+   * Appele par "Effacer". Vider la seule selection interne ne suffit
+   * pas : la liste reste filtree sur la plage precedemment appliquee, et
+   * le bouton parait sans effet. C'est au parent de retirer son filtre.
+   */
+  onClear?: () => void;
 }) {
   const today = new Date();
-  const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
-  const [rangeStart, setRangeStart] = useState<Date | null>(null);
-  const [rangeEnd, setRangeEnd] = useState<Date | null>(null);
+  // Le calendrier s'ouvre sur le mois de la plage en cours, sinon sur le
+  // mois courant.
+  const [viewYear, setViewYear] = useState(
+    (initialStart ?? today).getFullYear()
+  );
+  const [viewMonth, setViewMonth] = useState((initialStart ?? today).getMonth());
+  const [rangeStart, setRangeStart] = useState<Date | null>(initialStart ?? null);
+  const [rangeEnd, setRangeEnd] = useState<Date | null>(initialEnd ?? null);
 
   function pickDay(d: Date) {
     if (!rangeStart || (rangeStart && rangeEnd)) {
@@ -181,6 +200,7 @@ export default function DateRangeCalendar({
             onClick={() => {
               setRangeStart(null);
               setRangeEnd(null);
+              onClear?.();
             }}
             className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-[12px] font-medium text-gray-700 hover:bg-gray-50"
           >

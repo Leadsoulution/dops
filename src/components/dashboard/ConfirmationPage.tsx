@@ -131,6 +131,14 @@ export default function ConfirmationPage() {
     setCalendarOpen(false);
   }
 
+  /** Retire la plage personnalisee et revient a la periode par defaut. */
+  function clearCustomRange() {
+    setCustomRange(null);
+    setCustomRangeLabel(null);
+    setActiveRange("Maximum");
+    setCalendarOpen(false);
+  }
+
   const productOptions = productCatalog.map((p) => ({ label: p.name, sublabel: p.sku }));
   const sourceOptions = sourceKeyOptions.map((s) => ({ label: s }));
   const regionSelectOptions = regionOptions.map((r) => ({ label: r }));
@@ -223,7 +231,10 @@ export default function ConfirmationPage() {
                   </button>
                   {range === "Personnalisee" && calendarOpen && (
                     <DateRangeCalendar
+                      initialStart={customRange?.start}
+                      initialEnd={customRange?.end}
                       onApply={applyCustomRange}
+                      onClear={clearCustomRange}
                       onCancel={() => setCalendarOpen(false)}
                     />
                   )}

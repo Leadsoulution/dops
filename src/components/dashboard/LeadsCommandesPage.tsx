@@ -639,9 +639,16 @@ export default function LeadsCommandesPage() {
               </button>
               {range === "Personnalisee" && calendarOpen && (
                 <DateRangeCalendar
+                  initialStart={customRange?.start}
+                  initialEnd={customRange?.end}
                   onApply={(start, end) => {
                     setCustomRange({ start, end });
                     setActiveRange("Personnalisee");
+                    setCalendarOpen(false);
+                  }}
+                  onClear={() => {
+                    setCustomRange(null);
+                    setActiveRange("Maximum");
                     setCalendarOpen(false);
                   }}
                   onCancel={() => setCalendarOpen(false)}
