@@ -257,7 +257,6 @@ export function parseLeadDate(value: string | undefined): Date | null {
 }
 
 export const dateRanges = [
-  "Tout",
   "Aujourd'hui",
   "Hier",
   "7 derniers jours",

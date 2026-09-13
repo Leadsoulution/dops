@@ -102,7 +102,7 @@ export default function LeadsCommandesPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("Tous");
-  const [activeRange, setActiveRange] = useState("Tout");
+  const [activeRange, setActiveRange] = useState("Maximum");
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [customRange, setCustomRange] = useState<{ start: Date; end: Date } | null>(
     null
@@ -213,7 +213,7 @@ export default function LeadsCommandesPage() {
         return customRange
           ? { from: startOfDay(customRange.start), to: endOfDay(customRange.end) }
           : { from: null, to: null };
-      // "Tout" et "Maximum" couvrent tout l'historique.
+      // "Maximum" couvre tout l'historique.
       default:
         return { from: null, to: null };
     }
