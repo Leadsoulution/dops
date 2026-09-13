@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ShoppingCart,
   Warehouse,
@@ -86,11 +86,35 @@ export default function CreateCommandeModal({
   const [reference, setReference] = useState("");
   const [total, setTotal] = useState("0");
   const [ville, setVille] = useState("");
+  // Toutes les villes du dictionnaire, pas seulement les grandes : une
+  // commande peut partir a Mireleft comme a Casablanca.
+  const [cityOptions, setCityOptions] = useState<string[]>(moroccanCities);
   const [adresse, setAdresse] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
   const [productQuery, setProductQuery] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/cities")
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled || !Array.isArray(data.cities)) return;
+        const names = (data.cities as { name: string; active: boolean }[])
+          .filter((c) => c.active)
+          .map((c) => c.name);
+        // Le dictionnaire vide ou injoignable laisse la liste de secours :
+        // mieux vaut quelques villes qu'un champ sans aucun choix.
+        if (names.length > 0) setCityOptions(names);
+      })
+      .catch(() => {
+        /* Liste de secours conservee. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const [parcelType, setParcelType] = useState<"simple" | "stock">("simple");
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
@@ -635,7 +659,7 @@ export default function CreateCommandeModal({
                 <SelectDropdown
                   variant="field"
                   pinnedLabel="Aucune ville"
-                  options={moroccanCities}
+                  options={cityOptions}
                   onSelect={setVille}
                   searchable
                   searchPlaceholder="Rechercher une ville..."
