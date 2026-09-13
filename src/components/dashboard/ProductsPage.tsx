@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import SelectDropdown from "./SelectDropdown";
 import CreateProductModal from "./CreateProductModal";
+import type { StockProduct } from "@/lib/supabase/products";
 import ProductDetailModal from "./ProductDetailModal";
 import AdjustStockModal from "./AdjustStockModal";
 import {
@@ -25,35 +26,34 @@ import {
   type Product,
 } from "./products-data";
 
-/** Produit tel que renvoye par /api/products (stock ForceLog). */
-type StockProduct = {
-  ref: string;
-  name: string;
-  productName: string;
-  barcode?: string;
-  quantity: number;
-  waitingQuantity: number;
-};
-
 /**
- * Convertit une reference du stock ForceLog vers la forme `Product`
- * attendue par cette page, pour ne rien changer a son affichage.
- * ForceLog ne communique pas de prix : les montants restent a zero.
+ * Convertit un produit du catalogue vers la forme `Product` attendue par
+ * cette page. Les montants viennent maintenant de la base : ils ne sont
+ * plus figes a zero comme du temps ou le catalogue n'etait qu'un reflet
+ * du stock transporteur.
  */
 function toProduct(item: StockProduct): Product {
   return {
     sku: item.ref,
     name: item.name,
-    supplier: "ForceLog",
-    priceVente: 0,
-    coutFournisseur: 0,
+    supplier: item.supplier ?? "—",
+    priceVente: item.priceSale,
+    coutFournisseur: item.costSupplier,
     stockTotal: item.quantity + item.waitingQuantity,
     disponible: item.quantity,
     reserve: 0,
     enCours: item.waitingQuantity,
-    seuilReappro: 5,
-    dernierMouvement: "",
-    status: "Actif",
+    seuilReappro: item.reorderThreshold,
+    dernierMouvement: item.updatedAt
+      ? new Intl.DateTimeFormat("fr-FR", {
+          day: "numeric",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZone: "Africa/Casablanca",
+        }).format(new Date(item.updatedAt))
+      : "",
+    status: item.status,
   };
 }
 
@@ -392,7 +392,13 @@ export default function ProductsPage() {
       )}
 
       {createOpen && (
-        <CreateProductModal onClose={() => setCreateOpen(false)} />
+        <CreateProductModal
+          onClose={() => setCreateOpen(false)}
+          onCreated={(product) => {
+            setProducts((prev) => [toProduct(product), ...prev]);
+            setCreateOpen(false);
+          }}
+        />
       )}
       {detailProduct && (
         <ProductDetailModal

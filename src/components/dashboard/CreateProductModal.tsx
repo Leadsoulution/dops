@@ -1,11 +1,24 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ImagePlus, Package, Plus, Trash2, X } from "lucide-react";
+import { AlertCircle, ImagePlus, Loader2, Package, Plus, Trash2, X } from "lucide-react";
 import SelectDropdown from "./SelectDropdown";
 import Toggle from "./Toggle";
 import MediaPickerModal from "./MediaPickerModal";
 import { suppliers } from "./products-data";
+import type { StockProduct } from "@/lib/supabase/products";
+
+/** "Argan Cream Offer" -> "ARGCRE-4821", lisible et peu susceptible de collision. */
+function generateSku(name: string): string {
+  const letters = name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 6);
+  const suffix = String(Math.floor(1000 + Math.random() * 9000));
+  return `${letters || "PRD"}-${suffix}`;
+}
 
 type VariantOption = {
   id: string;
@@ -13,7 +26,21 @@ type VariantOption = {
   values: string[];
 };
 
-export default function CreateProductModal({ onClose }: { onClose: () => void }) {
+export default function CreateProductModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (product: StockProduct) => void;
+}) {
+  const [name, setName] = useState("");
+  const [sku, setSku] = useState("");
+  const [priceSale, setPriceSale] = useState("0");
+  const [costSupplier, setCostSupplier] = useState("0");
+  const [quantity, setQuantity] = useState("0");
+  const [reorderThreshold, setReorderThreshold] = useState("0");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [mediaOpen, setMediaOpen] = useState(false);
   const [image, setImage] = useState<string | null>(null);
   const [status, setStatus] = useState<"Actif" | "Archive">("Actif");
@@ -51,6 +78,40 @@ export default function CreateProductModal({ onClose }: { onClose: () => void })
     (acc, o) => (o.values.length > 0 ? acc * o.values.length : acc),
     1
   );
+
+  async function submit() {
+    setError(null);
+    if (!name.trim()) {
+      setError("Le nom du produit est obligatoire.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const res = await fetch("/api/products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          // Sans SKU saisi, une reference lisible est deduite du nom.
+          ref: sku.trim() || generateSku(name),
+          supplier: supplier ?? undefined,
+          priceSale: Number(priceSale) || 0,
+          costSupplier: Number(costSupplier) || 0,
+          quantity: Number(quantity) || 0,
+          reorderThreshold: Number(reorderThreshold) || 0,
+          status,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      onCreated(data.product);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Creation impossible.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 sm:px-4 sm:py-10">
@@ -107,6 +168,8 @@ export default function CreateProductModal({ onClose }: { onClose: () => void })
                 </label>
                 <input
                   type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   placeholder="Ex: Argan Cream Offer"
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-800 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none"
                 />
@@ -117,8 +180,10 @@ export default function CreateProductModal({ onClose }: { onClose: () => void })
                 </label>
                 <input
                   type="text"
+                  value={sku}
+                  onChange={(e) => setSku(e.target.value)}
                   placeholder="Laisse vide pour genere"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-800 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-[13px] text-gray-800 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none"
                 />
               </div>
             </div>
@@ -170,9 +235,10 @@ export default function CreateProductModal({ onClose }: { onClose: () => void })
               <div className="flex items-center gap-2">
                 <input
                   type="number"
-                  defaultValue={0}
+                  value={priceSale}
+                  onChange={(e) => setPriceSale(e.target.value)}
                   step="0.01"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
                 />
                 <span className="shrink-0 text-[12.5px] text-gray-500">MAD</span>
               </div>
@@ -184,9 +250,10 @@ export default function CreateProductModal({ onClose }: { onClose: () => void })
               <div className="flex items-center gap-2">
                 <input
                   type="number"
-                  defaultValue={0}
+                  value={costSupplier}
+                  onChange={(e) => setCostSupplier(e.target.value)}
                   step="0.01"
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
                 />
                 <span className="shrink-0 text-[12.5px] text-gray-500">MAD</span>
               </div>
@@ -218,8 +285,9 @@ export default function CreateProductModal({ onClose }: { onClose: () => void })
                 </label>
                 <input
                   type="number"
-                  defaultValue={0}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
                 />
               </div>
               <div>
@@ -228,8 +296,9 @@ export default function CreateProductModal({ onClose }: { onClose: () => void })
                 </label>
                 <input
                   type="number"
-                  defaultValue={0}
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
+                  value={reorderThreshold}
+                  onChange={(e) => setReorderThreshold(e.target.value)}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
                 />
               </div>
             </div>
@@ -324,6 +393,13 @@ export default function CreateProductModal({ onClose }: { onClose: () => void })
           </div>
         </div>
 
+        {error && (
+          <p className="mx-5 mb-1 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            {error}
+          </p>
+        )}
+
         <div className="flex flex-col-reverse gap-2.5 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end">
           <button
             onClick={onClose}
@@ -332,9 +408,11 @@ export default function CreateProductModal({ onClose }: { onClose: () => void })
             Annuler
           </button>
           <button
-            onClick={onClose}
-            className="w-full rounded-lg bg-gray-900 px-4 py-2 text-[13px] font-medium text-white hover:bg-gray-800 sm:w-auto"
+            onClick={submit}
+            disabled={saving}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-gray-900 px-4 py-2 text-[13px] font-medium text-white hover:bg-gray-800 disabled:opacity-60 sm:w-auto"
           >
+            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             Creer le produit
           </button>
         </div>
