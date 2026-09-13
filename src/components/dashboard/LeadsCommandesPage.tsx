@@ -44,6 +44,7 @@ import type { ComponentType } from "react";
 import {
   tabs,
   dateRanges,
+  parseLeadDate,
   sourceBadgeStyles,
   statusBadgeStyles,
   deliveryStatusStyles,
@@ -58,6 +59,7 @@ import EditOrderModal from "./EditOrderModal";
 import ChangeStatusModal from "./ChangeStatusModal";
 import AssignModal from "./AssignModal";
 import SelectDropdown from "./SelectDropdown";
+import DateRangeCalendar from "./DateRangeCalendar";
 
 /** Transporteur integre a l'application. */
 const CARRIER_NAME = "ForceLog";
@@ -101,6 +103,10 @@ export default function LeadsCommandesPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("Tous");
   const [activeRange, setActiveRange] = useState("Tout");
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [customRange, setCustomRange] = useState<{ start: Date; end: Date } | null>(
+    null
+  );
   const [filtersResetKey, setFiltersResetKey] = useState(0);
   const [filters, setFilters] = useState({
     produits: [] as string[],
@@ -176,22 +182,85 @@ export default function LeadsCommandesPage() {
     }
   }, [searchParams, router]);
 
+  // Bornes de la periode choisie, en heure locale. `null` = pas de borne.
+  function rangeBounds(): { from: Date | null; to: Date | null } {
+    const now = new Date();
+    const startOfDay = (d: Date) =>
+      new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const endOfDay = (d: Date) =>
+      new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+
+    switch (activeRange) {
+      case "Aujourd'hui":
+        return { from: startOfDay(now), to: endOfDay(now) };
+      case "Hier": {
+        const yesterday = new Date(now);
+        yesterday.setDate(now.getDate() - 1);
+        return { from: startOfDay(yesterday), to: endOfDay(yesterday) };
+      }
+      case "7 derniers jours": {
+        // Aujourd'hui compris, donc six jours en arriere.
+        const from = new Date(now);
+        from.setDate(now.getDate() - 6);
+        return { from: startOfDay(from), to: endOfDay(now) };
+      }
+      case "Ce mois-ci":
+        return {
+          from: new Date(now.getFullYear(), now.getMonth(), 1),
+          to: endOfDay(now),
+        };
+      case "Personnalisee":
+        return customRange
+          ? { from: startOfDay(customRange.start), to: endOfDay(customRange.end) }
+          : { from: null, to: null };
+      // "Tout" et "Maximum" couvrent tout l'historique.
+      default:
+        return { from: null, to: null };
+    }
+  }
+
+  const { from: rangeFrom, to: rangeTo } = rangeBounds();
+
+  // "3 - 12 sept." tant que les deux dates sont dans le meme mois.
+  const customRangeLabel = customRange
+    ? `${new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short" }).format(
+        customRange.start
+      )} - ${new Intl.DateTimeFormat("fr-FR", {
+        day: "numeric",
+        month: "short",
+      }).format(customRange.end)}`
+    : null;
+
+  function matchesRange(lead: Lead) {
+    if (!rangeFrom && !rangeTo) return true;
+    const date = parseLeadDate(lead.date);
+    // Une date illisible ne doit pas faire disparaitre la commande.
+    if (!date) return true;
+    if (rangeFrom && date < rangeFrom) return false;
+    if (rangeTo && date > rangeTo) return false;
+    return true;
+  }
+
+  // La periode s'applique avant les onglets : leurs compteurs annoncent
+  // ce que l'onglet contient reellement pour la periode affichee.
+  const rangedLeads = leadsState.filter(matchesRange);
+
   const dynamicTabs = tabs.map((tab) => ({
     ...tab,
     count: tab.status
-      ? leadsState.filter((lead) => lead.status === tab.status).length
-      : leadsState.length,
+      ? rangedLeads.filter((lead) => lead.status === tab.status).length
+      : rangedLeads.length,
   }));
   const activeTabDef = dynamicTabs.find((t) => t.label === activeTab) ?? dynamicTabs[0];
   const filteredLeads = activeTabDef.status
-    ? leadsState.filter((lead) => lead.status === activeTabDef.status)
-    : leadsState;
+    ? rangedLeads.filter((lead) => lead.status === activeTabDef.status)
+    : rangedLeads;
 
   // Les options proposees sont celles reellement presentes dans les
   // commandes chargees : inutile de proposer un filtre qui ne renverrait
   // jamais rien, et les statuts transporteur evoluent de leur cote.
   const uniqueValues = (pick: (lead: Lead) => string | undefined) =>
-    [...new Set(leadsState.map(pick).filter((v): v is string => Boolean(v)))].sort();
+    [...new Set(rangedLeads.map(pick).filter((v): v is string => Boolean(v)))].sort();
 
   const filterOptions = {
     produits: uniqueValues((l) => l.productName),
@@ -546,18 +615,39 @@ export default function LeadsCommandesPage() {
 
         <div className="flex items-center gap-2 overflow-x-auto lg:flex-wrap lg:overflow-visible">
           {dateRanges.map((range) => (
-            <button
-              key={range}
-              onClick={() => setActiveRange(range)}
-              className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[12.5px] font-medium transition-colors ${
-                activeRange === range
-                  ? "bg-gray-900 text-white"
-                  : "border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              {range === "Maximum" && <Calendar className="h-3.5 w-3.5" />}
-              {range}
-            </button>
+            <div key={range} className="relative">
+              <button
+                onClick={() => {
+                  if (range === "Personnalisee") {
+                    setActiveRange(range);
+                    setCalendarOpen((v) => !v);
+                  } else {
+                    setActiveRange(range);
+                    setCalendarOpen(false);
+                  }
+                }}
+                className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[12.5px] font-medium transition-colors ${
+                  activeRange === range
+                    ? "bg-gray-900 text-white"
+                    : "border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                {range === "Maximum" && <Calendar className="h-3.5 w-3.5" />}
+                {range === "Personnalisee" && customRange
+                  ? customRangeLabel
+                  : range}
+              </button>
+              {range === "Personnalisee" && calendarOpen && (
+                <DateRangeCalendar
+                  onApply={(start, end) => {
+                    setCustomRange({ start, end });
+                    setActiveRange("Personnalisee");
+                    setCalendarOpen(false);
+                  }}
+                  onCancel={() => setCalendarOpen(false)}
+                />
+              )}
+            </div>
           ))}
         </div>
       </div>

@@ -191,7 +191,6 @@ export const leads: Lead[] = [
 const tabDefinitions: { label: string; status: LeadStatus | null; flagged?: boolean }[] = [
   { label: "Tous", status: null },
   { label: "Nouveaux", status: "Nouveau" },
-  { label: "Assignes", status: "Assigne" },
   { label: "Confirmes", status: "Confirme" },
   { label: "Rappels", status: "Rappel" },
   { label: "Pas de rep.", status: "Pas de reponse" },
@@ -206,6 +205,56 @@ export const tabs = tabDefinitions.map((tab) => ({
     ? leads.filter((lead) => lead.status === tab.status).length
     : leads.length,
 }));
+
+/**
+ * Mois francais tels qu'ils apparaissent dans les dates affichees,
+ * abreges ou non, avec et sans accent.
+ */
+const FRENCH_MONTHS: Record<string, number> = {
+  janv: 0, janvier: 0,
+  fevr: 1, fevrier: 1, "fév": 1, "févr": 1, "février": 1,
+  mars: 2,
+  avr: 3, avril: 3,
+  mai: 4,
+  juin: 5,
+  juil: 6, juillet: 6,
+  aout: 7, "août": 7,
+  sept: 8, septembre: 8,
+  oct: 9, octobre: 9,
+  nov: 10, novembre: 10,
+  dec: 11, "déc": 11, decembre: 11, "décembre": 11,
+};
+
+/**
+ * Date reelle d'une commande, lue depuis le texte affiche.
+ *
+ * Deux formats coexistent selon l'origine : "2026-09-11 16:12" pour les
+ * colis importes de ForceLog, "13 sept. 2026, 14:40" pour une saisie
+ * dans l'application. Renvoie `null` si rien n'est exploitable, auquel
+ * cas la commande echappe aux filtres de periode plutot que d'etre
+ * rangee a une date inventee.
+ */
+export function parseLeadDate(value: string | undefined): Date | null {
+  if (!value) return null;
+
+  const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/);
+  if (iso) {
+    const [, y, m, d, hh = "0", mm = "0"] = iso;
+    return new Date(+y, +m - 1, +d, +hh, +mm);
+  }
+
+  const fr = value.match(
+    /^(\d{1,2})\s+([^\s.]+)\.?\s+(\d{4})(?:,\s*(\d{1,2}):(\d{2}))?/
+  );
+  if (fr) {
+    const [, d, monthName, y, hh = "0", mm = "0"] = fr;
+    const month = FRENCH_MONTHS[monthName.toLowerCase()];
+    if (month !== undefined) return new Date(+y, month, +d, +hh, +mm);
+  }
+
+  const fallback = new Date(value);
+  return Number.isNaN(fallback.getTime()) ? null : fallback;
+}
 
 export const dateRanges = [
   "Tout",
