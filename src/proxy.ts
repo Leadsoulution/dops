@@ -73,5 +73,10 @@ export async function proxy(request: NextRequest) {
 export const config = {
   // Tout sauf les fichiers statiques et les images : inutile de verifier
   // une session pour servir un logo.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|.*\.png$|.*\.svg$).*)"],
+  // Le manifeste et l'agent de service doivent rester joignables sans
+  // session : le navigateur les demande avant toute connexion, et une
+  // redirection vers /login empecherait l'installation.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icon.png|apple-icon.png|.*\.png$|.*\.svg$).*)",
+  ],
 };

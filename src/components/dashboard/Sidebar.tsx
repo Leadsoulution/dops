@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { useSignOut } from "@/components/auth/useSignOut";
+import InstallAppButton from "./InstallAppButton";
 import {
   APP_SECTIONS,
   canAccess,
@@ -164,6 +165,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
       </nav>
 
       <div className="border-t border-white/5 px-3 py-3">
+        <InstallAppButton />
         <button
           onClick={signOut}
           disabled={signingOut}
