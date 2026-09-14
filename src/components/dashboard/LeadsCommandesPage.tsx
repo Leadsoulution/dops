@@ -129,6 +129,19 @@ export default function LeadsCommandesPage() {
   // Charge les commandes depuis la base, au montage uniquement.
   useEffect(() => {
     let cancelled = false;
+
+    // Reprend d'abord les commandes de la boutique, puis lit la base :
+    // l'ordre importe, sinon une commande arrivee entre les deux
+    // n'apparaitrait qu'au prochain passage.
+    fetch("/api/woocommerce/orders", { method: "POST" })
+      .catch(() => {
+        /* Boutique non connectee ou injoignable : on affiche la base. */
+      })
+      .then(() => {
+        if (!cancelled) loadLeads();
+      });
+
+    function loadLeads() {
     fetch("/api/leads")
       .then((res) => res.json())
       .then((data) => {
@@ -171,6 +184,8 @@ export default function LeadsCommandesPage() {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
+    }
+
     return () => {
       cancelled = true;
     };

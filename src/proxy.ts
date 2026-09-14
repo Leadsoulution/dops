@@ -11,7 +11,13 @@ import { NextResponse, type NextRequest } from "next/server";
  * serveur dans chaque route d'API.
  */
 
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/forcelog/webhook"];
+// La boutique et le transporteur appellent ces adresses sans session.
+const PUBLIC_PATHS = [
+  "/login",
+  "/api/auth/login",
+  "/api/forcelog/webhook",
+  "/api/woocommerce/webhook",
+];
 
 function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));

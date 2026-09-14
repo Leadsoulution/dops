@@ -19,6 +19,7 @@ export type LeadSource =
   | "Direct"
   | "Landing page"
   | "Lightfunnels"
+  | "WooCommerce"
   | "ForceLog";
 
 export type Lead = {
@@ -60,6 +61,8 @@ export type Lead = {
   parcelType?: "simple" | "stock";
   /** References prelevees pour un colis de stock, format "ref:qte,ref:qte". */
   stockItems?: string;
+  /** Identifiant de la commande dans la boutique WooCommerce. */
+  wooOrderId?: number;
 };
 
 export const leads: Lead[] = [
@@ -273,6 +276,7 @@ export const sourceBadgeStyles: Record<LeadSource, string> = {
   Direct: "bg-gray-100 text-gray-600",
   "Landing page": "bg-blue-50 text-blue-600",
   Lightfunnels: "bg-blue-50 text-blue-600",
+  WooCommerce: "bg-violet-50 text-violet-600",
   ForceLog: "bg-orange-50 text-orange-600",
 };
 
