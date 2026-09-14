@@ -1165,7 +1165,7 @@ export default function LeadsCommandesPage() {
           return (
             <div
               key={lead.id}
-              className="rounded-xl border border-sky-200 bg-white p-3.5 shadow-sm ring-1 ring-sky-50"
+              className="rounded-xl border-2 border-sky-400 bg-white p-3.5 shadow-sm"
             >
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="font-mono text-[12.5px] font-medium text-gray-800">
