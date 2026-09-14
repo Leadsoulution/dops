@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { ClipboardList, MapPin, Pencil, User, X } from "lucide-react";
-import type { Lead } from "./leads-data";
+import type { Lead, LeadStatus } from "./leads-data";
+import CallOutcomePanel from "./CallOutcomePanel";
 
 const tabs = [
   "Historique des statuts",
@@ -15,10 +16,12 @@ export default function OrderDetailsModal({
   lead,
   onClose,
   onEdit,
+  onStatusChange,
 }: {
   lead: Lead;
   onClose: () => void;
   onEdit: () => void;
+  onStatusChange: (status: LeadStatus) => Promise<void> | void;
 }) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>(tabs[0]);
 
@@ -65,6 +68,8 @@ export default function OrderDetailsModal({
               {lead.amount}
             </p>
           </div>
+
+          <CallOutcomePanel lead={lead} onStatusChange={onStatusChange} />
 
           <div>
             <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-gray-500">

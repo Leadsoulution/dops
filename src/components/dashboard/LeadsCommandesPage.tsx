@@ -934,9 +934,10 @@ export default function LeadsCommandesPage() {
               {visibleLeads.map((lead) => (
                 <tr
                   key={lead.id}
-                  className="border-b border-gray-50 text-[13px] text-gray-700 last:border-0 hover:bg-gray-50/60"
+                  onClick={() => setModal({ type: "details", lead })}
+                  className="cursor-pointer border-b border-gray-50 text-[13px] text-gray-700 last:border-0 hover:bg-gray-50/60"
                 >
-                  <td className="px-5 py-3">
+                  <td className="px-5 py-3" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={selectedIds.has(lead.id)}
@@ -1099,7 +1100,7 @@ export default function LeadsCommandesPage() {
                       <span className="text-[12px] text-gray-300">&mdash;</span>
                     )}
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                     <RowActionsMenu {...getRowActions(lead)} />
                   </td>
                 </tr>
@@ -1280,7 +1281,12 @@ export default function LeadsCommandesPage() {
       )}
       {modal?.type === "details" && (
         <OrderDetailsModal
-          lead={modal.lead}
+          lead={
+            leadsState.find((l) => l.id === modal.lead.id) ?? modal.lead
+          }
+          onStatusChange={async (status) => {
+            await persistChanges([modal.lead.id], { status });
+          }}
           onClose={() => setModal(null)}
           onEdit={() => setModal({ type: "edit", lead: modal.lead })}
         />
