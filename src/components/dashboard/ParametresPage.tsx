@@ -33,6 +33,7 @@ import {
 import type { ComponentType } from "react";
 import SelectDropdown from "./SelectDropdown";
 import Toggle from "./Toggle";
+import DatabaseSizeCard from "./DatabaseSizeCard";
 import {
   leadStatuses,
   shippingStatuses,
@@ -227,6 +228,7 @@ export default function ParametresPage() {
 
       {activeTab === "general" && (
         <div className="max-w-3xl space-y-4">
+          <DatabaseSizeCard />
           <div className="rounded-xl border border-gray-200 bg-white p-4">
             <p className="mb-4 flex items-center gap-2 text-h3 font-semibold text-gray-900">
               <Store className="h-4 w-4 text-gray-400" />
