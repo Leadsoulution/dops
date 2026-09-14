@@ -73,6 +73,13 @@ export default function SelectDropdown(props: SelectDropdownProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
+    // En pastille, le panneau est rendu dans un calque au niveau du
+    // document : il n'est donc pas contenu dans cet element, et ce
+    // gestionnaire le fermerait des le `mousedown` sur une option, avant
+    // que le clic n'atteigne la case a cocher. `AnchoredMenu` se charge
+    // lui-meme de la fermeture au clic exterieur.
+    if (variant === "chip") return;
+
     function handleClickOutside(event: MouseEvent) {
       if (ref.current && !ref.current.contains(event.target as Node)) {
         setOpen(false);
@@ -80,7 +87,7 @@ export default function SelectDropdown(props: SelectDropdownProps) {
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [variant]);
 
   const filteredOptions = useMemo(() => {
     if (!searchable || !query) return options;

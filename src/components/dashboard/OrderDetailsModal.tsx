@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { ClipboardList, MapPin, Pencil, User, X } from "lucide-react";
 import type { Lead, LeadStatus } from "./leads-data";
 import CallOutcomePanel from "./CallOutcomePanel";
@@ -52,15 +53,30 @@ export default function OrderDetailsModal({
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4 sm:max-h-[70vh] sm:flex-none">
           <div className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2.5">
             <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-gray-100 text-[10px] font-medium text-gray-400">
-                {lead.productLabel}
-              </div>
-              <div>
+              {lead.productImage ? (
+                <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-gray-100 bg-gray-50">
+                  <Image
+                    src={lead.productImage}
+                    alt={lead.productName}
+                    fill
+                    sizes="80px"
+                    className="object-cover"
+                    unoptimized
+                  />
+                </div>
+              ) : (
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-[11px] font-medium text-gray-400">
+                  {lead.productLabel}
+                </div>
+              )}
+              <div className="min-w-0">
                 <p className="text-[13px] font-medium text-gray-800">
                   {lead.productName}
                 </p>
                 <p className="text-[12px] text-gray-500">
-                  <span className="font-mono">1 x {lead.amount}</span>
+                  <span className="font-mono">
+                    {lead.itemCount ?? 1} x {lead.amount}
+                  </span>
                 </p>
               </div>
             </div>

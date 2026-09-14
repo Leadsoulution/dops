@@ -967,19 +967,19 @@ export default function LeadsCommandesPage() {
                       return (
                         <div className="flex items-center gap-2">
                           {lead.productImage ? (
-                            <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-md border border-gray-100 bg-gray-50">
+                            <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-gray-100 bg-gray-50">
                               <Image
                                 src={lead.productImage}
                                 alt=""
                                 fill
-                                sizes="32px"
+                                sizes="48px"
                                 className="object-cover"
                                 unoptimized
                               />
                             </div>
                           ) : (
-                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-100 text-gray-500">
-                              <ProductIcon className="h-3.5 w-3.5" />
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500">
+                              <ProductIcon className="h-4 w-4" />
                             </div>
                           )}
                           {lead.productName && (
@@ -1165,7 +1165,7 @@ export default function LeadsCommandesPage() {
           return (
             <div
               key={lead.id}
-              className="rounded-xl border border-gray-200 bg-white p-3.5"
+              className="rounded-xl border border-sky-200 bg-white p-3.5 shadow-sm ring-1 ring-sky-50"
             >
               <div className="mb-2 flex items-center justify-between gap-2">
                 <span className="font-mono text-[12.5px] font-medium text-gray-800">
@@ -1190,9 +1190,22 @@ export default function LeadsCommandesPage() {
               </div>
 
               <div className="mb-3 flex gap-3">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-[10px] font-medium text-gray-400">
-                  {lead.productLabel}
-                </div>
+                {lead.productImage ? (
+                  <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-gray-100 bg-gray-50">
+                    <Image
+                      src={lead.productImage}
+                      alt=""
+                      fill
+                      sizes="64px"
+                      className="object-cover"
+                      unoptimized
+                    />
+                  </div>
+                ) : (
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-[10px] font-medium text-gray-400">
+                    {lead.productLabel}
+                  </div>
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[14px] font-semibold text-gray-900">
                     {lead.client}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import {
   ChevronDown,
   Minus,
@@ -14,9 +15,35 @@ import {
 import SelectDropdown from "./SelectDropdown";
 import { moroccanCities, type Lead } from "./leads-data";
 
-type CatalogProduct = { name: string; price: number };
+type CatalogProduct = { name: string; price: number; image?: string };
 
-type SelectedProduct = { name: string; price: number; qty: number };
+type SelectedProduct = {
+  name: string;
+  price: number;
+  qty: number;
+  image?: string;
+};
+
+/** Vignette d'un produit, ou un carre neutre s'il n'a pas de photo. */
+function ProductThumb({
+  image,
+  size,
+}: {
+  image?: string;
+  size: "sm" | "md";
+}) {
+  const box = size === "sm" ? "h-9 w-9" : "h-11 w-11";
+  if (!image) {
+    return <div className={`${box} shrink-0 rounded-md bg-gray-100`} />;
+  }
+  return (
+    <div
+      className={`relative ${box} shrink-0 overflow-hidden rounded-md border border-gray-100 bg-gray-50`}
+    >
+      <Image src={image} alt="" fill sizes="48px" className="object-cover" unoptimized />
+    </div>
+  );
+}
 
 export default function EditOrderModal({
   lead,
@@ -62,15 +89,27 @@ export default function EditOrderModal({
       .then((res) => res.json())
       .then((data) => {
         if (cancelled || !Array.isArray(data.products)) return;
-        const list = (data.products as { name: string; priceSale: number; status: string }[])
+        const list = (
+          data.products as {
+            name: string;
+            priceSale: number;
+            status: string;
+            image?: string;
+          }[]
+        )
           .filter((p) => p.status === "Actif")
-          .map((p) => ({ name: p.name, price: p.priceSale }));
+          .map((p) => ({ name: p.name, price: p.priceSale, image: p.image }));
         setCatalogProducts(list);
         // Le prix du produit deja sur la commande, s'il est au catalogue.
         setSelected((prev) =>
           prev.map((item) => {
             const match = list.find((p) => p.name === item.name);
-            return match && !item.price ? { ...item, price: match.price } : item;
+            if (!match) return item;
+            return {
+              ...item,
+              price: item.price || match.price,
+              image: item.image ?? match.image,
+            };
           })
         );
       })
@@ -285,7 +324,7 @@ export default function EditOrderModal({
                     key={p.name}
                     className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2"
                   >
-                    <div className="h-9 w-9 shrink-0 rounded-md bg-gray-100" />
+                    <ProductThumb image={p.image} size="md" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[13px] font-medium text-gray-800">
                         {p.name}
@@ -323,7 +362,7 @@ export default function EditOrderModal({
                   onClick={() => addProduct(product)}
                   className="flex w-full items-center gap-3 rounded-lg border border-gray-100 px-3 py-2 text-left hover:bg-gray-50"
                 >
-                  <div className="h-8 w-8 shrink-0 rounded-md bg-gray-100" />
+                  <ProductThumb image={product.image} size="sm" />
                   <span className="min-w-0 flex-1 truncate text-[12.5px] text-gray-700">
                     {product.name}
                   </span>
