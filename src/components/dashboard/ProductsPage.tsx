@@ -106,6 +106,15 @@ export default function ProductsPage() {
     };
   }, []);
 
+  async function reloadProducts() {
+    try {
+      const data = await fetch("/api/products").then((r) => r.json());
+      if (data.products) setRawProducts(data.products);
+    } catch {
+      /* La liste affichee reste celle connue. */
+    }
+  }
+
   function replaceProduct(updated: StockProduct) {
     setRawProducts((prev) =>
       prev.map((p) => (p.id === updated.id ? updated : p))
@@ -642,7 +651,10 @@ export default function ProductsPage() {
           product={editProduct}
           onClose={() => setEditProduct(null)}
           onSaved={(product) => {
-            replaceProduct(product);
+            // Une fusion renvoie une autre fiche que celle ouverte, et en
+            // supprime une : la liste doit etre relue, pas rapiecee.
+            if (product.id !== editProduct.id) void reloadProducts();
+            else replaceProduct(product);
             setEditProduct(null);
           }}
         />

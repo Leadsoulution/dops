@@ -338,3 +338,84 @@ export async function linkWooProducts(
 
   return { lies, ajoutes, deja };
 }
+
+/**
+ * Fusionne une fiche boutique dans la fiche du depot transporteur.
+ *
+ * Le catalogue se remplit par deux bouts : l'import ForceLog cree une
+ * fiche par article du depot, l'import WooCommerce une fiche par produit
+ * de la boutique. Le meme objet physique s'y retrouve donc deux fois,
+ * une fois par code. Les relier, c'est n'en garder qu'un.
+ *
+ * La fiche du transporteur est gardee : c'est elle qui porte le stock
+ * reel. Elle recupere le SKU boutique, et les champs commerciaux qui lui
+ * manquaient. La fiche boutique disparait.
+ */
+export async function mergeIntoCarrierProduct(
+  sourceId: string,
+  forcelogRef: string
+): Promise<StockProduct> {
+  const supabase = getSupabaseServerClient();
+
+  const { data: sourceRow } = await supabase
+    .from("products")
+    .select(COLUMNS)
+    .eq("id", sourceId)
+    .maybeSingle();
+  const { data: targetRow } = await supabase
+    .from("products")
+    .select(COLUMNS)
+    .eq("forcelog_ref", forcelogRef.trim())
+    .maybeSingle();
+
+  if (!sourceRow) throw new Error("Produit introuvable.");
+  if (!targetRow) {
+    throw new Error("Aucun produit ne porte ce code article ForceLog.");
+  }
+
+  const source = toProduct(sourceRow as ProductRow);
+  const target = toProduct(targetRow as ProductRow);
+  if (source.id === target.id) return target;
+
+  // La fiche boutique disparaissant, son SKU doit etre libere avant
+  // d'etre repose sur l'autre : il est unique en base.
+  const { error: clearError } = await supabase
+    .from("products")
+    .delete()
+    .eq("id", source.id);
+  if (clearError) throw new Error(clearError.message);
+
+  const { data, error } = await supabase
+    .from("products")
+    .update({
+      woo_sku: source.wooSku ?? target.wooSku ?? null,
+      // On ne remplace que ce qui manquait : le travail deja saisi sur la
+      // fiche transporteur prime.
+      price_sale: target.priceSale || source.priceSale,
+      cost_supplier: target.costSupplier || source.costSupplier,
+      image: target.image ?? source.image ?? null,
+      default_parcel_type: "stock",
+    })
+    .eq("id", target.id)
+    .select(COLUMNS)
+    .single();
+
+  if (error) throw new Error(error.message);
+  return toProduct(data as ProductRow);
+}
+
+/** Produit portant deja ce code article, s'il y en a un. */
+export async function findByForcelogRef(
+  forcelogRef: string,
+  exceptId?: string
+): Promise<StockProduct | null> {
+  const supabase = getSupabaseServerClient();
+  const { data } = await supabase
+    .from("products")
+    .select(COLUMNS)
+    .eq("forcelog_ref", forcelogRef.trim())
+    .maybeSingle();
+  if (!data) return null;
+  const product = toProduct(data as ProductRow);
+  return product.id === exceptId ? null : product;
+}

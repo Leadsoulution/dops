@@ -39,6 +39,10 @@ export default function EditProductModal({
   const [mediaOpen, setMediaOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [conflict, setConflict] = useState<{ name: string; forcelogRef: string } | null>(
+    null
+  );
+  const [merging, setMerging] = useState(false);
 
   // Les fournisseurs connus, plus celui du produit s'il n'y figure pas.
   const supplierOptions = supplier && !suppliers.includes(supplier)
@@ -75,12 +79,40 @@ export default function EditProductModal({
         }),
       });
       const data = await res.json();
+      if (res.status === 409 && data.conflict) {
+        setConflict(data.conflict);
+        setError(data.error);
+        return;
+      }
       if (!res.ok) throw new Error(data.error);
       onSaved(data.product);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Enregistrement impossible.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  /** Ne garde qu'une fiche : celle du depot, qui porte le stock reel. */
+  async function merge() {
+    if (!conflict) return;
+    setMerging(true);
+    try {
+      const res = await fetch("/api/products/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sourceId: product.id,
+          forcelogRef: conflict.forcelogRef,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      onSaved(data.product);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Fusion impossible.");
+    } finally {
+      setMerging(false);
     }
   }
 
@@ -306,10 +338,30 @@ export default function EditProductModal({
           </div>
 
           {error && (
-            <p className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">
-              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              {error}
-            </p>
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+              <p className="flex items-start gap-2 text-[12.5px] text-red-700">
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {error}
+              </p>
+              {conflict && (
+                <div className="mt-2 border-t border-red-200 pt-2">
+                  <p className="text-[12px] text-red-700">
+                    C&apos;est sans doute le meme produit, entre une fois par la
+                    boutique et une fois par le transporteur. Les fusionner
+                    garde la fiche du depot, qui porte le stock reel, et lui
+                    ajoute le SKU boutique.
+                  </p>
+                  <button
+                    onClick={merge}
+                    disabled={merging}
+                    className="mt-2 flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-red-700 disabled:opacity-60"
+                  >
+                    {merging && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    Fusionner avec &laquo; {conflict.name.slice(0, 24)} &raquo;
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
