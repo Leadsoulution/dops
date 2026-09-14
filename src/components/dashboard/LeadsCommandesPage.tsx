@@ -17,9 +17,7 @@ import {
   Wallet,
   Inbox,
   Eye,
-  Phone,
   Copy,
-  Trash2,
   UserPlus,
   RefreshCw,
   X,
@@ -726,7 +724,7 @@ export default function LeadsCommandesPage() {
         des commandes. `filtersResetKey` remonte les pastilles pour vider leur
         selection interne quand on reinitialise depuis ici.
       */}
-      <div className="relative z-20 mb-3 flex flex-wrap items-center gap-2">
+      <div className="relative z-20 mb-3 flex items-center gap-2 overflow-x-auto pb-1 lg:flex-wrap lg:overflow-visible">
         <SlidersHorizontal className="h-3.5 w-3.5 shrink-0 text-gray-400" />
         <SelectDropdown
           key={`produits-${filtersResetKey}`}
@@ -1169,8 +1167,15 @@ export default function LeadsCommandesPage() {
               key={lead.id}
               className="rounded-xl border border-gray-200 bg-white p-3.5"
             >
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <span className="font-mono text-[12.5px] font-medium text-gray-800">
+                  {lead.reference}
+                </span>
+                <RowActionsMenu {...actions} />
+              </div>
+
               <div className="mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
                   <span
                     className={`rounded-md px-2 py-1 text-[11.5px] font-medium ${sourceBadgeStyles[lead.source]}`}
                   >
@@ -1182,7 +1187,6 @@ export default function LeadsCommandesPage() {
                     {lead.status}
                   </span>
                 </div>
-                <RowActionsMenu {...actions} />
               </div>
 
               <div className="mb-3 flex gap-3">
@@ -1243,36 +1247,13 @@ export default function LeadsCommandesPage() {
                 ) : null}
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={actions.onViewDetails}
-                  className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 py-2 text-[12.5px] font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  <Eye className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">Voir details</span>
-                </button>
-                <button
-                  onClick={actions.onCall}
-                  className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 py-2 text-[12.5px] font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  <Phone className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">Appeler</span>
-                </button>
-                <button
-                  onClick={actions.onCopyContact}
-                  className="flex items-center justify-center gap-1.5 rounded-lg border border-gray-200 py-2 text-[12.5px] font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  <Copy className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">Copier numero</span>
-                </button>
-                <button
-                  onClick={actions.onDelete}
-                  className="flex items-center justify-center gap-1.5 rounded-lg bg-red-600 py-2 text-[12.5px] font-medium text-white hover:bg-red-700"
-                >
-                  <Trash2 className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">Supprimer commande</span>
-                </button>
-              </div>
+              <button
+                onClick={actions.onViewDetails}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 py-2 text-[12.5px] font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <Eye className="h-3.5 w-3.5 shrink-0" />
+                Voir details
+              </button>
             </div>
           );
         })}

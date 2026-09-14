@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronsUpDown, Search } from "lucide-react";
 import type { ComponentType } from "react";
+import AnchoredMenu from "./AnchoredMenu";
 
 type BaseProps = {
   /**
@@ -69,6 +70,7 @@ export default function SelectDropdown(props: SelectDropdownProps) {
     setOpen(false);
   }
   const ref = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -126,41 +128,12 @@ export default function SelectDropdown(props: SelectDropdownProps) {
           }`
         : "flex items-center justify-between gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-[12.5px] text-gray-600 hover:bg-gray-50";
 
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={triggerClasses}
-      >
-        <span className="flex min-w-0 items-center gap-2">
-          {Icon && (
-            <Icon
-              className={`h-3.5 w-3.5 shrink-0 ${chipActive ? "text-blue-500" : "text-gray-400"}`}
-            />
-          )}
-          <span className="truncate">{triggerLabel}</span>
-        </span>
-        {variant === "chip" && multi && multiSelected.length > 0 && (
-          <span className="rounded-full bg-blue-600 px-1.5 text-[10.5px] font-semibold leading-[17px] text-white tabular-nums">
-            {multiSelected.length}
-          </span>
-        )}
-        {variant === "field" ? (
-          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-        ) : (
-          <ChevronDown
-            className={`h-3.5 w-3.5 shrink-0 ${chipActive ? "text-blue-500" : "text-gray-400"}`}
-          />
-        )}
-      </button>
+  const panelClasses = `overflow-hidden rounded-xl border border-gray-200 bg-white ${
+    variant === "chip" ? "" : "shadow-lg"
+  }`;
 
-      {open && (
-        <div
-          className={`absolute left-0 top-full z-30 mt-1.5 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg ${
-            variant === "field" ? "w-full" : variant === "chip" ? "w-60" : "w-64"
-          }`}
-        >
+  const panelContent = (
+    <>
           {panelTitle && (
             <p className="border-b border-gray-100 px-3 py-2 text-[11px] font-semibold text-gray-500">
               {panelTitle}
@@ -242,6 +215,57 @@ export default function SelectDropdown(props: SelectDropdownProps) {
               )
             )}
           </div>
+    </>
+  );
+
+  return (
+    <div className={variant === "chip" ? "shrink-0" : "relative"} ref={ref}>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={triggerClasses}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          {Icon && (
+            <Icon
+              className={`h-3.5 w-3.5 shrink-0 ${chipActive ? "text-blue-500" : "text-gray-400"}`}
+            />
+          )}
+          <span className="truncate">{triggerLabel}</span>
+        </span>
+        {variant === "chip" && multi && multiSelected.length > 0 && (
+          <span className="rounded-full bg-blue-600 px-1.5 text-[10.5px] font-semibold leading-[17px] text-white tabular-nums">
+            {multiSelected.length}
+          </span>
+        )}
+        {variant === "field" ? (
+          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+        ) : (
+          <ChevronDown
+            className={`h-3.5 w-3.5 shrink-0 ${chipActive ? "text-blue-500" : "text-gray-400"}`}
+          />
+        )}
+      </button>
+
+      {open && variant === "chip" && (
+        <AnchoredMenu
+          open={open}
+          anchorRef={buttonRef}
+          onClose={() => setOpen(false)}
+          width={240}
+        >
+          <div className={panelClasses}>{panelContent}</div>
+        </AnchoredMenu>
+      )}
+
+      {open && variant !== "chip" && (
+        <div
+          className={`absolute left-0 top-full z-30 mt-1.5 shadow-lg ${panelClasses} ${
+            variant === "field" ? "w-full" : "w-64"
+          }`}
+        >
+          {panelContent}
         </div>
       )}
     </div>
