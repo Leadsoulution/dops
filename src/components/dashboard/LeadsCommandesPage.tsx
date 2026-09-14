@@ -41,6 +41,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import type { ComponentType } from "react";
+import Image from "next/image";
 import {
   tabs,
   dateRanges,
@@ -919,8 +920,31 @@ export default function LeadsCommandesPage() {
                     {(() => {
                       const ProductIcon = productIcon(lead.productName);
                       return (
-                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-gray-100 text-gray-500">
-                          <ProductIcon className="h-3.5 w-3.5" />
+                        <div className="flex items-center gap-2">
+                          {lead.productImage ? (
+                            <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-md border border-gray-100 bg-gray-50">
+                              <Image
+                                src={lead.productImage}
+                                alt=""
+                                fill
+                                sizes="32px"
+                                className="object-cover"
+                                unoptimized
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-100 text-gray-500">
+                              <ProductIcon className="h-3.5 w-3.5" />
+                            </div>
+                          )}
+                          {lead.productName && (
+                            <span
+                              title={lead.productName}
+                              className="max-w-[150px] truncate text-[12.5px] text-gray-700"
+                            >
+                              {lead.productName}
+                            </span>
+                          )}
                         </div>
                       );
                     })()}

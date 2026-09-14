@@ -63,6 +63,13 @@ export type Lead = {
   stockItems?: string;
   /** Identifiant de la commande dans la boutique WooCommerce. */
   wooOrderId?: number;
+  /**
+   * Photo du produit, retrouvee dans le catalogue a la lecture. Elle
+   * n'est pas enregistree sur la commande : changer la photo d'un
+   * produit doit se voir sur toutes ses commandes, pas seulement les
+   * suivantes.
+   */
+  productImage?: string;
 };
 
 export const leads: Lead[] = [

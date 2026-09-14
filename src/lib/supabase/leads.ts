@@ -123,8 +123,44 @@ export async function listLeads(): Promise<Lead[]> {
 
   if (error) throw new Error(error.message);
 
-  const leads = (data as LeadRow[]).map(toLead);
+  const leads = await withProductImages((data as LeadRow[]).map(toLead));
   return withCityTariffs(leads);
+}
+
+/**
+ * Attache a chaque commande la photo de son produit.
+ *
+ * Le rapprochement se fait d'abord par code article preleve, qui est
+ * exact, puis par nom : une commande de la boutique porte le nom exact
+ * du produit, puisque les deux viennent de la meme source.
+ */
+async function withProductImages(leads: Lead[]): Promise<Lead[]> {
+  const supabase = getSupabaseServerClient();
+  const { data } = await supabase
+    .from("products")
+    .select("name,image,forcelog_ref")
+    .not("image", "is", null);
+
+  const rows = (data ?? []) as {
+    name: string;
+    image: string;
+    forcelog_ref: string | null;
+  }[];
+  if (rows.length === 0) return leads;
+
+  const byRef = new Map(
+    rows.filter((r) => r.forcelog_ref).map((r) => [r.forcelog_ref as string, r.image])
+  );
+  const byName = new Map(rows.map((r) => [r.name.trim().toLowerCase(), r.image]));
+
+  return leads.map((lead) => {
+    // "180ZEI:2,18BWTD:1" : la photo du premier article preleve.
+    const firstRef = lead.stockItems?.split(",")[0]?.split(":")[0]?.trim();
+    const image =
+      (firstRef && byRef.get(firstRef)) ||
+      byName.get(lead.productName.trim().toLowerCase());
+    return image ? { ...lead, productImage: image } : lead;
+  });
 }
 
 /**
