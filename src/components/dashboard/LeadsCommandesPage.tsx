@@ -31,6 +31,12 @@ import {
   CheckCircle2,
   PhoneCall,
   PhoneOff,
+  PhoneMissed,
+  CalendarClock,
+  CalendarX,
+  Clock,
+  MessageCircle,
+  FlaskConical,
   XCircle,
   ShoppingBag,
   Watch,
@@ -44,6 +50,7 @@ import type { ComponentType } from "react";
 import Image from "next/image";
 import {
   tabs,
+  matchesTab,
   dateRanges,
   parseLeadDate,
   sourceBadgeStyles,
@@ -65,19 +72,44 @@ import DateRangeCalendar from "./DateRangeCalendar";
 /** Transporteur integre a l'application. */
 const CARRIER_NAME = "ForceLog";
 
-const statusIcons: Record<LeadStatus, ComponentType<{ className?: string }>> = {
-  Nouveau: Sparkles,
-  Assigne: UserPlus,
-  "En cours": RefreshCw,
-  Confirme: CheckCircle2,
-  Rappel: PhoneCall,
-  "Pas de reponse": PhoneOff,
-  "Numero incorrect": PhoneOff,
-  Annule: XCircle,
-  Duplique: Copy,
-  "A revoir": Eye,
-  "Faux / spam": Flag,
-};
+/**
+ * Icone d'un statut. Une fonction plutot qu'une table : les paliers
+ * numerotes ("Pas de rep 3") partagent l'icone de leur famille, et une
+ * table les repeterait cinq fois chacun.
+ */
+function statusIcon(status: LeadStatus): ComponentType<{ className?: string }> {
+  if (status.startsWith("Pas de rep")) return PhoneOff;
+  if (status.startsWith("Injoignable")) return PhoneMissed;
+  switch (status) {
+    case "Nouveau":
+      return Sparkles;
+    case "Confirme":
+      return CheckCircle2;
+    case "Rappel":
+      return PhoneCall;
+    case "Reportee":
+      return CalendarClock;
+    case "En attente":
+      return Clock;
+    case "Whatsapp":
+      return MessageCircle;
+    case "Annulee":
+    case "Non commandee":
+      return XCircle;
+    case "Faux numero":
+      return Flag;
+    case "Expiree":
+      return CalendarX;
+    case "En double":
+      return Copy;
+    case "EXPIDER":
+      return Truck;
+    case "TESTE":
+      return FlaskConical;
+    default:
+      return Sparkles;
+  }
+}
 
 function productIcon(productName: string): ComponentType<{ className?: string }> {
   const name = productName.toLowerCase();
@@ -263,14 +295,12 @@ export default function LeadsCommandesPage() {
 
   const dynamicTabs = tabs.map((tab) => ({
     ...tab,
-    count: tab.status
-      ? rangedLeads.filter((lead) => lead.status === tab.status).length
-      : rangedLeads.length,
+    count: rangedLeads.filter((lead) => matchesTab(tab, lead.status)).length,
   }));
   const activeTabDef = dynamicTabs.find((t) => t.label === activeTab) ?? dynamicTabs[0];
-  const filteredLeads = activeTabDef.status
-    ? rangedLeads.filter((lead) => lead.status === activeTabDef.status)
-    : rangedLeads;
+  const filteredLeads = rangedLeads.filter((lead) =>
+    matchesTab(activeTabDef, lead.status)
+  );
 
   // Les options proposees sont celles reellement presentes dans les
   // commandes chargees : inutile de proposer un filtre qui ne renverrait
@@ -992,7 +1022,7 @@ export default function LeadsCommandesPage() {
                   </td>
                   <td className="px-3 py-3">
                     {(() => {
-                      const StatusIcon = statusIcons[lead.status];
+                      const StatusIcon = statusIcon(lead.status);
                       return (
                         <span
                           className={`flex w-fit items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium ${statusBadgeStyles[lead.status]}`}

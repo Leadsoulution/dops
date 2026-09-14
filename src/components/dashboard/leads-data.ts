@@ -1,15 +1,41 @@
-export type LeadStatus =
-  | "Nouveau"
-  | "Assigne"
-  | "En cours"
-  | "Confirme"
-  | "Rappel"
-  | "Pas de reponse"
-  | "Numero incorrect"
-  | "Annule"
-  | "Duplique"
-  | "A revoir"
-  | "Faux / spam";
+/**
+ * Statuts de confirmation, dans l'ordre ou l'equipe les parcourt.
+ *
+ * La liste vient du service de confirmation : les paliers numerotes
+ * comptent les tentatives, ce que "Pas de reponse" seul ne disait pas.
+ *
+ * "Confirme" garde son orthographe existante plutot que "Confirmer" du
+ * tableau d'origine : c'est ce statut qui declenche l'expedition chez
+ * ForceLog, et 18 commandes le portent deja. Le renommer demanderait de
+ * migrer ces lignes pour un synonyme.
+ */
+export const LEAD_STATUSES = [
+  { label: "Nouveau", badge: "bg-sky-500 text-white" },
+  { label: "Confirme", badge: "bg-emerald-700 text-white" },
+  { label: "Pas de rep 1", badge: "bg-rose-100 text-rose-700" },
+  { label: "Pas de rep 2", badge: "bg-rose-100 text-rose-700" },
+  { label: "Pas de rep 3", badge: "bg-rose-100 text-rose-700" },
+  { label: "Pas de rep 4", badge: "bg-rose-100 text-rose-700" },
+  { label: "Pas de rep 5", badge: "bg-rose-100 text-rose-700" },
+  { label: "Injoignable 1", badge: "bg-orange-200 text-orange-800" },
+  { label: "Injoignable 2", badge: "bg-orange-200 text-orange-800" },
+  { label: "Injoignable 3", badge: "bg-orange-200 text-orange-800" },
+  { label: "Injoignable 4", badge: "bg-orange-200 text-orange-800" },
+  { label: "Injoignable 5", badge: "bg-orange-200 text-orange-800" },
+  { label: "En attente", badge: "bg-purple-200 text-purple-800" },
+  { label: "Reportee", badge: "bg-blue-700 text-white" },
+  { label: "Whatsapp", badge: "bg-yellow-200 text-yellow-800" },
+  { label: "Annulee", badge: "bg-red-700 text-white" },
+  { label: "Faux numero", badge: "bg-red-700 text-white" },
+  { label: "Non commandee", badge: "bg-red-700 text-white" },
+  { label: "Expiree", badge: "bg-amber-800 text-white" },
+  { label: "En double", badge: "bg-gray-700 text-white" },
+  { label: "Rappel", badge: "bg-slate-300 text-slate-800" },
+  { label: "EXPIDER", badge: "bg-blue-600 text-white" },
+  { label: "TESTE", badge: "bg-violet-700 text-white" },
+] as const;
+
+export type LeadStatus = (typeof LEAD_STATUSES)[number]["label"];
 
 export type LeadSource =
   | "Excel import"
@@ -84,7 +110,7 @@ export const leads: Lead[] = [
     source: "Agent Manual",
     assignedTo: "Imane Lahlou",
     amount: "500 MAD",
-    status: "Assigne",
+    status: "Nouveau",
     shipping: "En attente",
     date: "19 aout 2026, 21:59",
     ville: "Oujda",
@@ -164,7 +190,7 @@ export const leads: Lead[] = [
     source: "Agent Manual",
     assignedTo: "Fatima Zahra",
     amount: "837 MAD",
-    status: "Annule",
+    status: "Annulee",
     shipping: "En attente",
     date: "23 juil. 2026, 22:39",
   },
@@ -178,7 +204,7 @@ export const leads: Lead[] = [
     source: "nouveau",
     assignedTo: "Fatima Zahra",
     amount: "558 MAD",
-    status: "A revoir",
+    status: "En attente",
     shipping: "En attente",
     date: "28 juil. 2026, 08:40",
   },
@@ -192,29 +218,67 @@ export const leads: Lead[] = [
     source: "Direct",
     assignedTo: "Karim El Mansouri",
     amount: "799 MAD",
-    status: "Faux / spam",
+    status: "Faux numero",
     shipping: "En attente",
     date: "5 juil. 2026, 10:12",
   },
 ];
 
-const tabDefinitions: { label: string; status: LeadStatus | null; flagged?: boolean }[] = [
-  { label: "Tous", status: null },
-  { label: "Nouveaux", status: "Nouveau" },
-  { label: "Confirmes", status: "Confirme" },
-  { label: "Rappels", status: "Rappel" },
-  { label: "Pas de rep.", status: "Pas de reponse" },
-  { label: "Annules", status: "Annule" },
-  { label: "A revoir", status: "A revoir" },
-  { label: "Faux / spam", status: "Faux / spam", flagged: true },
+/**
+ * Onglets de la liste. Un onglet regroupe parfois plusieurs statuts :
+ * les cinq paliers de "Pas de rep" sont des tentatives d'un meme etat,
+ * cinq onglets pour eux noieraient les autres.
+ */
+const tabDefinitions: {
+  label: string;
+  statuses: LeadStatus[] | null;
+  flagged?: boolean;
+}[] = [
+  { label: "Tous", statuses: null },
+  { label: "Nouveaux", statuses: ["Nouveau"] },
+  { label: "Confirmes", statuses: ["Confirme"] },
+  { label: "Rappels", statuses: ["Rappel", "Reportee"] },
+  {
+    label: "Pas de rep.",
+    statuses: [
+      "Pas de rep 1",
+      "Pas de rep 2",
+      "Pas de rep 3",
+      "Pas de rep 4",
+      "Pas de rep 5",
+    ],
+  },
+  {
+    label: "Injoignables",
+    statuses: [
+      "Injoignable 1",
+      "Injoignable 2",
+      "Injoignable 3",
+      "Injoignable 4",
+      "Injoignable 5",
+    ],
+  },
+  { label: "En attente", statuses: ["En attente", "Whatsapp"] },
+  { label: "Annules", statuses: ["Annulee", "Non commandee", "Expiree"] },
+  {
+    label: "Faux / spam",
+    statuses: ["Faux numero", "En double", "TESTE"],
+    flagged: true,
+  },
 ];
 
 export const tabs = tabDefinitions.map((tab) => ({
   ...tab,
-  count: tab.status
-    ? leads.filter((lead) => lead.status === tab.status).length
-    : leads.length,
+  count: 0,
 }));
+
+/** La commande appartient-elle a cet onglet ? */
+export function matchesTab(
+  tab: { statuses: LeadStatus[] | null },
+  status: LeadStatus
+): boolean {
+  return tab.statuses === null || tab.statuses.includes(status);
+}
 
 /**
  * Mois francais tels qu'ils apparaissent dans les dates affichees,
@@ -316,19 +380,9 @@ export function paymentStatusStyle(situation: string): string {
   return "bg-gray-100 text-gray-600";
 }
 
-export const statusBadgeStyles: Record<LeadStatus, string> = {
-  Nouveau: "bg-sky-500 text-white",
-  Assigne: "bg-blue-600 text-white",
-  "En cours": "bg-indigo-500 text-white",
-  Confirme: "bg-emerald-600 text-white",
-  Rappel: "bg-orange-500 text-white",
-  "Pas de reponse": "bg-gray-500 text-white",
-  "Numero incorrect": "bg-rose-500 text-white",
-  Annule: "bg-red-600 text-white",
-  Duplique: "bg-amber-600 text-white",
-  "A revoir": "bg-purple-500 text-white",
-  "Faux / spam": "bg-red-600 text-white",
-};
+export const statusBadgeStyles: Record<string, string> = Object.fromEntries(
+  LEAD_STATUSES.map((s) => [s.label, s.badge])
+);
 
 export const agents = [
   "Fatima Zahra",
@@ -376,15 +430,7 @@ export const sourceOptions = [
 
 export const leadStatusOptions = [
   "Aucun changement",
-  "En cours",
-  "Confirme",
-  "Rappel",
-  "Pas de reponse",
-  "Numero incorrect",
-  "Annule",
-  "Duplique",
-  "A revoir",
-  "Faux / spam",
+  ...LEAD_STATUSES.map((s) => s.label),
 ];
 
 export const productNames = [
