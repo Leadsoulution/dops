@@ -13,6 +13,8 @@ import {
   SlidersHorizontal,
   TrendingDown,
   Loader2,
+  Store,
+  Truck,
   X,
 } from "lucide-react";
 import Image from "next/image";
@@ -77,6 +79,8 @@ export default function ProductsPage() {
   const [rawProducts, setRawProducts] = useState<StockProduct[]>([]);
   const [editProduct, setEditProduct] = useState<StockProduct | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [importing, setImporting] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const products = rawProducts.map(toProduct);
@@ -157,6 +161,37 @@ export default function ProductsPage() {
     void patchProduct(raw.id, { quantity: next });
   }
 
+  /** Rejoue un import et recharge le catalogue depuis la base. */
+  async function runImport(source: "woocommerce" | "forcelog") {
+    setImporting(source);
+    setActionError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(
+        source === "woocommerce"
+          ? "/api/woocommerce/products"
+          : "/api/products/sync-carrier",
+        { method: "POST" }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      setNotice(
+        source === "woocommerce"
+          ? `Boutique : ${data.ajoutes} produit(s) ajoute(s), ${data.lies} rattache(s), ${data.deja} deja lie(s)` +
+              (data.sansSku ? `, ${data.sansSku} ignore(s) faute de SKU.` : ".")
+          : `Stock transporteur : ${data.synced} article(s) mis a jour.`
+      );
+
+      const fresh = await fetch("/api/products").then((r) => r.json());
+      if (fresh.products) setRawProducts(fresh.products);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Import impossible.");
+    } finally {
+      setImporting(null);
+    }
+  }
+
   const query = searchQuery.trim().toLowerCase();
 
   /**
@@ -203,14 +238,52 @@ export default function ProductsPage() {
           </div>
         </div>
 
-        <button
-          onClick={() => setCreateOpen(true)}
-          className="flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-gray-800"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Nouveau produit
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => void runImport("woocommerce")}
+            disabled={importing !== null}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+          >
+            {importing === "woocommerce" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Store className="h-3.5 w-3.5" />
+            )}
+            Importer de WooCommerce
+          </button>
+          <button
+            onClick={() => void runImport("forcelog")}
+            disabled={importing !== null}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+          >
+            {importing === "forcelog" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Truck className="h-3.5 w-3.5" />
+            )}
+            Importer le stock ForceLog
+          </button>
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-gray-900 px-3.5 py-2 text-[13px] font-medium text-white hover:bg-gray-800"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Nouveau produit
+          </button>
+        </div>
       </div>
+
+      {notice && (
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <p className="text-[13px] text-emerald-700">{notice}</p>
+          <button
+            onClick={() => setNotice(null)}
+            className="rounded-md p-0.5 text-emerald-400 hover:text-emerald-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {actionError && (
         <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
