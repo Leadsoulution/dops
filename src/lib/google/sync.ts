@@ -1,5 +1,6 @@
 import "server-only";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getIntegrationSettings } from "@/lib/supabase/integrations";
 import { listLeads, updateLead } from "@/lib/supabase/leads";
 import type { Lead, LeadStatus } from "@/components/dashboard/leads-data";
 import { leadStatusOptions } from "@/components/dashboard/leads-data";
@@ -23,6 +24,14 @@ import {
  * L'ordre des deux operations n'est pas indifferent. On lit d'abord,
  * on ecrit ensuite : l'inverse ecraserait un statut saisi dans la
  * feuille avant meme de l'avoir vu.
+ *
+ * Lire ne suffit pourtant pas a decider. Entre deux synchronisations, la
+ * feuille porte encore ce qu'on y avait ecrit : un statut change dans
+ * l'application y apparait donc comme "different", et le reappliquer
+ * annulerait le changement. On retient donc ce qu'on a ecrit la derniere
+ * fois. Une valeur identique a notre dernier envoi veut dire que
+ * personne n'y a touche, et c'est l'application qui fait foi ; une
+ * valeur differente veut dire qu'une main est passee par la.
  */
 
 /** "Statut de confirmation" est la 12e colonne, soit L. */
@@ -39,6 +48,17 @@ export type SheetSyncResult = {
   statutsRepris: number;
   ignores: string[];
 };
+
+/** Le releve precedent, ou rien si la forme enregistree est illisible. */
+function parseMirror(raw?: string): Record<string, string> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "object" && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
+}
 
 function row(lead: Lead): (string | number)[] {
   return [
@@ -71,6 +91,11 @@ export async function syncSheet(): Promise<SheetSyncResult> {
   const leads = await listLeads();
   const byReference = new Map(leads.map((l) => [l.reference, l]));
 
+  const settings = await getIntegrationSettings<Record<string, string>>(
+    "google-sheets"
+  );
+  const lastMirror: Record<string, string> = parseMirror(settings.lastMirror);
+
   // 1. La feuille d'abord : un statut saisi la-bas doit etre lu avant
   //    d'etre recouvert par l'ecriture qui suit.
   const existing = await readColumn(STATUS_LETTER);
@@ -84,6 +109,10 @@ export async function syncSheet(): Promise<SheetSyncResult> {
 
     const lead = byReference.get(reference);
     if (!lead || lead.status === statut) continue;
+
+    // La feuille affiche encore ce que nous y avions ecrit : elle est
+    // simplement en retard, pas modifiee. L'application fait foi.
+    if (lastMirror[reference] === statut) continue;
 
     // Une valeur inconnue n'est pas appliquee : une faute de frappe dans
     // la feuille ne doit pas donner un statut fantaisiste a une commande.
@@ -119,9 +148,17 @@ export async function syncSheet(): Promise<SheetSyncResult> {
     );
   }
 
+  // Trace de ce qui vient d'etre ecrit, pour distinguer la prochaine
+  // fois une feuille en retard d'une feuille modifiee a la main.
+  const mirror: Record<string, string> = {};
+  for (const lead of leads) mirror[lead.reference] = lead.status;
+
   await getSupabaseServerClient()
     .from("integration_settings")
-    .update({ updated_at: new Date().toISOString() })
+    .update({
+      settings: { ...settings, lastMirror: JSON.stringify(mirror) },
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", "google-sheets");
 
   return { ecrites: leads.length, statutsRepris, ignores };
