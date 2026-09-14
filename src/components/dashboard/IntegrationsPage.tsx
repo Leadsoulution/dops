@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -207,26 +207,30 @@ export default function IntegrationsPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("leads");
   const [connectTarget, setConnectTarget] = useState<Integration | null>(null);
   const [forcelogConnected, setForcelogConnected] = useState<boolean | null>(null);
+  const [wooConnected, setWooConnected] = useState<boolean | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  // Les deux integrations reellement branchees disent leur etat plutot
+  // que de l'afficher en dur : une cle revoquee doit se voir ici.
+  const refreshHealth = useCallback(() => {
     fetch("/api/forcelog/health")
       .then((res) => res.json())
-      .then((data) => {
-        if (!cancelled) setForcelogConnected(Boolean(data.connected));
-      })
-      .catch(() => {
-        if (!cancelled) setForcelogConnected(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+      .then((data) => setForcelogConnected(Boolean(data.connected)))
+      .catch(() => setForcelogConnected(false));
+    fetch("/api/woocommerce/health")
+      .then((res) => res.json())
+      .then((data) => setWooConnected(Boolean(data.connected)))
+      .catch(() => setWooConnected(false));
   }, []);
 
-  const isConnected = (integration: Integration) =>
-    integration.id === "forcelog"
-      ? Boolean(forcelogConnected)
-      : integration.status === "Active";
+  useEffect(() => {
+    refreshHealth();
+  }, [refreshHealth]);
+
+  const isConnected = (integration: Integration) => {
+    if (integration.id === "forcelog") return Boolean(forcelogConnected);
+    if (integration.id === "woocommerce") return Boolean(wooConnected);
+    return integration.status === "Active";
+  };
 
   const totalCount = integrations.length;
   const connectedCount = integrations.filter(isConnected).length;
@@ -425,7 +429,10 @@ export default function IntegrationsPage() {
       {connectTarget && (
         <ConnectIntegrationModal
           integration={connectTarget}
-          onClose={() => setConnectTarget(null)}
+          onClose={() => {
+            setConnectTarget(null);
+            refreshHealth();
+          }}
         />
       )}
     </div>

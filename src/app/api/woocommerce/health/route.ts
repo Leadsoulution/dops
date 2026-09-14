@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { checkConnection, isWooConfigured, WooCommerceError } from "@/lib/woocommerce/client";
 
 export async function GET() {
-  if (!isWooConfigured()) {
+  if (!(await isWooConfigured())) {
     return NextResponse.json(
       { connected: false, error: "WooCommerce non configure." },
       { status: 200 }

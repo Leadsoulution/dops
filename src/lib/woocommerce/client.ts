@@ -8,6 +8,8 @@
  * Les identifiants sont lus ici et ne quittent jamais le serveur.
  */
 
+import { getIntegrationSettings } from "@/lib/supabase/integrations";
+
 export class WooCommerceError extends Error {
   constructor(message: string) {
     super(message);
@@ -55,23 +57,45 @@ export type WooOrder = {
   line_items: WooLineItem[];
 };
 
-function credentials() {
-  const url = process.env.WOOCOMMERCE_URL?.replace(/\/+$/, "");
-  const key = process.env.WOOCOMMERCE_CONSUMER_KEY;
-  const secret = process.env.WOOCOMMERCE_CONSUMER_SECRET;
-  return { url, key, secret };
+export type WooCredentials = {
+  url?: string;
+  key?: string;
+  secret?: string;
+};
+
+/**
+ * Identifiants de la boutique.
+ *
+ * Ceux saisis dans l'application priment sur les variables
+ * d'environnement : c'est la seule facon pour l'utilisateur de changer de
+ * boutique sans acces au serveur. Les variables restent un secours, et
+ * servent au premier demarrage.
+ */
+export async function getWooCredentials(): Promise<WooCredentials> {
+  const stored = await getIntegrationSettings<{
+    url: string;
+    key: string;
+    secret: string;
+  }>("woocommerce");
+
+  const url = (stored.url || process.env.WOOCOMMERCE_URL || "").replace(/\/+$/, "");
+  return {
+    url: url || undefined,
+    key: stored.key || process.env.WOOCOMMERCE_CONSUMER_KEY,
+    secret: stored.secret || process.env.WOOCOMMERCE_CONSUMER_SECRET,
+  };
 }
 
-export const isWooConfigured = () => {
-  const { url, key, secret } = credentials();
+export async function isWooConfigured(): Promise<boolean> {
+  const { url, key, secret } = await getWooCredentials();
   return Boolean(url && key && secret);
-};
+}
 
 async function wooRequest<T>(
   path: string,
   query: Record<string, string | number> = {}
 ): Promise<T> {
-  const { url, key, secret } = credentials();
+  const { url, key, secret } = await getWooCredentials();
   if (!url || !key || !secret) {
     throw new WooCommerceError(
       "WooCommerce non configure : adresse de la boutique et cles API requises."

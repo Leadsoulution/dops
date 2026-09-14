@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronRight, Loader2, X } from "lucide-react";
 import Toggle from "./Toggle";
 import type { Integration } from "./integrations-data";
+import WooCommerceConnectModal from "./WooCommerceConnectModal";
 
 const platformCopy: Record<
   string,
@@ -159,6 +160,12 @@ export default function ConnectIntegrationModal({
 
   if (integration.id === "forcelog") {
     return <ForceLogConnectModal integration={integration} onClose={onClose} />;
+  }
+
+  if (integration.id === "woocommerce") {
+    return (
+      <WooCommerceConnectModal integration={integration} onClose={onClose} />
+    );
   }
 
   const copy = platformCopy[integration.id] ?? {
