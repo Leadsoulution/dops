@@ -63,6 +63,7 @@ function toProduct(item: StockProduct): Product {
     image: item.image,
     forcelogRef: item.forcelogRef,
     wooSku: item.wooSku,
+    defaultParcelType: item.defaultParcelType,
   };
 }
 
@@ -516,6 +517,22 @@ export default function ProductsPage() {
                                 FL {product.forcelogRef}
                               </span>
                             )}
+                            <span
+                              title={
+                                product.defaultParcelType === "stock"
+                                  ? "Part du depot ForceLog"
+                                  : "Part de votre depot"
+                              }
+                              className={`rounded px-1.5 py-0.5 text-[10.5px] ${
+                                product.defaultParcelType === "stock"
+                                  ? "bg-sky-50 text-sky-600"
+                                  : "bg-gray-100 text-gray-500"
+                              }`}
+                            >
+                              {product.defaultParcelType === "stock"
+                                ? "Stock"
+                                : "Simple"}
+                            </span>
                             {product.wooSku ? (
                               <span
                                 title="SKU WooCommerce"

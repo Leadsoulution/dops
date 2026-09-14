@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Image from "next/image";
 import { AlertCircle, ImagePlus, Loader2, Package, Plus, Trash2, X } from "lucide-react";
 import SelectDropdown from "./SelectDropdown";
+import ParcelTypePicker from "./ParcelTypePicker";
 import Toggle from "./Toggle";
 import MediaPickerModal from "./MediaPickerModal";
 import { suppliers } from "./products-data";
@@ -40,6 +41,9 @@ export default function CreateProductModal({
   const [costSupplier, setCostSupplier] = useState("0");
   const [quantity, setQuantity] = useState("0");
   const [reorderThreshold, setReorderThreshold] = useState("0");
+  const [forcelogRef, setForcelogRef] = useState("");
+  const [wooSku, setWooSku] = useState("");
+  const [parcelType, setParcelType] = useState<"simple" | "stock">("simple");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mediaOpen, setMediaOpen] = useState(false);
@@ -103,6 +107,9 @@ export default function CreateProductModal({
           reorderThreshold: Number(reorderThreshold) || 0,
           status,
           image: image ?? undefined,
+          forcelogRef: forcelogRef.trim(),
+          wooSku: wooSku.trim(),
+          defaultParcelType: forcelogRef.trim() ? parcelType : "simple",
         }),
       });
       const data = await res.json();
@@ -285,6 +292,43 @@ export default function CreateProductModal({
               onSelect={setSupplier}
               searchable
             />
+          </div>
+
+          <div className="rounded-lg border border-gray-200 p-3">
+            <p className="mb-2 text-[11px] font-semibold tracking-wide text-gray-500">
+              CORRESPONDANCE ET EXPEDITION
+            </p>
+            <div className="space-y-2.5">
+              <div>
+                <label className="mb-1 block text-[12.5px] text-gray-600">
+                  Code article ForceLog
+                </label>
+                <input
+                  type="text"
+                  value={forcelogRef}
+                  onChange={(e) => setForcelogRef(e.target.value)}
+                  placeholder="180ZEI"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-[13px] text-gray-800 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[12.5px] text-gray-600">
+                  SKU WooCommerce
+                </label>
+                <input
+                  type="text"
+                  value={wooSku}
+                  onChange={(e) => setWooSku(e.target.value)}
+                  placeholder="LOR-ROSE-V2"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-[13px] text-gray-800 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none"
+                />
+              </div>
+              <ParcelTypePicker
+                value={parcelType}
+                onChange={setParcelType}
+                forcelogRef={forcelogRef}
+              />
+            </div>
           </div>
 
           <div>

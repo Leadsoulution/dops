@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { AlertCircle, ImagePlus, Loader2, Package, X } from "lucide-react";
 import MediaPickerModal from "./MediaPickerModal";
+import ParcelTypePicker from "./ParcelTypePicker";
 import SelectDropdown from "./SelectDropdown";
 import { suppliers } from "./products-data";
 import type { StockProduct } from "@/lib/supabase/products";
@@ -23,6 +24,9 @@ export default function EditProductModal({
   const [ref, setRef] = useState(product.ref);
   const [forcelogRef, setForcelogRef] = useState(product.forcelogRef ?? "");
   const [wooSku, setWooSku] = useState(product.wooSku ?? "");
+  const [parcelType, setParcelType] = useState<"simple" | "stock">(
+    product.defaultParcelType
+  );
   const [supplier, setSupplier] = useState(product.supplier ?? "");
   const [priceSale, setPriceSale] = useState(String(product.priceSale));
   const [costSupplier, setCostSupplier] = useState(String(product.costSupplier));
@@ -58,6 +62,8 @@ export default function EditProductModal({
           ref: ref.trim(),
           forcelogRef: forcelogRef.trim(),
           wooSku: wooSku.trim(),
+          // Retirer le code article retire aussi la possibilite du stock.
+          defaultParcelType: forcelogRef.trim() ? parcelType : "simple",
           supplier: supplier.trim(),
           priceSale: Number(priceSale) || 0,
           costSupplier: Number(costSupplier) || 0,
@@ -211,6 +217,12 @@ export default function EditProductModal({
               </div>
             </div>
           </div>
+
+          <ParcelTypePicker
+            value={parcelType}
+            onChange={setParcelType}
+            forcelogRef={forcelogRef}
+          />
 
           <div>
             <label className="mb-1 block text-[12.5px] text-gray-600">

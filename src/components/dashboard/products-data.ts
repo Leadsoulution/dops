@@ -19,6 +19,8 @@ export type Product = {
   forcelogRef?: string;
   /** SKU de la boutique WooCommerce. */
   wooSku?: string;
+  /** Type d'expedition par defaut du produit. */
+  defaultParcelType?: "simple" | "stock";
 };
 
 function margin(price: number, cost: number) {

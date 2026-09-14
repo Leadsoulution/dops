@@ -25,6 +25,12 @@ export type StockProduct = {
   forcelogRef?: string;
   /** SKU de la boutique WooCommerce. */
   wooSku?: string;
+  /**
+   * Comment ce produit part par defaut :
+   * - "simple" : expedie depuis notre depot
+   * - "stock"  : preleve dans le depot du transporteur
+   */
+  defaultParcelType: "simple" | "stock";
   quantity: number;
   waitingQuantity: number;
   image?: string;
@@ -45,6 +51,7 @@ type ProductRow = {
   barcode: string | null;
   forcelog_ref: string | null;
   woo_sku: string | null;
+  default_parcel_type: string;
   quantity: number;
   waiting_quantity: number;
   image: string | null;
@@ -58,7 +65,7 @@ type ProductRow = {
 };
 
 const COLUMNS =
-  "id,ref,name,product_name,barcode,forcelog_ref,woo_sku,quantity,waiting_quantity,image,supplier,price_sale,cost_supplier,reorder_threshold,status,source,updated_at";
+  "id,ref,name,product_name,barcode,forcelog_ref,woo_sku,default_parcel_type,quantity,waiting_quantity,image,supplier,price_sale,cost_supplier,reorder_threshold,status,source,updated_at";
 
 function toProduct(row: ProductRow): StockProduct {
   return {
@@ -69,6 +76,7 @@ function toProduct(row: ProductRow): StockProduct {
     barcode: row.barcode ?? undefined,
     forcelogRef: row.forcelog_ref ?? undefined,
     wooSku: row.woo_sku ?? undefined,
+    defaultParcelType: row.default_parcel_type === "stock" ? "stock" : "simple",
     quantity: row.quantity,
     waitingQuantity: row.waiting_quantity,
     image: row.image ?? undefined,
@@ -89,6 +97,7 @@ export type ProductInput = {
   barcode?: string;
   forcelogRef?: string;
   wooSku?: string;
+  defaultParcelType?: "simple" | "stock";
   supplier?: string;
   priceSale?: number;
   costSupplier?: number;
@@ -107,6 +116,9 @@ function toRow(input: Partial<ProductInput>) {
   if (input.barcode !== undefined) row.barcode = input.barcode || null;
   if (input.forcelogRef !== undefined) row.forcelog_ref = input.forcelogRef || null;
   if (input.wooSku !== undefined) row.woo_sku = input.wooSku || null;
+  if (input.defaultParcelType !== undefined) {
+    row.default_parcel_type = input.defaultParcelType;
+  }
   if (input.supplier !== undefined) row.supplier = input.supplier || null;
   if (input.priceSale !== undefined) row.price_sale = input.priceSale;
   if (input.costSupplier !== undefined) row.cost_supplier = input.costSupplier;
@@ -131,9 +143,22 @@ export async function listProducts(): Promise<StockProduct[]> {
   return (data as ProductRow[]).map(toProduct);
 }
 
+/**
+ * Un colis de stock preleve un article dans le depot du transporteur :
+ * sans code article, il n'y a rien a prelever.
+ */
+function assertStockIsShippable(input: Partial<ProductInput>) {
+  if (input.defaultParcelType === "stock" && !input.forcelogRef?.trim()) {
+    throw new Error(
+      "Un colis de stock exige un code article ForceLog : sans lui, le transporteur ne sait pas quoi prelever."
+    );
+  }
+}
+
 export async function createProduct(input: ProductInput): Promise<StockProduct> {
   if (!input.name?.trim()) throw new Error("Le nom du produit est requis.");
   if (!input.ref?.trim()) throw new Error("La reference (SKU) est requise.");
+  assertStockIsShippable(input);
 
   const supabase = getSupabaseServerClient();
   const { data, error } = await supabase
@@ -157,6 +182,23 @@ export async function updateProduct(
   changes: Partial<ProductInput>
 ): Promise<StockProduct> {
   const supabase = getSupabaseServerClient();
+
+  // Le code article peut ne pas faire partie de la modification : on lit
+  // alors celui deja enregistre, plutot que de refuser a tort.
+  if (changes.defaultParcelType === "stock" && changes.forcelogRef === undefined) {
+    const { data: current } = await supabase
+      .from("products")
+      .select("forcelog_ref")
+      .eq("id", id)
+      .maybeSingle();
+    assertStockIsShippable({
+      defaultParcelType: "stock",
+      forcelogRef: (current as { forcelog_ref: string | null } | null)?.forcelog_ref ?? "",
+    });
+  } else {
+    assertStockIsShippable(changes);
+  }
+
   const { data, error } = await supabase
     .from("products")
     .update(toRow(changes))
