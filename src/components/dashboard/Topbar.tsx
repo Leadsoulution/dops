@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -11,6 +11,7 @@ import {
   PackageCheck,
   Moon,
   Bell,
+  BellRing,
   ChevronDown,
   Settings,
   LogOut,
@@ -18,6 +19,14 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { leads, type Lead } from "./leads-data";
+import OrderWatcher from "./OrderWatcher";
+import {
+  askNotificationPermission,
+  notificationState,
+  notify,
+  unlockAudio,
+  type NotificationPermissionState,
+} from "@/lib/notifications";
 import type { SessionProfile } from "@/lib/supabase/auth";
 import { useSignOut } from "@/components/auth/useSignOut";
 
@@ -76,6 +85,11 @@ function SearchResultsPanel({
 }
 
 /** "Mohamed Alaoui" -> "MA" ; une seule initiale si un seul mot. */
+/** La permission ne change pas toute seule : rien a surveiller. */
+function subscribeNothing() {
+  return () => {};
+}
+
 function initials(name?: string) {
   if (!name) return "?";
   const parts = name.trim().split(/\s+/);
@@ -91,6 +105,18 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [profile, setProfile] = useState<SessionProfile | null>(null);
   const { signOut, signingOut } = useSignOut();
+  // La permission est un etat du navigateur, pas de React : la lire par
+  // `useSyncExternalStore` evite un reglage fige au premier rendu, et le
+  // serveur rend "default" comme le premier rendu du navigateur.
+  const [granted, setGranted] = useState<NotificationPermissionState | null>(
+    null
+  );
+  const browserState = useSyncExternalStore(
+    subscribeNothing,
+    notificationState,
+    () => "default" as NotificationPermissionState
+  );
+  const alertState = granted ?? browserState;
   const notifRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -147,6 +173,8 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
 
   return (
     <header className="shrink-0 border-b border-gray-200 bg-white">
+      {/* Surveille les commandes depuis toutes les pages. N'affiche rien. */}
+      <OrderWatcher />
       <div className="flex h-16 items-center gap-2 px-4 lg:gap-4 lg:px-6">
         <button
           onClick={onMenuClick}
@@ -232,6 +260,48 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
                 <p className="px-3 pb-1.5 text-[10.5px] font-semibold tracking-wide text-gray-400">
                   NOTIFICATIONS
                 </p>
+
+                {/* Alertes systeme : elles ne s'activent que sur demande
+                    explicite, le navigateur l'exige. */}
+                <div className="mx-1.5 mb-1.5 rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2">
+                  {alertState === "granted" ? (
+                    <p className="flex items-center gap-1.5 text-[12px] text-emerald-700">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Alertes activees
+                      <button
+                        onClick={() => {
+                          notify("Test", "Une commande livree sonne ainsi.", {
+                            sound: "payment",
+                          });
+                        }}
+                        className="ml-auto rounded px-1.5 py-0.5 text-[11px] font-medium text-blue-600 hover:bg-blue-50"
+                      >
+                        Tester le son
+                      </button>
+                    </p>
+                  ) : alertState === "denied" ? (
+                    <p className="text-[11.5px] text-gray-500">
+                      Les notifications sont bloquees pour ce site. Autorisez-les
+                      dans les reglages du navigateur pour etre prevenu.
+                    </p>
+                  ) : alertState === "unsupported" ? (
+                    <p className="text-[11.5px] text-gray-500">
+                      Ce navigateur ne gere pas les notifications systeme. Le son
+                      reste joue.
+                    </p>
+                  ) : (
+                    <button
+                      onClick={async () => {
+                        unlockAudio();
+                        setGranted(await askNotificationPermission());
+                      }}
+                      className="flex w-full items-center gap-1.5 rounded-md bg-gray-900 px-2.5 py-1.5 text-[12px] font-medium text-white hover:bg-gray-800"
+                    >
+                      <BellRing className="h-3.5 w-3.5" />
+                      Activer les alertes
+                    </button>
+                  )}
+                </div>
                 {notifications.map((notif) => {
                   const Icon = notif.icon;
                   return (
