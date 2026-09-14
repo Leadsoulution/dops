@@ -224,3 +224,75 @@ export async function syncProductsFromStock(
   }
   return touched;
 }
+
+/**
+ * Rattache les produits de la boutique au catalogue, par SKU.
+ *
+ * Trois cas, dans cet ordre :
+ *   - un produit porte deja ce SKU boutique : rien a faire
+ *   - un produit a la meme reference interne : le SKU s'y rattache
+ *   - sinon le produit est ajoute au catalogue, sans code ForceLog
+ *
+ * Le rapprochement avec l'article du depot n'est jamais devine : deux
+ * produits peuvent porter des noms proches, et se tromper enverrait le
+ * mauvais colis au client. C'est une decision humaine.
+ */
+export async function linkWooProducts(
+  items: Array<{
+    sku: string;
+    name: string;
+    price: number;
+    quantity: number;
+    image?: string;
+  }>
+): Promise<{ lies: number; ajoutes: number; deja: number }> {
+  if (items.length === 0) return { lies: 0, ajoutes: 0, deja: 0 };
+
+  const supabase = getSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("id,ref,woo_sku,name");
+  if (error) throw new Error(error.message);
+
+  const rows = (data ?? []) as { id: string; ref: string; woo_sku: string | null; name: string }[];
+  const byWooSku = new Map(rows.filter((r) => r.woo_sku).map((r) => [r.woo_sku as string, r]));
+  const byRef = new Map(rows.map((r) => [r.ref.toLowerCase(), r]));
+
+  let lies = 0;
+  let ajoutes = 0;
+  let deja = 0;
+
+  for (const item of items) {
+    if (byWooSku.has(item.sku)) {
+      deja += 1;
+      continue;
+    }
+
+    const match = byRef.get(item.sku.toLowerCase());
+    if (match) {
+      const { error: linkError } = await supabase
+        .from("products")
+        .update({ woo_sku: item.sku })
+        .eq("id", match.id);
+      if (linkError) throw new Error(linkError.message);
+      lies += 1;
+      continue;
+    }
+
+    const { error: insertError } = await supabase.from("products").insert({
+      ref: item.sku,
+      woo_sku: item.sku,
+      name: item.name,
+      product_name: item.name,
+      price_sale: item.price,
+      quantity: item.quantity,
+      image: item.image ?? null,
+      supplier: "WooCommerce",
+      source: "manuel",
+    });
+    if (insertError) throw new Error(insertError.message);
+    ajoutes += 1;
+  }
+
+  return { lies, ajoutes, deja };
+}
