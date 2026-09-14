@@ -2,6 +2,7 @@ import { addParcel, getRecentParcelStatuses } from "./client";
 import { mapOrderToParcel } from "./mapping";
 import { ForceLogApiError } from "./types";
 import type { Lead } from "@/components/dashboard/leads-data";
+import { sendPushToAll } from "@/lib/push";
 
 /** Statut a partir duquel une commande part automatiquement chez ForceLog. */
 export const AUTO_DISPATCH_STATUS = "Confirme";
@@ -113,6 +114,7 @@ export async function collectStatusUpdates(
   }
 
   const updates = new Map<string, Partial<Lead>>();
+  const delivered: Lead[] = [];
   for (const lead of tracked) {
     const remote = statuses.get(lead.trackingNumber!);
     if (!remote) continue;
@@ -138,6 +140,19 @@ export async function collectStatusUpdates(
       deliveryStatusCode: remote.statusCode,
       paymentStatus: remote.situation,
       ...(stampsDelivery ? { deliveryDate: deliveryTimestamp() } : {}),
+    });
+
+    // Une livraison merite une alerte, pas les autres changements de
+    // statut : c'est elle qui appelle un encaissement.
+    if (stampsDelivery) delivered.push(lead);
+  }
+
+  for (const lead of delivered) {
+    await sendPushToAll({
+      title: "Commande livree",
+      body: `${lead.client} - ${lead.amount} encaisse`,
+      tag: `livree-${lead.reference}`,
+      kind: "payment",
     });
   }
 

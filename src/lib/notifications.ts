@@ -120,3 +120,67 @@ export function notify(
     /* Certains navigateurs refusent hors d'un agent de service. */
   }
 }
+
+/**
+ * Abonne cet appareil aux notifications push.
+ *
+ * Sans cet abonnement, une alerte n'existe que dans un onglet ouvert.
+ * Avec lui, le serveur peut joindre le telephone application fermee.
+ *
+ * Sur iPhone, cela n'est possible qu'apres installation sur l'ecran
+ * d'accueil : Safari refuse l'abonnement depuis un onglet ordinaire.
+ */
+export async function subscribeToPush(): Promise<
+  { ok: true } | { ok: false; reason: string }
+> {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return { ok: false, reason: "Ce navigateur ne gere pas les notifications push." };
+  }
+
+  try {
+    const info = await fetch("/api/push/subscribe").then((r) => r.json());
+    if (!info.publicKey) {
+      return { ok: false, reason: "Notifications push non configurees sur le serveur." };
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+    const existing = await registration.pushManager.getSubscription();
+    const subscription =
+      existing ??
+      (await registration.pushManager.subscribe({
+        // Obligatoire : un abonnement muet, sans notification visible,
+        // serait refuse par les navigateurs.
+        userVisibleOnly: true,
+        applicationServerKey: info.publicKey,
+      }));
+
+    const res = await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subscription: subscription.toJSON() }),
+    });
+    if (!res.ok) {
+      return { ok: false, reason: (await res.json()).error ?? "Enregistrement refuse." };
+    }
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      reason:
+        error instanceof Error
+          ? error.message
+          : "Abonnement impossible sur cet appareil.",
+    };
+  }
+}
+
+/** Demande au serveur d'envoyer une notification a cet appareil. */
+export async function sendTestPush(): Promise<number> {
+  const res = await fetch("/api/push/subscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ test: true }),
+  });
+  const data = await res.json();
+  return data.sent ?? 0;
+}

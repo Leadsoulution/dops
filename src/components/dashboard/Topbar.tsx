@@ -25,6 +25,8 @@ import {
   notificationState,
   notify,
   unlockAudio,
+  subscribeToPush,
+  sendTestPush,
   type NotificationPermissionState,
 } from "@/lib/notifications";
 import type { SessionProfile } from "@/lib/supabase/auth";
@@ -117,6 +119,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
     () => "default" as NotificationPermissionState
   );
   const alertState = granted ?? browserState;
+  const [pushNote, setPushNote] = useState<string | null>(null);
   const notifRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -269,14 +272,20 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       Alertes activees
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           notify("Test", "Une commande livree sonne ainsi.", {
                             sound: "payment",
                           });
+                          const sent = await sendTestPush();
+                          setPushNote(
+                            sent > 0
+                              ? `Envoye a ${sent} appareil(s).`
+                              : "Aucun appareil abonne pour l'instant."
+                          );
                         }}
                         className="ml-auto rounded px-1.5 py-0.5 text-[11px] font-medium text-blue-600 hover:bg-blue-50"
                       >
-                        Tester le son
+                        Tester
                       </button>
                     </p>
                   ) : alertState === "denied" ? (
@@ -293,13 +302,26 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
                     <button
                       onClick={async () => {
                         unlockAudio();
-                        setGranted(await askNotificationPermission());
+                        const state = await askNotificationPermission();
+                        setGranted(state);
+                        if (state !== "granted") return;
+                        // L'abonnement push est ce qui permet de sonner
+                        // application fermee.
+                        const result = await subscribeToPush();
+                        setPushNote(
+                          result.ok
+                            ? "Cet appareil recevra les alertes, meme application fermee."
+                            : result.reason
+                        );
                       }}
                       className="flex w-full items-center gap-1.5 rounded-md bg-gray-900 px-2.5 py-1.5 text-[12px] font-medium text-white hover:bg-gray-800"
                     >
                       <BellRing className="h-3.5 w-3.5" />
                       Activer les alertes
                     </button>
+                  )}
+                  {pushNote && (
+                    <p className="mt-1.5 text-[11px] text-gray-500">{pushNote}</p>
                   )}
                 </div>
                 {notifications.map((notif) => {

@@ -2,6 +2,7 @@ import "server-only";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { listRecentOrders, type WooOrder } from "./client";
 import type { Lead } from "@/components/dashboard/leads-data";
+import { sendPushToAll } from "@/lib/push";
 
 /**
  * Reprise des commandes de la boutique dans l'application.
@@ -104,6 +105,26 @@ export async function importWooOrders(): Promise<WooImportResult> {
   if (nouvelles.length > 0) {
     const { error } = await supabase.from("leads").insert(nouvelles.map(toRow));
     if (error) throw new Error(error.message);
+
+    // Previent les telephones, y compris application fermee. L'import
+    // etant declenche par le webhook de la boutique, l'alerte part meme
+    // si personne n'a l'application ouverte.
+    const premiere = nouvelles[0];
+    await sendPushToAll(
+      nouvelles.length === 1
+        ? {
+            title: "Nouvelle commande",
+            body: `${premiere.client} - ${premiere.amount}${premiere.ville ? ` - ${premiere.ville}` : ""}`,
+            tag: `commande-${premiere.reference}`,
+            kind: "order",
+          }
+        : {
+            title: `${nouvelles.length} nouvelles commandes`,
+            body: nouvelles.map((l) => l.client).slice(0, 3).join(", "),
+            tag: "commandes",
+            kind: "order",
+          }
+    );
   }
 
   return {
