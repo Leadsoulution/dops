@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Check, ChevronDown, Loader2, Phone } from "lucide-react";
 import { LEAD_STATUSES, type Lead, type LeadStatus } from "./leads-data";
+import ConfirmDialog from "./ConfirmDialog";
 
 /**
  * Resultat d'un appel de confirmation.
@@ -31,14 +32,22 @@ export default function CallOutcomePanel({
 }) {
   const [allOpen, setAllOpen] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState<LeadStatus | null>(null);
 
   async function apply(status: LeadStatus) {
+    setConfirming(null);
     setPending(status);
     try {
       await onStatusChange(status);
     } finally {
       setPending(null);
     }
+  }
+
+  /** Reposer le statut deja en place ne change rien : autant l'ignorer. */
+  function ask(status: LeadStatus) {
+    if (status === lead.status) return;
+    setConfirming(status);
   }
 
   return (
@@ -69,7 +78,7 @@ export default function CallOutcomePanel({
           return (
             <button
               key={option.label}
-              onClick={() => apply(option.label)}
+              onClick={() => ask(option.label)}
               disabled={pending !== null}
               className={`flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-[12.5px] font-medium text-white transition-colors disabled:opacity-60 ${option.className} ${
                 active ? "ring-2 ring-gray-900 ring-offset-1" : ""
@@ -106,7 +115,7 @@ export default function CallOutcomePanel({
               return (
                 <button
                   key={status.label}
-                  onClick={() => apply(status.label)}
+                  onClick={() => ask(status.label)}
                   disabled={pending !== null}
                   className={`flex items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[12px] font-medium disabled:opacity-60 ${status.badge} ${
                     active ? "ring-2 ring-gray-900 ring-offset-1" : ""
@@ -123,6 +132,27 @@ export default function CallOutcomePanel({
             })}
           </div>
         </div>
+      )}
+
+      {confirming && (
+        <ConfirmDialog
+          title="Confirmer le changement de statut"
+          message={
+            <>
+              Passer <span className="font-medium text-gray-700">{lead.client}</span>{" "}
+              en <span className="font-medium text-gray-700">{confirming}</span> ?
+              {confirming === "Confirme" && !lead.trackingNumber && (
+                <span className="mt-1.5 block text-amber-600">
+                  Le colis partira aussitot chez le transporteur.
+                </span>
+              )}
+            </>
+          }
+          confirmLabel="Appliquer le statut"
+          pending={pending !== null}
+          onConfirm={() => apply(confirming)}
+          onCancel={() => setConfirming(null)}
+        />
       )}
 
       <p className="mt-2 text-[11.5px] text-gray-400">

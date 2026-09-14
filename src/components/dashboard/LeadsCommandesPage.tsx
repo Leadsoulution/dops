@@ -67,6 +67,7 @@ import EditOrderModal from "./EditOrderModal";
 import ChangeStatusModal from "./ChangeStatusModal";
 import AssignModal from "./AssignModal";
 import SelectDropdown from "./SelectDropdown";
+import ConfirmDialog from "./ConfirmDialog";
 import DateRangeCalendar from "./DateRangeCalendar";
 
 /** Transporteur integre a l'application. */
@@ -153,6 +154,8 @@ export default function LeadsCommandesPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sendingToForceLog, setSendingToForceLog] = useState<Set<string>>(new Set());
   const [modal, setModal] = useState<ModalState>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Lead | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // L'id d'une eventuelle arrivee depuis la recherche globale (?lead=<id>),
   // capture une seule fois : `searchParams` change d'identite a chaque
@@ -549,7 +552,7 @@ export default function LeadsCommandesPage() {
       },
       onAssign: () => setModal({ type: "assign", leadIds: [lead.id] }),
       onChangeStatus: () => setModal({ type: "status", leadIds: [lead.id] }),
-      onDelete: () => deleteLead(lead.id),
+      onDelete: () => setConfirmDelete(lead),
       onSendToForceLog: () => sendToForceLog(lead),
     };
   }
@@ -1272,6 +1275,44 @@ export default function LeadsCommandesPage() {
       >
         <Plus className="h-6 w-6" />
       </button>
+
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Supprimer la commande"
+          message={
+            <>
+              Supprimer definitivement{" "}
+              <span className="font-medium text-gray-700">
+                {confirmDelete.reference}
+              </span>{" "}
+              de{" "}
+              <span className="font-medium text-gray-700">
+                {confirmDelete.client}
+              </span>{" "}
+              ? Cette action ne peut pas etre annulee.
+              {confirmDelete.trackingNumber && (
+                <span className="mt-1.5 block text-amber-600">
+                  Le colis {confirmDelete.trackingNumber} restera chez le
+                  transporteur : annulez-le de leur cote si besoin.
+                </span>
+              )}
+            </>
+          }
+          confirmLabel="Supprimer"
+          danger
+          pending={deleting}
+          onConfirm={async () => {
+            setDeleting(true);
+            try {
+              await deleteLead(confirmDelete.id);
+            } finally {
+              setDeleting(false);
+              setConfirmDelete(null);
+            }
+          }}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
 
       {modal?.type === "create" && (
         <CreateCommandeModal
