@@ -1262,7 +1262,7 @@ export default function LeadsCommandesPage() {
 
               <button
                 onClick={actions.onViewDetails}
-                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 py-2 text-[12.5px] font-medium text-gray-700 hover:bg-gray-50"
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#cfdae8] bg-[#E3EAF2] py-2 text-[12.5px] font-medium text-gray-700 transition-colors hover:bg-[#d5dfec]"
               >
                 <Eye className="h-3.5 w-3.5 shrink-0" />
                 Voir details
