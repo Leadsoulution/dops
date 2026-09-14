@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { deleteLead, updateLead } from "@/lib/supabase/leads";
 import { isSupabaseServerConfigured } from "@/lib/supabase/server";
+import { getSessionProfile } from "@/lib/supabase/auth";
 import { AUTO_DISPATCH_STATUS, dispatchToForceLog } from "@/lib/forcelog/dispatch";
 
 function notConfigured() {
@@ -48,6 +49,20 @@ export async function DELETE(
 ) {
   if (!isSupabaseServerConfigured) return notConfigured();
   const { id } = await ctx.params;
+
+  // Supprimer une commande est sans retour : reserve aux
+  // administrateurs, et verifie ici. Masquer le bouton ne protege rien,
+  // la requete pouvant etre envoyee sans passer par l'interface.
+  const profile = await getSessionProfile();
+  if (!profile) {
+    return NextResponse.json({ error: "Non connecte." }, { status: 401 });
+  }
+  if (profile.role !== "Admin") {
+    return NextResponse.json(
+      { error: "Seul un administrateur peut supprimer une commande." },
+      { status: 403 }
+    );
+  }
 
   try {
     await deleteLead(id);

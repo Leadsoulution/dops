@@ -153,6 +153,7 @@ export default function LeadsCommandesPage() {
   const [sendingToForceLog, setSendingToForceLog] = useState<Set<string>>(new Set());
   const [modal, setModal] = useState<ModalState>(null);
   const [confirmDelete, setConfirmDelete] = useState<Lead | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   // L'id d'une eventuelle arrivee depuis la recherche globale (?lead=<id>),
@@ -220,6 +221,23 @@ export default function LeadsCommandesPage() {
       });
     }
 
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Qui est connecte : seul un administrateur voit les suppressions.
+  // Le serveur refuse de toute facon la requete aux autres.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.profile) setIsAdmin(data.profile.role === "Admin");
+      })
+      .catch(() => {
+        /* Sans profil connu, les suppressions restent masquees. */
+      });
     return () => {
       cancelled = true;
     };
@@ -559,7 +577,7 @@ export default function LeadsCommandesPage() {
       },
       onAssign: () => setModal({ type: "assign", leadIds: [lead.id] }),
       onChangeStatus: () => setModal({ type: "status", leadIds: [lead.id] }),
-      onDelete: () => setConfirmDelete(lead),
+      onDelete: isAdmin ? () => setConfirmDelete(lead) : undefined,
       onSendToForceLog: () => sendToForceLog(lead),
     };
   }
@@ -1331,6 +1349,15 @@ export default function LeadsCommandesPage() {
           onStatusChange={async (status) => {
             await persistChanges([modal.lead.id], { status });
           }}
+          onDelete={
+            isAdmin
+              ? () => {
+                  const lead = modal.lead;
+                  setModal(null);
+                  setConfirmDelete(lead);
+                }
+              : undefined
+          }
           onClose={() => setModal(null)}
           onEdit={() => setModal({ type: "edit", lead: modal.lead })}
         />

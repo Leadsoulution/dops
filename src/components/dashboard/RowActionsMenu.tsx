@@ -23,7 +23,8 @@ type RowActionsMenuProps = {
   onCopyContact: () => void;
   onAssign: () => void;
   onChangeStatus: () => void;
-  onDelete: () => void;
+  /** Absente pour qui n'a pas le droit de supprimer. */
+  onDelete?: () => void;
   onSendToForceLog?: () => void;
 };
 
@@ -105,6 +106,7 @@ export default function RowActionsMenu({
               })}
             </div>
           ))}
+          {onDelete && (
           <div className="border-t border-gray-100 pt-1">
             <button
               onClick={() => runAndClose(onDelete)}
@@ -114,6 +116,7 @@ export default function RowActionsMenu({
               Supprimer commande
             </button>
           </div>
+          )}
         </div>
       </AnchoredMenu>
     </>

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { ClipboardList, MapPin, Pencil, User, X } from "lucide-react";
+import { ClipboardList, MapPin, Pencil, Trash2, User, X } from "lucide-react";
 import type { Lead, LeadStatus } from "./leads-data";
 import CallOutcomePanel from "./CallOutcomePanel";
 
@@ -18,11 +18,14 @@ export default function OrderDetailsModal({
   onClose,
   onEdit,
   onStatusChange,
+  onDelete,
 }: {
   lead: Lead;
   onClose: () => void;
   onEdit: () => void;
   onStatusChange: (status: LeadStatus) => Promise<void> | void;
+  /** Absente pour qui n'a pas le droit de supprimer. */
+  onDelete?: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>(tabs[0]);
 
@@ -194,6 +197,15 @@ export default function OrderDetailsModal({
         </div>
 
         <div className="flex flex-col-reverse gap-2.5 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end">
+          {onDelete && (
+            <button
+              onClick={onDelete}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-4 py-2 text-[13px] font-medium text-red-600 hover:bg-red-50 sm:mr-auto sm:w-auto"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Supprimer la commande
+            </button>
+          )}
           <button
             onClick={onClose}
             className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-50 sm:w-auto"
