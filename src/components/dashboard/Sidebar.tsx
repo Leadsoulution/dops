@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -21,52 +22,29 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { useSignOut } from "@/components/auth/useSignOut";
+import {
+  APP_SECTIONS,
+  canAccess,
+  effectiveAccess,
+  firstAllowedHref,
+} from "@/lib/access";
+import type { SessionProfile } from "@/lib/supabase/auth";
 
-type NavItem = {
-  label: string;
-  icon: ComponentType<{ className?: string }>;
-  href?: string;
+const ICONS: Record<string, ComponentType<{ className?: string }>> = {
+  dashboard: LayoutDashboard,
+  leads: ShoppingCart,
+  confirmation: PhoneCall,
+  "perf-agents": Activity,
+  products: Package,
+  integrations: Puzzle,
+  fournisseurs: Users,
+  villes: MapPin,
+  finance: Wallet,
+  utilisateurs: UserCog,
+  parametres: Settings,
 };
 
-type NavSection = {
-  title: string;
-  items: NavItem[];
-};
-
-const sections: NavSection[] = [
-  {
-    title: "PRINCIPAL",
-    items: [
-      { label: "Tableau de bord", icon: LayoutDashboard, href: "/dashboard" },
-      { label: "Leads / Commandes", icon: ShoppingCart, href: "/" },
-      { label: "Confirmation", icon: PhoneCall, href: "/confirmation" },
-      { label: "Perf. Agents", icon: Activity, href: "/perf-agents" },
-    ],
-  },
-  {
-    title: "COMMERCE",
-    items: [
-      { label: "Produits", icon: Package, href: "/products" },
-      { label: "Integrations", icon: Puzzle, href: "/integrations" },
-    ],
-  },
-  {
-    title: "OPERATIONS",
-    items: [{ label: "Fournisseurs", icon: Users, href: "/fournisseurs" }],
-  },
-  {
-    title: "DONNEES MAITRES",
-    items: [{ label: "Villes de livraison", icon: MapPin, href: "/villes" }],
-  },
-  {
-    title: "GESTION",
-    items: [
-      { label: "Finance", icon: Wallet, href: "/finance" },
-      { label: "Utilisateurs", icon: UserCog, href: "/utilisateurs" },
-      { label: "Parametres", icon: Settings, href: "/parametres" },
-    ],
-  },
-];
+const GROUPS = [...new Set(APP_SECTIONS.map((s) => s.group))];
 
 type SidebarProps = {
   open: boolean;
@@ -76,6 +54,38 @@ type SidebarProps = {
 export default function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { signOut, signingOut } = useSignOut();
+  const router = useRouter();
+  const [profile, setProfile] = useState<SessionProfile | null>(null);
+
+  /**
+   * La barre laterale porte les regles de navigation : elle masque les
+   * pages interdites, et renvoie ailleurs quiconque en ouvre une par son
+   * adresse. C'est un garde-fou d'affichage ; les operations sensibles
+   * sont refusees cote serveur, dans les routes d'API.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.profile) return;
+        setProfile(data.profile);
+        if (!canAccess(data.profile, pathname)) {
+          router.replace(firstAllowedHref(data.profile));
+        }
+      })
+      .catch(() => {
+        /* Sans profil, la barre affiche tout : le serveur reste juge. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname, router]);
+
+  // Tant que le profil n'est pas connu, la barre affiche tout : masquer
+  // puis reafficher ferait clignoter la navigation a chaque page.
+  const allowedKeys = profile ? effectiveAccess(profile) : null;
+  const allowed = (key: string) => !allowedKeys || allowedKeys.includes(key);
 
   return (
     <>
@@ -114,39 +124,43 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
       </div>
 
       <nav className="sidebar-scroll flex-1 overflow-y-auto px-3 pb-4">
-        {sections.map((section) => (
-          <div key={section.title} className="mb-4">
-            <p className="mb-1 px-3 text-[10.5px] font-semibold tracking-wider text-slate-500">
-              {section.title}
-            </p>
-            <ul className="space-y-0.5">
-              {section.items.map((item) => {
-                const Icon = item.icon;
-                const active = item.href === pathname;
-                const className = `flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] transition-colors ${
-                  active
-                    ? "bg-blue-600 text-white font-medium"
-                    : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
-                }`;
-                return (
-                  <li key={item.label}>
-                    {item.href ? (
-                      <Link href={item.href} onClick={onClose} className={className}>
+        {GROUPS.map((group) => {
+          const items = APP_SECTIONS.filter(
+            (s) => s.group === group && allowed(s.key)
+          );
+          // Un groupe dont toutes les pages sont interdites disparait,
+          // titre compris : un intitule seul n'apprend rien.
+          if (items.length === 0) return null;
+          return (
+            <div key={group} className="mb-4">
+              <p className="mb-1 px-3 text-[10.5px] font-semibold tracking-wider text-slate-500">
+                {group}
+              </p>
+              <ul className="space-y-0.5">
+                {items.map((item) => {
+                  const Icon = ICONS[item.key];
+                  const active = item.href === pathname;
+                  return (
+                    <li key={item.key}>
+                      <Link
+                        href={item.href}
+                        onClick={onClose}
+                        className={`flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] transition-colors ${
+                          active
+                            ? "bg-blue-600 font-medium text-white"
+                            : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                        }`}
+                      >
                         <Icon className="h-[17px] w-[17px] shrink-0" />
                         <span>{item.label}</span>
                       </Link>
-                    ) : (
-                      <div className={`${className} cursor-default`}>
-                        <Icon className="h-[17px] w-[17px] shrink-0" />
-                        <span>{item.label}</span>
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
       </nav>
 
       <div className="border-t border-white/5 px-3 py-3">

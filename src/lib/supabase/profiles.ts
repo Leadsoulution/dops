@@ -22,10 +22,11 @@ type ProfileRow = {
   creation_prospects: boolean;
   avatar_color: string;
   last_sign_in_at: string | null;
+  page_access: string[] | null;
 };
 
 const COLUMNS =
-  "id,name,email,phone,role,status,suivi_livraison,imports_excel,creation_prospects,avatar_color,last_sign_in_at";
+  "id,name,email,phone,role,status,suivi_livraison,imports_excel,creation_prospects,avatar_color,last_sign_in_at,page_access";
 
 /** "26 aout 2026, 16:02", comme les autres dates de l'interface. */
 function formatSignIn(iso: string | null): string {
@@ -64,6 +65,7 @@ function toMember(row: ProfileRow): TeamMember {
     tauxConv: null,
     derniereConnexion: formatSignIn(row.last_sign_in_at),
     avatarColor: row.avatar_color,
+    pageAccess: row.page_access ?? [],
   };
 }
 
@@ -75,6 +77,7 @@ function toRow(member: Partial<TeamMember>): Record<string, unknown> {
   if (member.role !== undefined) row.role = member.role;
   if (member.status !== undefined) row.status = member.status;
   if (member.avatarColor !== undefined) row.avatar_color = member.avatarColor;
+  if (member.pageAccess !== undefined) row.page_access = member.pageAccess;
   if (member.permissions) {
     row.suivi_livraison = member.permissions.suiviLivraison;
     row.imports_excel = member.permissions.importsExcel;

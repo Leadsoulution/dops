@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   MoreVertical,
   Eye,
@@ -13,6 +13,7 @@ import {
   Trash2,
   Truck,
 } from "lucide-react";
+import AnchoredMenu from "./AnchoredMenu";
 
 type RowActionsMenuProps = {
   onViewDetails: () => void;
@@ -38,17 +39,7 @@ export default function RowActionsMenu({
   onSendToForceLog,
 }: RowActionsMenuProps) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (ref.current && !ref.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const menuGroups = [
     [
@@ -73,16 +64,27 @@ export default function RowActionsMenu({
   }
 
   return (
-    <div className="relative" ref={ref}>
+    <>
       <button
+        ref={buttonRef}
         onClick={() => setOpen((v) => !v)}
         className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
       >
         <MoreVertical className="h-4 w-4" />
       </button>
 
-      {open && (
-        <div className="absolute right-0 top-full z-20 mt-1 w-56 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+      {/*
+        Rendu hors du tableau : son conteneur porte `overflow-x-auto`, ce
+        qui rogne aussi verticalement et coupait le menu des dernieres
+        lignes.
+      */}
+      <AnchoredMenu
+        open={open}
+        anchorRef={buttonRef}
+        onClose={() => setOpen(false)}
+        width={224}
+      >
+        <div>
           {menuGroups.map((group, i) => (
             <div
               key={i}
@@ -113,7 +115,7 @@ export default function RowActionsMenu({
             </button>
           </div>
         </div>
-      )}
-    </div>
+      </AnchoredMenu>
+    </>
   );
 }

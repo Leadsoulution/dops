@@ -5,6 +5,8 @@ import { AlertCircle, Loader2, X } from "lucide-react";
 import Toggle from "./Toggle";
 import SelectDropdown from "./SelectDropdown";
 import { avatarColors, roleOptions, type TeamMember } from "./users-data";
+import SectionAccessPicker from "./SectionAccessPicker";
+import { ALL_SECTION_KEYS, DEFAULT_AGENT_SECTIONS, effectiveAccess } from "@/lib/access";
 
 export default function CreateUserModal({
   onClose,
@@ -22,6 +24,16 @@ export default function CreateUserModal({
   const [importsExcel, setImportsExcel] = useState(false);
   const [creationProspects, setCreationProspects] = useState(false);
   const [active, setActive] = useState(true);
+  const [pageAccess, setPageAccess] = useState<string[]>(DEFAULT_AGENT_SECTIONS);
+
+  // Passer un compte en administrateur ouvre tout par defaut ; il reste
+  // libre de decocher ce qu'il ne veut pas voir.
+  function changeRole(next: string) {
+    setRole(next);
+    if (next === "Admin" && pageAccess.length <= DEFAULT_AGENT_SECTIONS.length) {
+      setPageAccess([...ALL_SECTION_KEYS]);
+    }
+  }
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -52,6 +64,7 @@ export default function CreateUserModal({
           // d'un coup d'oeil dans la liste.
           avatarColor: avatarColors[Math.floor(Math.random() * avatarColors.length)],
           permissions: { suiviLivraison, importsExcel, creationProspects },
+          pageAccess: effectiveAccess({ role, pageAccess }),
         }),
       });
       const data = await res.json();
@@ -129,7 +142,7 @@ export default function CreateUserModal({
               pinnedLabel={role}
               options={roleOptions}
               value={role}
-              onSelect={setRole}
+              onSelect={changeRole}
             />
           </div>
 
@@ -148,6 +161,12 @@ export default function CreateUserModal({
               A transmettre a la personne : elle se connecte avec.
             </p>
           </div>
+
+          <SectionAccessPicker
+            role={role}
+            value={pageAccess}
+            onChange={setPageAccess}
+          />
 
           <div className="rounded-lg border border-teal-100 bg-teal-50 px-3">
             <Toggle

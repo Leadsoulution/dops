@@ -47,6 +47,7 @@ export type SessionProfile = {
   role: string;
   status: string;
   avatarColor: string;
+  pageAccess: string[];
   permissions: {
     suiviLivraison: boolean;
     importsExcel: boolean;
@@ -74,7 +75,7 @@ export async function getSessionProfile(): Promise<SessionProfile | null> {
   const { data } = await admin
     .from("profiles")
     .select(
-      "id,name,email,phone,role,status,avatar_color,suivi_livraison,imports_excel,creation_prospects"
+      "id,name,email,phone,role,status,avatar_color,page_access,suivi_livraison,imports_excel,creation_prospects"
     )
     .eq("id", user.id)
     .maybeSingle();
@@ -89,6 +90,7 @@ export async function getSessionProfile(): Promise<SessionProfile | null> {
     role: data.role,
     status: data.status,
     avatarColor: data.avatar_color,
+    pageAccess: data.page_access ?? [],
     permissions: {
       suiviLivraison: data.suivi_livraison,
       importsExcel: data.imports_excel,

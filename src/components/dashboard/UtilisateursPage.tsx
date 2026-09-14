@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertCircle,
   Eye,
@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import Sparkline from "./Sparkline";
 import SelectDropdown from "./SelectDropdown";
+import AnchoredMenu from "./AnchoredMenu";
 import CreateUserModal from "./CreateUserModal";
 import UserDetailModal from "./UserDetailModal";
 import EditUserModal from "./EditUserModal";
@@ -402,54 +403,18 @@ export default function UtilisateursPage() {
                   <td className="whitespace-nowrap px-3 py-3 font-mono text-gray-500">
                     {member.derniereConnexion}
                   </td>
-                  <td
-                    className="relative px-3 py-3"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      onClick={() =>
+                  <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                    <UserRowMenu
+                      member={member}
+                      open={openMenuId === member.id}
+                      onToggle={() =>
                         setOpenMenuId((v) => (v === member.id ? null : member.id))
                       }
-                      className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </button>
-                    {openMenuId === member.id && (
-                      <div className="absolute right-3 top-full z-20 mt-1 w-48 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
-                        <button
-                          onClick={() => {
-                            setDetailMember(member);
-                            setOpenMenuId(null);
-                          }}
-                          className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-gray-700 hover:bg-gray-50"
-                        >
-                          <Eye className="h-3.5 w-3.5 text-gray-400" />
-                          Voir details
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditMember(member);
-                            setOpenMenuId(null);
-                          }}
-                          className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-gray-700 hover:bg-gray-50"
-                        >
-                          <Pencil className="h-3.5 w-3.5 text-gray-400" />
-                          Modifier
-                        </button>
-                        <div className="mt-1 border-t border-gray-100 pt-1">
-                          <button
-                            onClick={() => {
-                              void removeMember(member.id);
-                              setOpenMenuId(null);
-                            }}
-                            className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-red-600 hover:bg-red-50"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            Supprimer
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                      onClose={() => setOpenMenuId(null)}
+                      onView={() => setDetailMember(member)}
+                      onEdit={() => setEditMember(member)}
+                      onDelete={() => void removeMember(member.id)}
+                    />
                   </td>
                 </tr>
               ))}
@@ -485,5 +450,73 @@ export default function UtilisateursPage() {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Menu d'une ligne. Extrait en composant pour que chaque ligne dispose
+ * de sa propre reference vers son bouton : le menu est rendu hors du
+ * tableau, il lui faut savoir sous lequel se placer.
+ */
+function UserRowMenu({
+  member,
+  open,
+  onToggle,
+  onClose,
+  onView,
+  onEdit,
+  onDelete,
+}: {
+  member: TeamMember;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onView: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  function run(action: () => void) {
+    onClose();
+    action();
+  }
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        onClick={onToggle}
+        aria-label={`Actions pour ${member.name}`}
+        className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+      >
+        <MoreVertical className="h-4 w-4" />
+      </button>
+      <AnchoredMenu open={open} anchorRef={buttonRef} onClose={onClose}>
+        <button
+          onClick={() => run(onView)}
+          className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-gray-700 hover:bg-gray-50"
+        >
+          <Eye className="h-3.5 w-3.5 text-gray-400" />
+          Voir details
+        </button>
+        <button
+          onClick={() => run(onEdit)}
+          className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-gray-700 hover:bg-gray-50"
+        >
+          <Pencil className="h-3.5 w-3.5 text-gray-400" />
+          Modifier
+        </button>
+        <div className="mt-1 border-t border-gray-100 pt-1">
+          <button
+            onClick={() => run(onDelete)}
+            className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-red-600 hover:bg-red-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Supprimer
+          </button>
+        </div>
+      </AnchoredMenu>
+    </>
   );
 }

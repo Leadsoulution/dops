@@ -3,6 +3,10 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import Toggle from "./Toggle";
+import SelectDropdown from "./SelectDropdown";
+import SectionAccessPicker from "./SectionAccessPicker";
+import { effectiveAccess } from "@/lib/access";
+import { roleOptions } from "./users-data";
 import type { TeamMember } from "./users-data";
 
 export default function EditUserModal({
@@ -25,6 +29,8 @@ export default function EditUserModal({
     member.permissions.creationProspects
   );
   const [active, setActive] = useState(member.status === "Actif");
+  const [role, setRole] = useState(member.role);
+  const [pageAccess, setPageAccess] = useState<string[]>(member.pageAccess);
 
   function handleSave() {
     onSave({
@@ -33,7 +39,9 @@ export default function EditUserModal({
       email,
       phone,
       status: active ? "Actif" : "Inactif",
+      role,
       permissions: { suiviLivraison, importsExcel, creationProspects },
+      pageAccess: effectiveAccess({ role, pageAccess }),
     });
   }
 
@@ -89,7 +97,24 @@ export default function EditUserModal({
             />
           </div>
 
-          {member.role === "Agent" && (
+          <div>
+            <label className="mb-1 block text-[12.5px] text-gray-600">Role</label>
+            <SelectDropdown
+              variant="field"
+              pinnedLabel={role}
+              options={roleOptions}
+              value={role}
+              onSelect={(v) => setRole(v as TeamMember["role"])}
+            />
+          </div>
+
+          <SectionAccessPicker
+            role={role}
+            value={pageAccess}
+            onChange={setPageAccess}
+          />
+
+          {role === "Agent" && (
             <>
               <div className="rounded-lg border border-teal-100 bg-teal-50 px-3">
                 <Toggle
