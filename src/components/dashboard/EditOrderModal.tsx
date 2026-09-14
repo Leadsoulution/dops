@@ -1,32 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ChevronDown,
   Minus,
   Pencil,
   Plus,
   Search,
+  Loader2,
+  AlertCircle,
   X,
 } from "lucide-react";
 import SelectDropdown from "./SelectDropdown";
 import { moroccanCities, type Lead } from "./leads-data";
 
-const catalogProducts = [
-  { name: "SAC LO", price: 75 },
-  { name: "Diffuseur Atlas Zen", price: 259 },
-  { name: "Sac Cuir Marrakech", price: 289 },
-  { name: "Bracelet Atlas Silver", price: 179 },
-  { name: "Serum Derma Glow", price: 228 },
-  { name: "Powerbank MagSafe Atlas", price: 389 },
-  { name: "Kit Elan Argan", price: 278 },
-  { name: "Montre Pro X V2", price: 799 },
-  { name: "Ecouteurs Elite ANC", price: 249 },
-  { name: "Argan Care Intense", price: 199 },
-  { name: "Organiseur Voyage Nomad", price: 249 },
-  { name: "Lampe Casa Smart", price: 329 },
-  { name: "Poudre Drops Casa Soft", price: 459 },
-];
+type CatalogProduct = { name: string; price: number };
 
 type SelectedProduct = { name: string; price: number; qty: number };
 
@@ -40,12 +28,106 @@ export default function EditOrderModal({
   onSave: () => void;
 }) {
   const [productQuery, setProductQuery] = useState("");
-  const [selected, setSelected] = useState<SelectedProduct[]>(() => {
-    const match = catalogProducts.find((p) => p.name === lead.productName);
-    return match ? [{ ...match, qty: 1 }] : [];
-  });
+  const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>([]);
+  const [selected, setSelected] = useState<SelectedProduct[]>(
+    lead.productName
+      ? [{ name: lead.productName, price: 0, qty: lead.itemCount ?? 1 }]
+      : []
+  );
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [externalStatus, setExternalStatus] = useState("");
+
+  const [client, setClient] = useState(lead.client);
+  const [phone, setPhone] = useState(lead.phone);
+  const [ville, setVille] = useState(lead.ville ?? "");
+  const [quartier, setQuartier] = useState(lead.quartier ?? "");
+  const [adresse, setAdresse] = useState(lead.adresse ?? "");
+  const [cityOptions, setCityOptions] = useState<string[]>(moroccanCities);
+  // Le total reste celui de la commande tant que personne ne le change.
+  // Le recalculer depuis le catalogue effacerait la livraison, les
+  // remises, et tout ce que la boutique avait deja compte.
+  const [total, setTotal] = useState(
+    (lead.amount ?? "").replace(/[^\d.,]/g, "") || "0"
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Le catalogue et le dictionnaire des villes viennent de la base : les
+  // listes ecrites en dur ne montraient qu'une poignee de choix, sans
+  // rapport avec les produits et les villes reellement desservies.
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch("/api/products")
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled || !Array.isArray(data.products)) return;
+        const list = (data.products as { name: string; priceSale: number; status: string }[])
+          .filter((p) => p.status === "Actif")
+          .map((p) => ({ name: p.name, price: p.priceSale }));
+        setCatalogProducts(list);
+        // Le prix du produit deja sur la commande, s'il est au catalogue.
+        setSelected((prev) =>
+          prev.map((item) => {
+            const match = list.find((p) => p.name === item.name);
+            return match && !item.price ? { ...item, price: match.price } : item;
+          })
+        );
+      })
+      .catch(() => {
+        /* Catalogue vide : la commande reste modifiable. */
+      });
+
+    fetch("/api/cities")
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled || !Array.isArray(data.cities)) return;
+        const names = (data.cities as { name: string; active: boolean }[])
+          .filter((c) => c.active)
+          .map((c) => c.name);
+        if (names.length > 0) setCityOptions(names);
+      })
+      .catch(() => {
+        /* Liste de secours conservee. */
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function save() {
+    setError(null);
+    setSaving(true);
+    try {
+      const premier = selected[0];
+      const res = await fetch(`/api/leads/${lead.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client: client.trim(),
+          phone: phone.trim(),
+          ville: ville.trim(),
+          quartier: quartier.trim(),
+          adresse: adresse.trim(),
+          amount: `${total.trim() || 0} MAD`,
+          ...(premier
+            ? {
+                productName: premier.name,
+                itemCount: selected.reduce((sum, p) => sum + p.qty, 0),
+              }
+            : {}),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      onSave();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Enregistrement impossible.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const filteredProducts = productQuery
     ? catalogProducts.filter((p) =>
@@ -107,7 +189,8 @@ export default function EditOrderModal({
               </label>
               <input
                 type="text"
-                defaultValue={lead.client}
+                value={client}
+                onChange={(e) => setClient(e.target.value)}
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
               />
             </div>
@@ -117,7 +200,8 @@ export default function EditOrderModal({
               </label>
               <input
                 type="text"
-                defaultValue={lead.phone}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
                 className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
               />
             </div>
@@ -145,8 +229,12 @@ export default function EditOrderModal({
                   </label>
                   <SelectDropdown
                     variant="field"
-                    pinnedLabel={lead.ville ?? "Aucune ville"}
-                    options={moroccanCities}
+                    pinnedLabel={ville || "Aucune ville"}
+                    options={cityOptions}
+                    value={ville || undefined}
+                    onSelect={setVille}
+                    searchable
+                    searchPlaceholder="Rechercher une ville..."
                   />
                 </div>
                 <div>
@@ -155,7 +243,8 @@ export default function EditOrderModal({
                   </label>
                   <input
                     type="text"
-                    defaultValue={lead.quartier}
+                    value={quartier}
+                    onChange={(e) => setQuartier(e.target.value)}
                     className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
                   />
                 </div>
@@ -166,7 +255,8 @@ export default function EditOrderModal({
                 </label>
                 <input
                   type="text"
-                  defaultValue={lead.adresse}
+                  value={adresse}
+                  onChange={(e) => setAdresse(e.target.value)}
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
                 />
               </div>
@@ -260,11 +350,20 @@ export default function EditOrderModal({
                 <div className="mt-1 flex items-center gap-2">
                   <input
                     type="text"
-                    defaultValue={subtotal}
-                    key={subtotal}
-                    className="w-20 rounded-md border border-gray-200 px-2 py-1 font-mono text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
+                    value={total}
+                    onChange={(e) => setTotal(e.target.value)}
+                    className="w-24 rounded-md border border-gray-200 px-2 py-1 font-mono text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
                   />
                   <span className="text-[13px] text-gray-500">MAD</span>
+                  {subtotal > 0 && String(subtotal) !== total.trim() && (
+                    <button
+                      onClick={() => setTotal(String(subtotal))}
+                      title="Reporter le sous-total du catalogue"
+                      className="rounded-md px-1.5 py-1 text-[11.5px] font-medium text-blue-600 hover:bg-blue-50"
+                    >
+                      = {subtotal}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -298,6 +397,13 @@ export default function EditOrderModal({
           </div>
         </div>
 
+        {error && (
+          <p className="mx-5 mb-1 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            {error}
+          </p>
+        )}
+
         <div className="flex flex-col-reverse gap-2.5 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end">
           <button
             onClick={onClose}
@@ -306,9 +412,11 @@ export default function EditOrderModal({
             Annuler
           </button>
           <button
-            onClick={onSave}
-            className="w-full rounded-lg bg-gray-900 px-4 py-2 text-[13px] font-medium text-white hover:bg-gray-800 sm:w-auto"
+            onClick={save}
+            disabled={saving}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-gray-900 px-4 py-2 text-[13px] font-medium text-white hover:bg-gray-800 disabled:opacity-60 sm:w-auto"
           >
+            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             Enregistrer les details
           </button>
         </div>

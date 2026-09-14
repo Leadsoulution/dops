@@ -433,6 +433,15 @@ export default function LeadsCommandesPage() {
    * etat precedent si la base refuse, pour que l'affichage ne mente
    * jamais sur ce qui est reellement enregistre.
    */
+  async function reloadLeads() {
+    try {
+      const data = await fetch("/api/leads").then((r) => r.json());
+      if (data.leads) setLeadsState(data.leads);
+    } catch {
+      /* La liste affichee reste celle connue. */
+    }
+  }
+
   async function persistChanges(ids: string[], changes: Partial<Lead>) {
     const previous = leadsState;
     setLeadsState((prev) =>
@@ -1336,7 +1345,12 @@ export default function LeadsCommandesPage() {
         <EditOrderModal
           lead={modal.lead}
           onClose={() => setModal(null)}
-          onSave={() => setModal(null)}
+          onSave={() => {
+            setModal(null);
+            // La fiche vient d'ecrire en base : relire pour afficher ce
+            // qui a reellement ete enregistre.
+            void reloadLeads();
+          }}
         />
       )}
       {modal?.type === "status" && (
