@@ -5,6 +5,7 @@ import { AlertTriangle, CheckCircle2, ChevronRight, Loader2, X } from "lucide-re
 import Toggle from "./Toggle";
 import type { Integration } from "./integrations-data";
 import WooCommerceConnectModal from "./WooCommerceConnectModal";
+import GoogleSheetsConnectModal from "./GoogleSheetsConnectModal";
 
 const platformCopy: Record<
   string,
@@ -160,6 +161,12 @@ export default function ConnectIntegrationModal({
 
   if (integration.id === "forcelog") {
     return <ForceLogConnectModal integration={integration} onClose={onClose} />;
+  }
+
+  if (integration.id === "google-sheets") {
+    return (
+      <GoogleSheetsConnectModal integration={integration} onClose={onClose} />
+    );
   }
 
   if (integration.id === "woocommerce") {

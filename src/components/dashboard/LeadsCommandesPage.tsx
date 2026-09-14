@@ -419,6 +419,10 @@ export default function LeadsCommandesPage() {
           return updated ?? l;
         })
       );
+      // La feuille de sauvegarde suit, sans faire attendre l'ecran : une
+      // sauvegarde qui echoue ne doit pas donner l'impression que
+      // l'enregistrement a echoue.
+      void fetch("/api/sheets/sync", { method: "POST" }).catch(() => {});
     } catch (error) {
       setLeadsState(previous);
       setLoadError(

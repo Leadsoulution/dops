@@ -208,6 +208,7 @@ export default function IntegrationsPage() {
   const [connectTarget, setConnectTarget] = useState<Integration | null>(null);
   const [forcelogConnected, setForcelogConnected] = useState<boolean | null>(null);
   const [wooConnected, setWooConnected] = useState<boolean | null>(null);
+  const [sheetsConnected, setSheetsConnected] = useState<boolean | null>(null);
 
   // Les deux integrations reellement branchees disent leur etat plutot
   // que de l'afficher en dur : une cle revoquee doit se voir ici.
@@ -220,6 +221,10 @@ export default function IntegrationsPage() {
       .then((res) => res.json())
       .then((data) => setWooConnected(Boolean(data.connected)))
       .catch(() => setWooConnected(false));
+    fetch("/api/sheets/settings")
+      .then((res) => res.json())
+      .then((data) => setSheetsConnected(Boolean(data.configured)))
+      .catch(() => setSheetsConnected(false));
   }, []);
 
   useEffect(() => {
@@ -229,6 +234,7 @@ export default function IntegrationsPage() {
   const isConnected = (integration: Integration) => {
     if (integration.id === "forcelog") return Boolean(forcelogConnected);
     if (integration.id === "woocommerce") return Boolean(wooConnected);
+    if (integration.id === "google-sheets") return Boolean(sheetsConnected);
     return integration.status === "Active";
   };
 
