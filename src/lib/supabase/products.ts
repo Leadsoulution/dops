@@ -21,6 +21,10 @@ export type StockProduct = {
   name: string;
   productName: string;
   barcode?: string;
+  /** Code article chez le transporteur, genere par lui. */
+  forcelogRef?: string;
+  /** SKU de la boutique WooCommerce. */
+  wooSku?: string;
   quantity: number;
   waitingQuantity: number;
   image?: string;
@@ -39,6 +43,8 @@ type ProductRow = {
   name: string;
   product_name: string | null;
   barcode: string | null;
+  forcelog_ref: string | null;
+  woo_sku: string | null;
   quantity: number;
   waiting_quantity: number;
   image: string | null;
@@ -52,7 +58,7 @@ type ProductRow = {
 };
 
 const COLUMNS =
-  "id,ref,name,product_name,barcode,quantity,waiting_quantity,image,supplier,price_sale,cost_supplier,reorder_threshold,status,source,updated_at";
+  "id,ref,name,product_name,barcode,forcelog_ref,woo_sku,quantity,waiting_quantity,image,supplier,price_sale,cost_supplier,reorder_threshold,status,source,updated_at";
 
 function toProduct(row: ProductRow): StockProduct {
   return {
@@ -61,6 +67,8 @@ function toProduct(row: ProductRow): StockProduct {
     name: row.name,
     productName: row.product_name ?? row.name,
     barcode: row.barcode ?? undefined,
+    forcelogRef: row.forcelog_ref ?? undefined,
+    wooSku: row.woo_sku ?? undefined,
     quantity: row.quantity,
     waitingQuantity: row.waiting_quantity,
     image: row.image ?? undefined,
@@ -79,6 +87,8 @@ export type ProductInput = {
   name: string;
   productName?: string;
   barcode?: string;
+  forcelogRef?: string;
+  wooSku?: string;
   supplier?: string;
   priceSale?: number;
   costSupplier?: number;
@@ -95,6 +105,8 @@ function toRow(input: Partial<ProductInput>) {
   if (input.name !== undefined) row.name = input.name.trim();
   if (input.productName !== undefined) row.product_name = input.productName || null;
   if (input.barcode !== undefined) row.barcode = input.barcode || null;
+  if (input.forcelogRef !== undefined) row.forcelog_ref = input.forcelogRef || null;
+  if (input.wooSku !== undefined) row.woo_sku = input.wooSku || null;
   if (input.supplier !== undefined) row.supplier = input.supplier || null;
   if (input.priceSale !== undefined) row.price_sale = input.priceSale;
   if (input.costSupplier !== undefined) row.cost_supplier = input.costSupplier;
@@ -133,7 +145,7 @@ export async function createProduct(input: ProductInput): Promise<StockProduct> 
   if (error) {
     throw new Error(
       error.code === "23505"
-        ? "Un produit porte deja cette reference."
+        ? "Une reference est deja utilisee par un autre produit (interne, ForceLog ou WooCommerce)."
         : error.message
     );
   }
@@ -195,6 +207,7 @@ export async function syncProductsFromStock(
       name: item.name,
       product_name: item.productName,
       barcode: item.barcode ?? null,
+      forcelog_ref: item.ref,
       quantity: item.quantity,
       waiting_quantity: item.waitingQuantity,
       image: item.image ?? null,

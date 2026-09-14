@@ -15,6 +15,10 @@ export type Product = {
   status: ProductStatus;
   /** URL publique de l'image principale, si le produit en a une. */
   image?: string;
+  /** Code article chez le transporteur. */
+  forcelogRef?: string;
+  /** SKU de la boutique WooCommerce. */
+  wooSku?: string;
 };
 
 function margin(price: number, cost: number) {

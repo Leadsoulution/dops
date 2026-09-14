@@ -21,6 +21,8 @@ export default function EditProductModal({
 }) {
   const [name, setName] = useState(product.name);
   const [ref, setRef] = useState(product.ref);
+  const [forcelogRef, setForcelogRef] = useState(product.forcelogRef ?? "");
+  const [wooSku, setWooSku] = useState(product.wooSku ?? "");
   const [supplier, setSupplier] = useState(product.supplier ?? "");
   const [priceSale, setPriceSale] = useState(String(product.priceSale));
   const [costSupplier, setCostSupplier] = useState(String(product.costSupplier));
@@ -54,6 +56,8 @@ export default function EditProductModal({
         body: JSON.stringify({
           name: name.trim(),
           ref: ref.trim(),
+          forcelogRef: forcelogRef.trim(),
+          wooSku: wooSku.trim(),
           supplier: supplier.trim(),
           priceSale: Number(priceSale) || 0,
           costSupplier: Number(costSupplier) || 0,
@@ -163,12 +167,49 @@ export default function EditProductModal({
               onChange={(e) => setRef(e.target.value)}
               className="w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
             />
-            {product.source === "forcelog" && (
-              <p className="mt-1 text-[11.5px] text-amber-600">
-                Code article ForceLog : le changer coupe le lien avec le stock
-                du transporteur.
-              </p>
-            )}
+            <p className="mt-1 text-[11.5px] text-gray-400">
+              Reference interne, utilisee dans l&apos;application.
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-gray-200 p-3">
+            <p className="mb-2 text-[11px] font-semibold tracking-wide text-gray-500">
+              CORRESPONDANCE DES REFERENCES
+            </p>
+            <div className="space-y-2.5">
+              <div>
+                <label className="mb-1 block text-[12.5px] text-gray-600">
+                  Code article ForceLog
+                </label>
+                <input
+                  type="text"
+                  value={forcelogRef}
+                  onChange={(e) => setForcelogRef(e.target.value)}
+                  placeholder="180ZEI"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-[13px] text-gray-800 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none"
+                />
+                <p className="mt-1 text-[11.5px] text-gray-400">
+                  Genere par le transporteur. C&apos;est lui qui part dans un
+                  colis de stock.
+                </p>
+              </div>
+              <div>
+                <label className="mb-1 block text-[12.5px] text-gray-600">
+                  SKU WooCommerce
+                </label>
+                <input
+                  type="text"
+                  value={wooSku}
+                  onChange={(e) => setWooSku(e.target.value)}
+                  placeholder="COLLIER-ROSE-01"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-[13px] text-gray-800 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none"
+                />
+                <p className="mt-1 text-[11.5px] text-gray-400">
+                  Le SKU de la boutique. C&apos;est par lui qu&apos;une commande
+                  WooCommerce retrouve ce produit.
+                </p>
+              </div>
+            </div>
           </div>
 
           <div>

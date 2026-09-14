@@ -59,6 +59,8 @@ function toProduct(item: StockProduct): Product {
       : "",
     status: item.status,
     image: item.image,
+    forcelogRef: item.forcelogRef,
+    wooSku: item.wooSku,
   };
 }
 
@@ -430,7 +432,34 @@ export default function ProductsPage() {
                             </span>
                           </div>
                         </td>
-                        <td className="px-3 py-3 font-mono text-gray-500">{product.sku}</td>
+                        <td className="px-3 py-3">
+                          <p className="font-mono text-gray-500">{product.sku}</p>
+                          <div className="mt-0.5 flex flex-wrap gap-1">
+                            {product.forcelogRef && (
+                              <span
+                                title="Code article ForceLog"
+                                className="rounded bg-orange-50 px-1.5 py-0.5 font-mono text-[10.5px] text-orange-600"
+                              >
+                                FL {product.forcelogRef}
+                              </span>
+                            )}
+                            {product.wooSku ? (
+                              <span
+                                title="SKU WooCommerce"
+                                className="rounded bg-violet-50 px-1.5 py-0.5 font-mono text-[10.5px] text-violet-600"
+                              >
+                                WOO {product.wooSku}
+                              </span>
+                            ) : (
+                              <span
+                                title="Aucun SKU WooCommerce : une commande de la boutique ne pourra pas retrouver ce produit"
+                                className="rounded bg-gray-100 px-1.5 py-0.5 text-[10.5px] text-gray-400"
+                              >
+                                WOO —
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="px-3 py-3 text-gray-600">
                           {product.supplier}
                         </td>
