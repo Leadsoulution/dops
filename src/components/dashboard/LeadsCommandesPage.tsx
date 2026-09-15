@@ -243,6 +243,60 @@ export default function LeadsCommandesPage() {
     };
   }, []);
 
+  /**
+   * Rafraichissement periodique.
+   *
+   * Une commande arrivee de la boutique, ou un statut change par un
+   * collegue, doit apparaitre sans qu'on recharge la page. On relit la
+   * base toutes les vingt secondes -- une lecture, pas une
+   * synchronisation : c'est la surveillance de l'en-tete qui interroge
+   * la boutique et le transporteur, plus lentement.
+   *
+   * Rien ne tourne quand l'onglet est en arriere-plan : personne ne
+   * regarde, et le telephone a mieux a faire.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    const timer = setInterval(() => {
+      if (document.hidden) return;
+      fetch("/api/leads")
+        .then((res) => res.json())
+        .then((data) => {
+          if (cancelled || !data.leads) return;
+          setLeadsState((prev) => {
+            const fresh = data.leads as Lead[];
+            // Ne remplace que si quelque chose a change : un nouveau
+            // tableau a chaque tour ferait clignoter la liste et
+            // perdrait la position de defilement.
+            const identique =
+              prev.length === fresh.length &&
+              prev.every((lead, i) => {
+                const f = fresh[i];
+                return (
+                  f &&
+                  f.id === lead.id &&
+                  f.status === lead.status &&
+                  f.deliveryStatus === lead.deliveryStatus &&
+                  f.paymentStatus === lead.paymentStatus &&
+                  f.trackingNumber === lead.trackingNumber &&
+                  f.assignedTo === lead.assignedTo
+                );
+              });
+            return identique ? prev : fresh;
+          });
+        })
+        .catch(() => {
+          /* Reseau coupe : on reessaiera au prochain tour. */
+        });
+    }, 20000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
   useEffect(() => {
     if (searchParams.get("lead")) {
       router.replace("/");
@@ -927,7 +981,7 @@ export default function LeadsCommandesPage() {
                 <th className="px-3 py-3">Source</th>
                 <th className="px-3 py-3">Assigne a</th>
                 <th className="px-3 py-3">Montant</th>
-                <th className="px-3 py-3">Statut</th>
+                <th className="whitespace-nowrap px-3 py-3">Statut</th>
                 <th className="px-3 py-3">Transporteur</th>
                 <th className="px-3 py-3">Code suivi</th>
                 <th className="px-3 py-3">Statut livraison</th>
@@ -1054,7 +1108,7 @@ export default function LeadsCommandesPage() {
                       const StatusIcon = statusIcon(lead.status);
                       return (
                         <span
-                          className={`flex w-fit items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium ${statusBadgeStyles[lead.status]}`}
+                          className={`flex w-fit items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 text-[12px] font-medium ${statusBadgeStyles[lead.status]}`}
                         >
                           <StatusIcon className="h-3 w-3" />
                           {lead.status}
@@ -1200,7 +1254,7 @@ export default function LeadsCommandesPage() {
                     {lead.source}
                   </span>
                   <span
-                    className={`rounded-md px-2 py-1 text-[11.5px] font-medium ${statusBadgeStyles[lead.status]}`}
+                    className={`whitespace-nowrap rounded-md px-2 py-1 text-[11.5px] font-medium ${statusBadgeStyles[lead.status]}`}
                   >
                     {lead.status}
                   </span>
