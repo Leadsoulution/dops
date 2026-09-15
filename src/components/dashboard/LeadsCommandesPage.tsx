@@ -1297,6 +1297,21 @@ export default function LeadsCommandesPage() {
                   >
                     {lead.status}
                   </span>
+                  {/*
+                    Le statut de livraison, a cote du statut de
+                    confirmation : ce sont les deux etats d'une commande,
+                    et sur telephone la colonne du tableau n'existe pas.
+                  */}
+                  {lead.deliveryStatus && (
+                    <span
+                      className={`whitespace-nowrap rounded-md px-2 py-1 text-[11.5px] font-medium ${
+                        deliveryStatusStyles[lead.deliveryStatusCode ?? ""] ??
+                        "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {lead.deliveryStatus}
+                    </span>
+                  )}
                 </div>
               </div>
 
