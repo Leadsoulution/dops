@@ -31,6 +31,7 @@ export const LEAD_STATUSES = [
   { label: "Expiree", badge: "bg-amber-800 text-white" },
   { label: "En double", badge: "bg-gray-700 text-white" },
   { label: "Rappel", badge: "bg-slate-300 text-slate-800" },
+  { label: "+3 jours", badge: "bg-amber-500 text-white" },
   { label: "EXPIDER", badge: "bg-blue-600 text-white" },
   { label: "TESTE", badge: "bg-violet-700 text-white" },
 ] as const;
@@ -232,30 +233,16 @@ export const leads: Lead[] = [
  * les cinq paliers de "Pas de rep" sont des tentatives d'un meme etat,
  * cinq onglets pour eux noieraient les autres.
  */
-/** Statuts qui closent une commande : plus rien a decider dessus. */
-export const CLOSED_STATUSES: LeadStatus[] = [
-  "Confirme",
-  "Annulee",
-  "Non commandee",
-  "Expiree",
-  "Faux numero",
-  "En double",
-  "TESTE",
-];
-
-/** Au-dela de ce delai, une commande sans decision traine. */
-export const STALE_DAYS = 3;
-
 const tabDefinitions: {
   label: string;
   statuses: LeadStatus[] | null;
-  /** Onglet defini par l'anciennete plutot que par un statut. */
-  stale?: boolean;
+  /** Onglet signale en ambre : un dossier qui attend depuis trop longtemps. */
+  warn?: boolean;
   flagged?: boolean;
 }[] = [
   { label: "Tous", statuses: null },
   { label: "Nouveaux", statuses: ["Nouveau"] },
-  { label: "Confirmes", statuses: ["Confirme"] },
+  { label: "Confirmes", statuses: ["Confirme", "EXPIDER"] },
   { label: "Rappels", statuses: ["Rappel", "Reportee"] },
   {
     label: "Pas de rep.",
@@ -284,7 +271,7 @@ const tabDefinitions: {
     statuses: ["Faux numero", "En double", "TESTE"],
     flagged: true,
   },
-  { label: "+3 jours", statuses: null, stale: true },
+  { label: "+3 jours", statuses: ["+3 jours"], warn: true },
 ];
 
 export const tabs = tabDefinitions.map((tab) => ({
@@ -292,27 +279,12 @@ export const tabs = tabDefinitions.map((tab) => ({
   count: 0,
 }));
 
-/**
- * La commande appartient-elle a cet onglet ?
- *
- * L'onglet "+3 jours" ne regarde pas le statut mais l'age, et ne retient
- * que les commandes encore ouvertes : une commande confirmee il y a une
- * semaine suit son cours, elle n'a rien a faire dans une liste d'attente.
- */
+/** La commande appartient-elle a cet onglet ? */
 export function matchesTab(
-  tab: { statuses: LeadStatus[] | null; stale?: boolean },
-  lead: { status: LeadStatus; date: string }
+  tab: { statuses: LeadStatus[] | null },
+  status: LeadStatus
 ): boolean {
-  if (tab.stale) return isStale(lead);
-  return tab.statuses === null || tab.statuses.includes(lead.status);
-}
-
-export function isStale(lead: { status: LeadStatus; date: string }): boolean {
-  if (CLOSED_STATUSES.includes(lead.status)) return false;
-  const date = parseLeadDate(lead.date);
-  // Une date illisible ne fait pas d'une commande un dossier en retard.
-  if (!date) return false;
-  return Date.now() - date.getTime() > STALE_DAYS * 86400000;
+  return tab.statuses === null || tab.statuses.includes(status);
 }
 
 /**

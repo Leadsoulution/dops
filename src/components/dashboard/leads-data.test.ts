@@ -1,47 +1,53 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { isStale, STALE_DAYS, type LeadStatus } from "./leads-data";
+import { describe, it, expect } from "vitest";
+import { parseLeadDate, LEAD_STATUSES, tabs, matchesTab } from "./leads-data";
 
-/** Une date au format que portent les commandes importees. */
-function ilYA(jours: number): string {
-  const d = new Date(Date.now() - jours * 86400000);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-
-describe("isStale", () => {
-  afterEach(() => vi.useRealTimers());
-
-  it("retient une commande ouverte plus vieille que le delai", () => {
-    expect(isStale({ status: "Pas de rep 2", date: ilYA(STALE_DAYS + 1) })).toBe(true);
+/**
+ * La lecture des dates porte les filtres de periode. Deux formats
+ * coexistent selon l'origine de la commande, et s'y tromper ferait
+ * disparaitre des commandes d'un filtre sans que rien ne le signale.
+ */
+describe("parseLeadDate", () => {
+  it("lit le format des colis importes", () => {
+    expect(parseLeadDate("2026-09-11 16:12")?.toISOString().slice(0, 10)).toBe(
+      "2026-09-11"
+    );
   });
 
-  it("ignore une commande recente", () => {
-    expect(isStale({ status: "Pas de rep 2", date: ilYA(1) })).toBe(false);
+  it("lit le format francais des saisies dans l'application", () => {
+    const d = parseLeadDate("13 sept. 2026, 14:40");
+    expect(d?.getFullYear()).toBe(2026);
+    expect(d?.getMonth()).toBe(8);
+    expect(d?.getDate()).toBe(13);
   });
 
-  // Une commande confirmee suit son cours chez le transporteur : elle
-  // n'attend plus de decision, meme vieille de trois semaines.
-  it.each<LeadStatus>([
-    "Confirme",
-    "Annulee",
-    "Non commandee",
-    "Expiree",
-    "Faux numero",
-    "En double",
-    "TESTE",
-  ])("ignore une commande close (%s)", (status) => {
-    expect(isStale({ status, date: ilYA(30) })).toBe(false);
+  it("comprend les mois ecrits en entier et sans accent", () => {
+    expect(parseLeadDate("19 aout 2026, 21:59")?.getMonth()).toBe(7);
+    expect(parseLeadDate("5 juillet 2026, 10:12")?.getMonth()).toBe(6);
   });
 
-  it("ignore une date illisible plutot que de la croire ancienne", () => {
-    expect(isStale({ status: "Nouveau", date: "pas une date" })).toBe(false);
-    expect(isStale({ status: "Nouveau", date: "" })).toBe(false);
+  it("renvoie null plutot qu'une date inventee", () => {
+    expect(parseLeadDate("n importe quoi")).toBeNull();
+    expect(parseLeadDate("")).toBeNull();
+    expect(parseLeadDate(undefined)).toBeNull();
+  });
+});
+
+describe("onglets", () => {
+  it("place chaque statut dans au moins un onglet", () => {
+    const sansOnglet = LEAD_STATUSES.filter(
+      (s) => !tabs.some((t) => t.statuses?.includes(s.label))
+    );
+    expect(sansOnglet.map((s) => s.label)).toEqual([]);
   });
 
-  it("comprend les dates ecrites en francais", () => {
-    const vieux = new Date(Date.now() - (STALE_DAYS + 2) * 86400000);
-    const mois = new Intl.DateTimeFormat("fr-FR", { month: "short" }).format(vieux);
-    const date = `${vieux.getDate()} ${mois} ${vieux.getFullYear()}, 10:00`;
-    expect(isStale({ status: "Nouveau", date })).toBe(true);
+  it("l'onglet +3 jours suit le statut pose a la main", () => {
+    const onglet = tabs.find((t) => t.label === "+3 jours")!;
+    expect(matchesTab(onglet, "+3 jours")).toBe(true);
+    expect(matchesTab(onglet, "Nouveau")).toBe(false);
+  });
+
+  it("l'onglet Tous ne rejette rien", () => {
+    const tous = tabs.find((t) => t.label === "Tous")!;
+    for (const s of LEAD_STATUSES) expect(matchesTab(tous, s.label)).toBe(true);
   });
 });
