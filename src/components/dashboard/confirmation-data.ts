@@ -1,3 +1,57 @@
+/**
+ * Statistiques reelles d'un agent, calculees par le serveur a partir du
+ * journal des modifications. Les types vivent ici, hors du module
+ * serveur, pour que les composants du navigateur puissent les importer
+ * sans entrainer la cle secrete avec eux.
+ */
+export type AgentAction = {
+  reference: string;
+  phone: string;
+  when: string;
+  field: string;
+  from: string | null;
+  to: string;
+};
+
+export type AgentStats = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  active: boolean;
+  avatarColor: string;
+  /** Commandes distinctes touchees par l'agent sur la periode. */
+  treated: number;
+  /** Commandes ou l'agent a pose un statut supposant un client joint. */
+  contacted: number;
+  /** Commandes que l'agent a lui-meme passees en Confirme ou EXPIDER. */
+  confirmed: number;
+  /** Commandes touchees par l'agent et encore ouvertes aujourd'hui. */
+  pending: number;
+  confirmRate: number;
+  /** Delai moyen entre l'arrivee d'une commande et le premier geste. */
+  avgFirstTouch: string;
+  /** Duree moyenne entre le premier et le dernier geste sur une commande. */
+  avgHandling: string;
+  /** Non mesure : l'application ne passe pas les appels. */
+  avgCallDuration: string;
+  actions: number;
+  history: AgentAction[];
+};
+
+export type TeamStats = {
+  agents: AgentStats[];
+  team: {
+    treated: number;
+    contacted: number;
+    confirmed: number;
+    confirmRate: number;
+    avgHandling: string;
+    avgFirstTouch: string;
+  };
+};
+
+
 export type AgentPerformance = {
   name: string;
   email: string;
@@ -142,58 +196,12 @@ export const agentPerformance: AgentPerformance[] = [
   },
 ];
 
-export type CallHistoryEntry = {
-  reference: string;
-  phone: string;
-  duration: string;
-  status: "Confirme" | "Repart" | "Pas de reponse" | "Numero incorrect";
-};
-
-export const callHistoryByAgent: Record<string, CallHistoryEntry[]> = {
-  "Fatima Zahra": [
-    { reference: "LD-000034-0424", phone: "0660164362", duration: "3s", status: "Confirme" },
-    { reference: "LD-000091-0422", phone: "0660164370", duration: "3s", status: "Repart" },
-    { reference: "GS-000309-0423", phone: "0622161711", duration: "4s", status: "Confirme" },
-    { reference: "GS-000562-0427", phone: "0630053131", duration: "8s", status: "Pas de reponse" },
-    { reference: "LD-000467-0423", phone: "0666686869", duration: "11s", status: "Numero incorrect" },
-    { reference: "LD-000068-0423", phone: "0623145234", duration: "3s", status: "Confirme" },
-    { reference: "LD-000543-0425", phone: "0606060606", duration: "13s", status: "Confirme" },
-    { reference: "LD-000202-0422", phone: "0661122334", duration: "4s", status: "Repart" },
-  ],
-  "Hamza Berrada": [
-    { reference: "GS-048083-0779", phone: "0622161711", duration: "10m 25s", status: "Confirme" },
-    { reference: "LD-048641-0779", phone: "0630053131", duration: "8m 55s", status: "Confirme" },
-    { reference: "LD-048225-0779", phone: "0666686869", duration: "12m 45s", status: "Confirme" },
-    { reference: "MO-048583-0779", phone: "0623145234", duration: "4m 35s", status: "Confirme" },
-    { reference: "LD-048078-0779", phone: "0606060606", duration: "4m", status: "Pas de reponse" },
-  ],
-};
-
 export const rebalanceModes = [
   "Par pourcentage",
   "Par produit",
   "Par source",
   "Par region",
   "Manuel",
-];
-
-export type PercentageRule = {
-  name: string;
-  avatarColor: string;
-  weight: number;
-  percent: number;
-};
-
-export const percentageRules: PercentageRule[] = [
-  { name: "Fatima Zahra", avatarColor: "bg-emerald-500", weight: 10, percent: 10 },
-  { name: "Hamza Berrada", avatarColor: "bg-blue-500", weight: 10, percent: 10 },
-  { name: "Imane Lahlou", avatarColor: "bg-violet-500", weight: 13, percent: 12 },
-  { name: "Karim El Mansouri", avatarColor: "bg-orange-500", weight: 8, percent: 8 },
-  { name: "Nadia El Fassi", avatarColor: "bg-pink-500", weight: 8, percent: 8 },
-  { name: "Omar Tazi", avatarColor: "bg-cyan-500", weight: 10, percent: 9 },
-  { name: "Salma Bennani", avatarColor: "bg-rose-500", weight: 7, percent: 7 },
-  { name: "soufiane imil", avatarColor: "bg-gray-400", weight: 25, percent: 27 },
-  { name: "Youssef Idrissi", avatarColor: "bg-indigo-500", weight: 9, percent: 9 },
 ];
 
 export type ProductCatalogItem = {
@@ -267,11 +275,8 @@ export type AssignedRule = {
 
 export const initialProductRules: AssignedRule[] = [];
 
-export const initialSourceRules: AssignedRule[] = [
-  { id: "meta-ads", label: "Meta Ads", agent: "Fatima Zahra" },
-  { id: "instagram-ads", label: "Instagram Ads", agent: "Youssef Idrissi" },
-];
+// Aucune regle par defaut : elles nommeraient des agents qui
+// n'existent pas dans cette equipe.
+export const initialSourceRules: AssignedRule[] = [];
 
 export const initialRegionRules: AssignedRule[] = [];
-
-export const excludedFromReassignment = ["Fatima Zahra"];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Settings2,
   RefreshCw,
@@ -13,6 +13,8 @@ import {
   Maximize2,
   User,
   Info,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 import DonutRing from "./DonutRing";
 import AgentPerformanceCard from "./AgentPerformanceCard";
@@ -21,20 +23,16 @@ import SelectDropdown from "./SelectDropdown";
 import RuleList from "./RuleList";
 import DateRangeCalendar from "./DateRangeCalendar";
 import {
-  agentPerformance,
   rebalanceModes,
-  percentageRules,
   sourceKeyOptions,
   productCatalog,
   regionOptions,
   initialProductRules,
   initialSourceRules,
   initialRegionRules,
-  excludedFromReassignment,
   type AssignedRule,
+  type TeamStats,
 } from "./confirmation-data";
-import { agents } from "./leads-data";
-import { periodScale, scaleCount } from "./dashboard-data";
 
 const dateRanges = [
   "Aujourd'hui",
@@ -70,51 +68,126 @@ export default function ConfirmationPage() {
   const [autoAssign, setAutoAssign] = useState(true);
   const [autoReassign, setAutoReassign] = useState(true);
   const [dedupDetection, setDedupDetection] = useState(true);
-  const [excluded, setExcluded] = useState<string[]>(excludedFromReassignment);
+  const [excluded, setExcluded] = useState<string[]>([]);
   const [productRules, setProductRules] = useState<AssignedRule[]>(initialProductRules);
   const [sourceRules, setSourceRules] = useState<AssignedRule[]>(initialSourceRules);
   const [regionRules, setRegionRules] = useState<AssignedRule[]>(initialRegionRules);
-  const [weights, setWeights] = useState<Record<string, number>>(
-    Object.fromEntries(percentageRules.map((r) => [r.name, r.weight]))
-  );
+  const [weights, setWeights] = useState<Record<string, number>>({});
+  // Le resultat porte la periode pour laquelle il a ete calcule : c'est
+  // la comparaison avec la periode affichee qui dit si l'on attend, sans
+  // avoir a poser un drapeau de chargement depuis l'effet.
+  const [loaded, setLoaded] = useState<{
+    key: string;
+    data: TeamStats | null;
+    error: string | null;
+  } | null>(null);
+
+  /**
+   * Bornes de la periode choisie. Les compteurs portent sur ce que les
+   * agents ont fait pendant cet intervalle, et non sur la date des
+   * commandes : c'est le travail qui est mesure, pas le carnet.
+   */
+  const rangeBounds = useCallback((): { from?: string; to?: string } => {
+    const now = new Date();
+    const startOfDay = (d: Date) =>
+      new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const endOfDay = (d: Date) =>
+      new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+    const span = (a: Date, b: Date) => ({
+      from: a.toISOString(),
+      to: b.toISOString(),
+    });
+
+    switch (activeRange) {
+      case "Aujourd'hui":
+        return span(startOfDay(now), endOfDay(now));
+      case "Hier": {
+        const yesterday = new Date(now);
+        yesterday.setDate(now.getDate() - 1);
+        return span(startOfDay(yesterday), endOfDay(yesterday));
+      }
+      case "7 derniers jours": {
+        // Aujourd'hui compris, donc six jours en arriere.
+        const from = new Date(now);
+        from.setDate(now.getDate() - 6);
+        return span(startOfDay(from), endOfDay(now));
+      }
+      case "Ce mois-ci":
+        return span(new Date(now.getFullYear(), now.getMonth(), 1), endOfDay(now));
+      case "Personnalisee":
+        return customRange
+          ? span(startOfDay(customRange.start), endOfDay(customRange.end))
+          : {};
+      // "Maximum" couvre tout l'historique.
+      default:
+        return {};
+    }
+  }, [activeRange, customRange]);
+
+  const { from: rangeFrom, to: rangeTo } = rangeBounds();
+  const rangeKey = `${rangeFrom ?? ""}|${rangeTo ?? ""}`;
+
+  useEffect(() => {
+    let cancelled = false;
+    const [from, to] = rangeKey.split("|");
+    const params = new URLSearchParams();
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+
+    fetch(`/api/agents/stats?${params}`)
+      .then((res) => res.json())
+      .then((data: TeamStats & { error?: string }) => {
+        if (cancelled) return;
+        if (data.error) {
+          setLoaded({ key: rangeKey, data: null, error: data.error });
+          return;
+        }
+        setLoaded({ key: rangeKey, data, error: null });
+        // Un poids egal par defaut : la repartition ne privilegie
+        // personne tant que personne n'a decide du contraire.
+        setWeights((prev) =>
+          Object.fromEntries(data.agents.map((a) => [a.name, prev[a.name] ?? 10]))
+        );
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoaded({
+            key: rangeKey,
+            data: null,
+            error: "Statistiques indisponibles.",
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rangeKey]);
+
+  const stats = loaded?.data ?? null;
+  const error = loaded?.error ?? null;
+  const loading = loaded?.key !== rangeKey;
+
+  const agentList = stats?.agents ?? [];
+  const agentNames = agentList.map((a) => a.name);
 
   const totalWeight = Object.values(weights).reduce((sum, w) => sum + w, 0);
-  const weightedRules = percentageRules.map((rule) => ({
-    ...rule,
-    weight: weights[rule.name],
+  const weightedRules = agentList.map((agent) => ({
+    name: agent.name,
+    avatarColor: agent.avatarColor,
+    weight: weights[agent.name] ?? 10,
     percent:
-      totalWeight > 0 ? Math.round((weights[rule.name] / totalWeight) * 100) : 0,
+      totalWeight > 0
+        ? Math.round(((weights[agent.name] ?? 10) / totalWeight) * 100)
+        : 0,
   }));
   const totalPercent = weightedRules.reduce((sum, r) => sum + r.percent, 0);
 
   function resetWeights() {
-    setWeights(Object.fromEntries(percentageRules.map((r) => [r.name, r.weight])));
+    setWeights(Object.fromEntries(agentNames.map((name) => [name, 10])));
   }
 
-  const customDays = customRange
-    ? Math.max(
-        1,
-        Math.round(
-          (customRange.end.getTime() - customRange.start.getTime()) / 86400000
-        ) + 1
-      )
-    : 1;
-  const customScale = Math.min(1, Math.max(0.01, customDays / 365));
-  const scale =
-    activeRange === "Personnalisee" ? customScale : periodScale[activeRange] ?? 1;
-
-  const scaledAgents = agentPerformance.map((agent) => ({
-    ...agent,
-    assigned: scaleCount(agent.assigned, scale),
-    contacted: scaleCount(agent.contacted, scale),
-    confirmed: scaleCount(agent.confirmed, scale),
-    pending: scaleCount(agent.pending, scale),
-  }));
-
-  const teamAssigned = agentPerformance.reduce((sum, a) => sum + a.assigned, 0);
-  const teamConfirmed = agentPerformance.reduce((sum, a) => sum + a.confirmed, 0);
-  const teamContacted = scaledAgents.reduce((sum, a) => sum + a.contacted, 0);
-  const globalRate = teamAssigned > 0 ? Math.round((teamConfirmed / teamAssigned) * 100) : 0;
+  const globalRate = stats?.team.confirmRate ?? 0;
 
   function toggleExcluded(name: string) {
     setExcluded((prev) =>
@@ -259,7 +332,9 @@ export default function ConfirmationPage() {
                   <Clock className="h-4 w-4 text-violet-600" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[17px] font-semibold text-gray-900">—</p>
+                  <p className="font-mono text-[17px] font-semibold text-gray-900">
+                    {stats?.team.avgHandling ?? "—"}
+                  </p>
                   <p className="truncate text-[11.5px] text-gray-500">
                     Duree moy. traitement
                   </p>
@@ -271,10 +346,13 @@ export default function ConfirmationPage() {
                 </div>
                 <div className="min-w-0">
                   <p className="font-mono text-[17px] font-semibold text-gray-900">
-                    3m 37s
+                    {stats?.team.avgFirstTouch ?? "—"}
                   </p>
-                  <p className="truncate text-[11.5px] text-gray-500">
-                    Duree moy. session
+                  <p
+                    className="truncate text-[11.5px] text-gray-500"
+                    title="Delai entre l'arrivee d'une commande et le premier geste d'un agent"
+                  >
+                    Delai moy. prise en charge
                   </p>
                 </div>
               </div>
@@ -284,7 +362,7 @@ export default function ConfirmationPage() {
                 </div>
                 <div className="min-w-0">
                   <p className="font-mono text-[17px] font-semibold text-gray-900">
-                    {teamContacted.toLocaleString("fr-FR")}
+                    {(stats?.team.contacted ?? 0).toLocaleString("fr-FR")}
                   </p>
                   <p className="truncate text-[11.5px] text-gray-500">
                     Contactes (equipe)
@@ -314,11 +392,28 @@ export default function ConfirmationPage() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {scaledAgents.map((agent) => (
-              <AgentPerformanceCard key={agent.name} agent={agent} />
-            ))}
-          </div>
+          {loading && !stats ? (
+            <div className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-16 text-[13px] text-gray-400">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Calcul des statistiques...
+            </div>
+          ) : error ? (
+            <p className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[12.5px] text-red-700">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              {error}
+            </p>
+          ) : agentList.length === 0 ? (
+            <p className="rounded-xl border border-gray-200 bg-white py-16 text-center text-[13px] text-gray-400">
+              Aucun compte dans l&apos;equipe. Creez-en depuis la page
+              Utilisateurs.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {agentList.map((agent) => (
+                <AgentPerformanceCard key={agent.id} agent={agent} />
+              ))}
+            </div>
+          )}
         </>
       ) : (
         <div className="max-w-3xl space-y-6">
@@ -526,7 +621,7 @@ export default function ConfirmationPage() {
               automatiquement entre agents
             </p>
             <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
-              {agents.map((name) => (
+              {agentNames.map((name) => (
                 <label
                   key={name}
                   className="flex items-center gap-2 text-[12.5px] text-gray-700"
@@ -564,7 +659,7 @@ export default function ConfirmationPage() {
             <SelectDropdown
               variant="field"
               pinnedLabel="Aucun agent de secours"
-              options={agents}
+              options={agentNames}
             />
           </div>
         </div>

@@ -1,25 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { Clock, Mail, Phone, PhoneCall, Timer, X } from "lucide-react";
+import { Clock, History, Mail, PhoneCall, Timer, X } from "lucide-react";
 import DonutRing from "./DonutRing";
-import { callHistoryByAgent, type AgentPerformance } from "./confirmation-data";
+import { LEAD_STATUSES } from "./leads-data";
+import type { AgentStats } from "./confirmation-data";
 
-const statusStyles: Record<string, string> = {
-  Confirme: "bg-emerald-50 text-emerald-600",
-  Repart: "bg-orange-50 text-orange-600",
-  "Pas de reponse": "bg-gray-100 text-gray-500",
-  "Numero incorrect": "bg-red-50 text-red-600",
-};
+/** Chaque statut garde la couleur qu'il a partout ailleurs. */
+const badgeByStatus = new Map(
+  LEAD_STATUSES.map((s) => [s.label as string, s.badge as string])
+);
 
-export default function AgentPerformanceCard({
-  agent,
-}: {
-  agent: AgentPerformance;
-}) {
+export default function AgentPerformanceCard({ agent }: { agent: AgentStats }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const initial = agent.name.trim().charAt(0).toUpperCase();
-  const history = callHistoryByAgent[agent.name] ?? [];
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
@@ -59,27 +53,35 @@ export default function AgentPerformanceCard({
         <div className="min-w-0 flex-1 space-y-1">
           <p className="text-[11px] font-medium text-gray-400">Taux Confs</p>
           <div className="flex items-center gap-1.5 text-[12px] text-gray-600">
-            <Clock className="h-3 w-3 shrink-0 text-blue-400" />
-            <span className="font-mono">{agent.avgResponseTime}</span>
+            <Clock
+              className="h-3 w-3 shrink-0 text-blue-400"
+              aria-label="Delai de prise en charge"
+            />
+            <span className="font-mono" title="Delai moyen de prise en charge">
+              {agent.avgFirstTouch}
+            </span>
             <span className="text-gray-300">·</span>
-            <span className="font-mono">{agent.firstResponseTime}</span>
+            <span className="font-mono" title="Duree moyenne de traitement">
+              {agent.avgHandling}
+            </span>
           </div>
         </div>
         <button
           onClick={() => setHistoryOpen(true)}
-          disabled={history.length === 0}
+          disabled={agent.history.length === 0}
+          title="Historique des actions"
           className="shrink-0 rounded-md p-1.5 text-gray-400 hover:bg-gray-50 hover:text-gray-600 disabled:opacity-30 disabled:hover:bg-transparent"
         >
-          <Phone className="h-3.5 w-3.5" />
+          <History className="h-3.5 w-3.5" />
         </button>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-md bg-purple-50 px-2.5 py-1.5">
           <p className="font-mono text-[13px] font-semibold text-purple-700">
-            {agent.assigned.toLocaleString("fr-FR")}
+            {agent.treated.toLocaleString("fr-FR")}
           </p>
-          <p className="text-[10.5px] text-purple-500">Assignes</p>
+          <p className="text-[10.5px] text-purple-500">Traitees</p>
         </div>
         <div className="rounded-md bg-cyan-50 px-2.5 py-1.5">
           <p className="font-mono text-[13px] font-semibold text-cyan-700">
@@ -136,9 +138,9 @@ export default function AgentPerformanceCard({
             <div className="grid grid-cols-4 gap-1.5 px-4 pt-3">
               <div className="rounded-md bg-purple-50 px-1.5 py-1.5 text-center">
                 <p className="font-mono text-[12px] font-semibold text-purple-700">
-                  {agent.assigned.toLocaleString("fr-FR")}
+                  {agent.treated.toLocaleString("fr-FR")}
                 </p>
-                <p className="text-[9.5px] text-purple-500">Assignes</p>
+                <p className="text-[9.5px] text-purple-500">Traitees</p>
               </div>
               <div className="rounded-md bg-cyan-50 px-1.5 py-1.5 text-center">
                 <p className="font-mono text-[12px] font-semibold text-cyan-700">
@@ -164,20 +166,23 @@ export default function AgentPerformanceCard({
               <div className="flex flex-col items-center gap-0.5 rounded-md bg-gray-50 py-1.5">
                 <Clock className="h-3.5 w-3.5 text-blue-400" />
                 <p className="font-mono text-[11.5px] font-medium text-gray-700">
-                  {agent.avgResponseTime}
+                  {agent.avgFirstTouch}
                 </p>
-                <p className="text-[9px] text-gray-400">Temps reponse</p>
+                <p className="text-[9px] text-gray-400">Prise en charge</p>
               </div>
               <div className="flex flex-col items-center gap-0.5 rounded-md bg-gray-50 py-1.5">
                 <Timer className="h-3.5 w-3.5 text-violet-400" />
                 <p className="font-mono text-[11.5px] font-medium text-gray-700">
-                  {agent.firstResponseTime}
+                  {agent.avgHandling}
                 </p>
-                <p className="text-[9px] text-gray-400">1re reponse</p>
+                <p className="text-[9px] text-gray-400">Duree traitement</p>
               </div>
-              <div className="flex flex-col items-center gap-0.5 rounded-md bg-gray-50 py-1.5">
-                <PhoneCall className="h-3.5 w-3.5 text-emerald-400" />
-                <p className="font-mono text-[11.5px] font-medium text-gray-700">
+              <div
+                className="flex flex-col items-center gap-0.5 rounded-md bg-gray-50 py-1.5"
+                title="Non mesure : l'application ne passe pas les appels."
+              >
+                <PhoneCall className="h-3.5 w-3.5 text-gray-300" />
+                <p className="font-mono text-[11.5px] font-medium text-gray-400">
                   {agent.avgCallDuration}
                 </p>
                 <p className="text-[9px] text-gray-400">Duree appels</p>
@@ -185,38 +190,46 @@ export default function AgentPerformanceCard({
             </div>
 
             <p className="px-4 pb-1 pt-3 text-[11px] font-semibold tracking-wide text-gray-500">
-              HISTORIQUE DES APPELS
+              HISTORIQUE DES ACTIONS
+              {agent.actions > agent.history.length && (
+                <span className="ml-1 font-normal text-gray-400">
+                  ({agent.history.length} dernieres sur {agent.actions})
+                </span>
+              )}
             </p>
             <div className="max-h-64 space-y-2 overflow-y-auto px-4 pb-4">
-              {history.length === 0 && (
+              {agent.history.length === 0 && (
                 <p className="py-6 text-center text-[12px] text-gray-400">
-                  Aucun appel enregistre
+                  Aucune action enregistree sur cette periode
                 </p>
               )}
-              {history.map((call, i) => (
+              {agent.history.map((action, i) => (
                 <div
-                  key={`${call.reference}-${i}`}
-                  className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2"
+                  key={`${action.reference}-${i}`}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 px-3 py-2"
                 >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <Phone className="h-3.5 w-3.5 shrink-0 text-gray-300" />
-                    <div className="min-w-0">
-                      <p className="truncate text-[12.5px] font-medium text-gray-800">
-                        {call.reference}
-                      </p>
-                      <p className="truncate font-mono text-[11.5px] text-gray-400">
-                        {call.phone}
-                      </p>
-                    </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-[12.5px] font-medium text-gray-800">
+                      {action.reference}
+                    </p>
+                    <p className="truncate text-[11px] text-gray-400">
+                      {action.phone ? (
+                        <span className="font-mono">{action.phone}</span>
+                      ) : (
+                        action.field
+                      )}
+                    </p>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     <span className="font-mono text-[11px] text-gray-400">
-                      {call.duration}
+                      {action.when}
                     </span>
                     <span
-                      className={`rounded-md px-1.5 py-0.5 text-[10.5px] font-medium ${statusStyles[call.status]}`}
+                      className={`rounded-md px-1.5 py-0.5 text-[10.5px] font-medium whitespace-nowrap ${
+                        badgeByStatus.get(action.to) ?? "bg-gray-100 text-gray-600"
+                      }`}
                     >
-                      {call.status}
+                      {action.to}
                     </span>
                   </div>
                 </div>
