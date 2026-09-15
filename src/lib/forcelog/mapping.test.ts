@@ -36,6 +36,19 @@ describe("mapOrderToParcel", () => {
     expect(parcel.ADDRESS).toBe("Sale");
   });
 
+  it("arrondit le montant a encaisser a la dizaine", () => {
+    // Le livreur reclame le compte rond annonce au client, pas 199.
+    const parcel = mapOrderToParcel({
+      reference: "spc-1005",
+      client: "Hind",
+      phone: "0713935915",
+      ville: "Casablanca",
+      amount: "199 MAD",
+      productName: "SAC LO",
+    });
+    expect(parcel.COD).toBe(200);
+  });
+
   it("leaves COD undefined when the amount can't be parsed", () => {
     const parcel = mapOrderToParcel({
       reference: "spc-1004",

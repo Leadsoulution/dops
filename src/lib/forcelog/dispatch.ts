@@ -3,6 +3,8 @@ import { mapOrderToParcel } from "./mapping";
 import { ForceLogApiError } from "./types";
 import type { Lead } from "@/components/dashboard/leads-data";
 import { sendPushToAll } from "@/lib/push";
+import { dispatchBlocker } from "./eligibility";
+import { deliverableCityKeys } from "@/lib/supabase/cities";
 
 /** Statut a partir duquel une commande part automatiquement chez ForceLog. */
 export const AUTO_DISPATCH_STATUS = "Confirme";
@@ -52,6 +54,15 @@ export async function dispatchToForceLog(
   const apiKey = process.env.FORCELOG_API_KEY;
   if (!apiKey) {
     return { trackingError: "Cle API ForceLog non configuree." };
+  }
+
+  // Controle avant appel : un colis cree avec une ville fantaisiste ne
+  // peut plus etre supprime une fois qu'il a quitte l'etat NEW_PARCEL.
+  try {
+    const blocker = dispatchBlocker(lead, await deliverableCityKeys());
+    if (blocker) return { trackingNumber: undefined, trackingError: blocker };
+  } catch {
+    return { trackingError: "Liste des villes indisponible." };
   }
 
   try {

@@ -34,6 +34,7 @@ import {
   type Lead,
   type LeadStatus,
 } from "./leads-data";
+import { displayAmount } from "@/lib/amount";
 import CallOutcomePanel from "./CallOutcomePanel";
 
 const tabs = [
@@ -148,13 +149,13 @@ export default function OrderDetailsModal({
                 </p>
                 <p className="text-[12px] text-gray-500">
                   <span className="font-mono">
-                    {lead.itemCount ?? 1} x {lead.amount}
+                    {lead.itemCount ?? 1} x {displayAmount(lead.amount)}
                   </span>
                 </p>
               </div>
             </div>
             <p className="font-mono text-[14px] font-semibold text-gray-900">
-              {lead.amount}
+              {displayAmount(lead.amount)}
             </p>
           </div>
 

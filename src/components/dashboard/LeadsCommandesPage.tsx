@@ -58,6 +58,7 @@ import {
   type Lead,
   type LeadStatus,
 } from "./leads-data";
+import { displayAmount } from "@/lib/amount";
 import RowActionsMenu from "./RowActionsMenu";
 import CreateCommandeModal from "./CreateCommandeModal";
 import OrderDetailsModal from "./OrderDetailsModal";
@@ -600,7 +601,8 @@ export default function LeadsCommandesPage() {
       lead.phone,
       lead.source,
       lead.assignedTo,
-      lead.amount,
+      // Le montant arrondi : celui qui sera reellement encaisse.
+      displayAmount(lead.amount),
       lead.status,
       lead.date,
     ]);
@@ -1143,7 +1145,7 @@ export default function LeadsCommandesPage() {
                     )}
                   </td>
                   <td className="px-3 py-3 font-mono font-semibold text-gray-900">
-                    {lead.amount}
+                    {displayAmount(lead.amount)}
                   </td>
                   <td className="px-3 py-3">
                     {(() => {
@@ -1357,7 +1359,7 @@ export default function LeadsCommandesPage() {
                   <span />
                 )}
                 <span className="font-mono text-[16px] font-semibold text-gray-900">
-                  {lead.amount}
+                  {displayAmount(lead.amount)}
                 </span>
               </div>
 

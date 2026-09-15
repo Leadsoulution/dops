@@ -143,6 +143,31 @@ export async function tariffByCityForm(): Promise<Map<string, number>> {
   return tariffs;
 }
 
+/**
+ * Toutes les formes acceptees d'une ville livrable : sa cle, son nom et
+ * chacun de ses alias, normalises.
+ *
+ * Sert a refuser une commande dont la ville est mal ecrite avant de
+ * l'envoyer au transporteur. Les villes desactivees sont exclues : on ne
+ * livre pas ou l'on a cesse de livrer.
+ */
+export async function deliverableCityKeys(): Promise<Set<string>> {
+  const supabase = getSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("cities")
+    .select("key,name,aliases")
+    .eq("active", true);
+  if (error) throw new Error(error.message);
+
+  const keys = new Set<string>();
+  for (const row of (data ?? []) as Pick<CityRow, "key" | "name" | "aliases">[]) {
+    keys.add(row.key);
+    keys.add(cityKey(row.name));
+    for (const alias of row.aliases ?? []) keys.add(cityKey(alias));
+  }
+  return keys;
+}
+
 export async function listCities(): Promise<City[]> {
   const supabase = getSupabaseServerClient();
   const { data, error } = await supabase

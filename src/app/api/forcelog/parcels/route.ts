@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { addParcel } from "@/lib/forcelog/client";
 import { mapOrderToParcel, type MappableOrder } from "@/lib/forcelog/mapping";
 import { ForceLogApiError } from "@/lib/forcelog/types";
+import { dispatchBlocker } from "@/lib/forcelog/eligibility";
+import { deliverableCityKeys } from "@/lib/supabase/cities";
 
 export async function POST(request: NextRequest) {
   const apiKey = process.env.FORCELOG_API_KEY;
@@ -22,10 +24,26 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!order?.reference || !order?.client || !order?.phone) {
+  // Le nom et le telephone sont verifies plus bas, qui en dit davantage
+  // sur ce qui manque ; ici seule la reference, qui n'a pas de message
+  // dedie, est controlee.
+  if (!order?.reference) {
     return NextResponse.json(
-      { error: "Champs requis manquants (reference, client, phone)." },
+      { error: "Champ requis manquant (reference)." },
       { status: 400 }
+    );
+  }
+
+  // Meme controle que l'envoi automatique : la ville doit exister dans
+  // la liste des villes livrables, et la commande porter un nom et un
+  // numero joignable.
+  try {
+    const blocker = dispatchBlocker(order, await deliverableCityKeys());
+    if (blocker) return NextResponse.json({ error: blocker }, { status: 422 });
+  } catch {
+    return NextResponse.json(
+      { error: "Liste des villes indisponible." },
+      { status: 500 }
     );
   }
 

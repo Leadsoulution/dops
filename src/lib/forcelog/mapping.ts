@@ -1,4 +1,5 @@
 import type { AddParcelParams } from "./types";
+import { roundToTen } from "@/lib/amount";
 
 /**
  * Minimal shape this mapping needs from a Lead2Door lead/order — kept
@@ -20,10 +21,15 @@ export type MappableOrder = {
   stockItems?: string;
 };
 
+/**
+ * Montant a encaisser, arrondi a la dizaine comme celui affiche dans
+ * l'application : le livreur doit reclamer exactement la somme que
+ * l'agent a annoncee au client.
+ */
 function parseAmount(amount: string): number | undefined {
   const digits = amount.replace(/[^\d.,-]/g, "").replace(",", ".");
   const value = Number.parseFloat(digits);
-  return Number.isFinite(value) ? Math.round(value) : undefined;
+  return Number.isFinite(value) ? roundToTen(value) : undefined;
 }
 
 /**
