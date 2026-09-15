@@ -2,6 +2,7 @@ import "server-only";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getIntegrationSettings } from "@/lib/supabase/integrations";
 import { listLeads, updateLead } from "@/lib/supabase/leads";
+import { recordLeadChanges } from "@/lib/supabase/lead-events";
 import type { Lead, LeadStatus } from "@/components/dashboard/leads-data";
 import { leadStatusOptions } from "@/components/dashboard/leads-data";
 import { AUTO_DISPATCH_STATUS, dispatchToForceLog } from "@/lib/forcelog/dispatch";
@@ -122,12 +123,15 @@ export async function syncSheet(): Promise<SheetSyncResult> {
     }
 
     let updated = await updateLead(lead.id, { status: statut as LeadStatus });
+    await recordLeadChanges(lead, updated, { name: "Google Sheets" });
 
     // Confirmer depuis la feuille doit expedier comme confirmer depuis
     // l'application : sans cela, une commande passee a "Confirme" dans
     // la feuille resterait chez nous sans que personne s'en apercoive.
     if (statut === AUTO_DISPATCH_STATUS && !updated.trackingNumber) {
+      const avantEnvoi = updated;
       updated = await updateLead(updated.id, await dispatchToForceLog(updated));
+      await recordLeadChanges(avantEnvoi, updated, { name: "ForceLog" });
     }
 
     Object.assign(lead, updated);

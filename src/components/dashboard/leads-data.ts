@@ -89,6 +89,9 @@ export type Lead = {
   stockItems?: string;
   /** Identifiant de la commande dans la boutique WooCommerce. */
   wooOrderId?: number;
+  /** Auteur de la derniere modification : une personne ou un automate. */
+  lastModifiedBy?: string;
+  lastModifiedAt?: string;
   /**
    * Photo du produit, retrouvee dans le catalogue a la lecture. Elle
    * n'est pas enregistree sur la commande : changer la photo d'un

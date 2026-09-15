@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { deleteLead, updateLead } from "@/lib/supabase/leads";
+import { deleteLead, listLeads, updateLead } from "@/lib/supabase/leads";
 import { isSupabaseServerConfigured } from "@/lib/supabase/server";
 import { getSessionProfile } from "@/lib/supabase/auth";
+import { recordLeadChanges } from "@/lib/supabase/lead-events";
 import { AUTO_DISPATCH_STATUS, dispatchToForceLog } from "@/lib/forcelog/dispatch";
 
 function notConfigured() {
@@ -26,12 +27,19 @@ export async function PATCH(
   }
 
   try {
+    const profile = await getSessionProfile();
+    const actor = { name: profile?.name ?? "Systeme", id: profile?.id };
+    const avant = (await listLeads()).find((l) => l.id === id);
+
     let lead = await updateLead(id, changes);
+    if (avant) await recordLeadChanges(avant, lead, actor);
 
     // Meme regle que pour la mise a jour groupee : une commande confirmee
     // part chez ForceLog si elle n'y est pas deja.
     if (changes.status === AUTO_DISPATCH_STATUS && !lead.trackingNumber) {
+      const avantEnvoi = lead;
       lead = await updateLead(id, await dispatchToForceLog(lead));
+      await recordLeadChanges(avantEnvoi, lead, { name: "ForceLog" });
     }
 
     return NextResponse.json({ lead });

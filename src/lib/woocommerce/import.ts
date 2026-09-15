@@ -3,6 +3,7 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { listRecentOrders, type WooOrder } from "./client";
 import type { Lead } from "@/components/dashboard/leads-data";
 import { sendPushToAll } from "@/lib/push";
+import { recordLeadCreated } from "@/lib/supabase/lead-events";
 
 /**
  * Reprise des commandes de la boutique dans l'application.
@@ -103,8 +104,21 @@ export async function importWooOrders(): Promise<WooImportResult> {
   }
 
   if (nouvelles.length > 0) {
-    const { error } = await supabase.from("leads").insert(nouvelles.map(toRow));
+    const { data: inserted, error } = await supabase
+      .from("leads")
+      .insert(nouvelles.map(toRow))
+      .select("id,reference");
     if (error) throw new Error(error.message);
+
+    await Promise.all(
+      ((inserted ?? []) as { id: string; reference: string }[]).map((row) =>
+        recordLeadCreated(
+          row.id,
+          { name: "WooCommerce" },
+          `Commande importee de la boutique (${row.reference})`
+        )
+      )
+    );
 
     // Previent les telephones, y compris application fermee. L'import
     // etant declenche par le webhook de la boutique, l'alerte part meme

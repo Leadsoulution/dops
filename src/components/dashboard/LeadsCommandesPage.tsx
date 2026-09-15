@@ -979,7 +979,7 @@ export default function LeadsCommandesPage() {
                 <th className="px-3 py-3">Client</th>
                 <th className="px-3 py-3">Ville / Tarif</th>
                 <th className="px-3 py-3">Source</th>
-                <th className="px-3 py-3">Assigne a</th>
+                <th className="whitespace-nowrap px-3 py-3">Derniere modification</th>
                 <th className="px-3 py-3">Montant</th>
                 <th className="whitespace-nowrap px-3 py-3">Statut</th>
                 <th className="px-3 py-3">Transporteur</th>
@@ -1097,8 +1097,24 @@ export default function LeadsCommandesPage() {
                       {lead.source}
                     </span>
                   </td>
-                  <td className="px-3 py-3 text-gray-600">
-                    {lead.assignedTo}
+                  <td className="whitespace-nowrap px-3 py-3 text-gray-600">
+                    {lead.lastModifiedBy ? (
+                      <span
+                        title={
+                          lead.lastModifiedAt
+                            ? new Date(lead.lastModifiedAt).toLocaleString("fr-FR", {
+                                timeZone: "Africa/Casablanca",
+                              })
+                            : undefined
+                        }
+                        className="flex items-center gap-1"
+                      >
+                        <User className="h-3 w-3 shrink-0 text-gray-400" />
+                        {lead.lastModifiedBy}
+                      </span>
+                    ) : (
+                      <span className="text-[12px] text-gray-300">&mdash;</span>
+                    )}
                   </td>
                   <td className="px-3 py-3 font-mono font-semibold text-gray-900">
                     {lead.amount}

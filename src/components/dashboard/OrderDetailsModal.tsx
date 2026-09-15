@@ -1,8 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
-import { ClipboardList, MapPin, Pencil, Trash2, User, X } from "lucide-react";
+import { ClipboardList, Loader2, MapPin, Pencil, Trash2, User, X } from "lucide-react";
+import type { LeadEvent } from "@/lib/supabase/lead-events";
+
+/** "14 sept. 2026, 16:36", a l'heure du Maroc. */
+function formatEventDate(iso: string): string {
+  const d = new Date(iso);
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Africa/Casablanca",
+  }).format(d);
+}
 import type { Lead, LeadStatus } from "./leads-data";
 import CallOutcomePanel from "./CallOutcomePanel";
 
@@ -28,6 +43,46 @@ export default function OrderDetailsModal({
   onDelete?: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>(tabs[0]);
+  // L'etat retient pour quelle commande il a ete charge : le chargement
+  // se deduit de cette comparaison, plutot que d'un drapeau pose
+  // synchroniquement dans l'effet.
+  const [loaded, setLoaded] = useState<{
+    leadId: string;
+    events: LeadEvent[];
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/leads/${lead.id}/events`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled) return;
+        setLoaded({
+          leadId: lead.id,
+          events: Array.isArray(data.events) ? data.events : [],
+        });
+      })
+      .catch(() => {
+        // Historique indisponible : la fiche reste utilisable, et
+        // l'onglet annonce simplement qu'il n'y a rien a montrer.
+        if (!cancelled) setLoaded({ leadId: lead.id, events: [] });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [lead.id]);
+
+  const eventsLoading = loaded?.leadId !== lead.id;
+  const events = loaded?.leadId === lead.id ? loaded.events : [];
+
+  // L'onglet des statuts ne montre que les changements de statut ; celui
+  // des modifications montre tout le reste. Deux questions differentes.
+  const visibleEvents =
+    activeTab === "Historique des statuts"
+      ? events.filter(
+          (e) => e.field === "Statut de confirmation" || e.field === "Creation"
+        )
+      : events.filter((e) => e.field !== "Statut de confirmation");
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 sm:px-4 sm:py-10">
@@ -129,43 +184,43 @@ export default function OrderDetailsModal({
             </div>
 
             <div className="pt-3">
-              {activeTab === "Historique des statuts" && (
-                <div className="space-y-3">
-                  <div className="flex gap-2.5">
-                    <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-blue-500" />
-                    <div>
-                      <p className="text-[12.5px] font-medium text-gray-700">
-                        {lead.status} &mdash; Par Mohamed Alaoui
-                      </p>
-                      <p className="font-mono text-[11.5px] text-gray-400">
-                        {lead.date}
-                      </p>
-                      <p className="mt-0.5 text-[11.5px] text-gray-500">
-                        Order reassigned to agent
-                      </p>
+              {(activeTab === "Historique des statuts" ||
+                activeTab === "Historique des modifications") && (
+                <div>
+                  {eventsLoading ? (
+                    <p className="flex items-center gap-2 text-[12.5px] text-gray-400">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Lecture de l&apos;historique...
+                    </p>
+                  ) : visibleEvents.length === 0 ? (
+                    <p className="text-[12.5px] text-gray-400">
+                      {activeTab === "Historique des statuts"
+                        ? "Aucun changement de statut enregistre."
+                        : "Aucune modification enregistree pour cette commande."}
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {visibleEvents.map((event) => (
+                        <div key={event.id} className="flex gap-2.5">
+                          <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-blue-500" />
+                          <div className="min-w-0">
+                            <p className="text-[12.5px] font-medium text-gray-700">
+                              {event.field} &mdash; Par {event.actorName}
+                            </p>
+                            <p className="font-mono text-[11.5px] text-gray-400">
+                              {formatEventDate(event.createdAt)}
+                            </p>
+                            <p className="mt-0.5 text-[11.5px] text-gray-500">
+                              {event.oldValue
+                                ? `${event.oldValue} vers ${event.newValue ?? "(vide)"}`
+                                : (event.newValue ?? "")}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                  <div className="flex gap-2.5">
-                    <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-blue-500" />
-                    <div>
-                      <p className="text-[12.5px] font-medium text-gray-700">
-                        Nouveau &mdash; Par Mohamed Alaoui
-                      </p>
-                      <p className="font-mono text-[11.5px] text-gray-400">
-                        {lead.date}
-                      </p>
-                      <p className="mt-0.5 text-[11.5px] text-gray-500">
-                        Order imported from Excel file lead_import_template.csv
-                      </p>
-                    </div>
-                  </div>
+                  )}
                 </div>
-              )}
-
-              {activeTab === "Historique des modifications" && (
-                <p className="text-[12.5px] text-gray-400">
-                  Aucune modification enregistree pour cette commande.
-                </p>
               )}
 
               {activeTab === "Tracking & attribution" && (
@@ -175,7 +230,15 @@ export default function OrderDetailsModal({
                   </p>
                   <p>
                     Assigne a :{" "}
-                    <span className="font-medium">{lead.assignedTo}</span>
+                    <span className="font-medium">
+                      {lead.assignedTo || "Personne"}
+                    </span>
+                  </p>
+                  <p>
+                    Derniere modification :{" "}
+                    <span className="font-medium">
+                      {lead.lastModifiedBy ?? "Aucune"}
+                    </span>
                   </p>
                   <p>
                     Expedition :{" "}

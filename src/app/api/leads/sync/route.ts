@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { listLeads, updateLead } from "@/lib/supabase/leads";
+import { recordLeadChanges } from "@/lib/supabase/lead-events";
 import { isSupabaseServerConfigured } from "@/lib/supabase/server";
 import { collectStatusUpdates } from "@/lib/forcelog/dispatch";
 
@@ -23,7 +24,15 @@ export async function POST() {
     }
 
     const updated = await Promise.all(
-      [...updates.entries()].map(([id, changes]) => updateLead(id, changes))
+      [...updates.entries()].map(async ([id, changes]) => {
+        const avant = leads.find((l) => l.id === id);
+        const apres = await updateLead(id, changes);
+        // Le transporteur signe ses propres changements : lire "Par
+        // ForceLog" dans l'historique evite de croire qu'un collegue a
+        // touche au statut de livraison.
+        if (avant) await recordLeadChanges(avant, apres, { name: "ForceLog" });
+        return apres;
+      })
     );
 
     return NextResponse.json({ updated, checked });
