@@ -2,7 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
-import { ClipboardList, Loader2, MapPin, Pencil, Trash2, User, X } from "lucide-react";
+import {
+  AlertCircle,
+  ClipboardList,
+  Loader2,
+  MapPin,
+  Pencil,
+  Trash2,
+  Truck,
+  User,
+  X,
+} from "lucide-react";
 import type { LeadEvent } from "@/lib/supabase/lead-events";
 
 /** "14 sept. 2026, 16:36", a l'heure du Maroc. */
@@ -18,7 +28,12 @@ function formatEventDate(iso: string): string {
     timeZone: "Africa/Casablanca",
   }).format(d);
 }
-import type { Lead, LeadStatus } from "./leads-data";
+import {
+  deliveryStatusStyles,
+  paymentStatusStyle,
+  type Lead,
+  type LeadStatus,
+} from "./leads-data";
 import CallOutcomePanel from "./CallOutcomePanel";
 
 const tabs = [
@@ -162,6 +177,72 @@ export default function OrderDetailsModal({
               <div className="col-span-2">
                 <p className="text-gray-400">Adresse</p>
                 <p className="text-gray-700">{lead.adresse ?? "—"}</p>
+              </div>
+            </div>
+          </div>
+
+          {/*
+            Les quatre colonnes de livraison du tableau. Sur telephone la
+            liste n'en montre aucune, faute de largeur : la fiche est le
+            seul endroit ou les lire.
+          */}
+          <div>
+            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-gray-500">
+              <Truck className="h-3 w-3" />
+              LIVRAISON
+            </p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 rounded-lg border border-gray-100 px-3 py-2.5 text-[12.5px]">
+              <div className="col-span-2">
+                <p className="text-gray-400">Code suivi</p>
+                {lead.trackingNumber ? (
+                  <p className="font-mono font-medium text-gray-800">
+                    {lead.trackingNumber}
+                  </p>
+                ) : lead.trackingError ? (
+                  <p className="mt-0.5 flex items-start gap-1 font-medium text-red-600">
+                    <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    {lead.trackingError}
+                  </p>
+                ) : (
+                  <p className="text-gray-300">&mdash;</p>
+                )}
+              </div>
+              <div>
+                <p className="mb-1 text-gray-400">Statut livraison</p>
+                {lead.deliveryStatus ? (
+                  <span
+                    className={`inline-block rounded-md px-2 py-1 text-[12px] font-medium ${
+                      deliveryStatusStyles[lead.deliveryStatusCode ?? ""] ??
+                      "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    {lead.deliveryStatus}
+                  </span>
+                ) : (
+                  <p className="text-gray-300">&mdash;</p>
+                )}
+              </div>
+              <div>
+                <p className="mb-1 text-gray-400">Statut paiement</p>
+                {lead.paymentStatus ? (
+                  <span
+                    className={`inline-block rounded-md px-2 py-1 text-[12px] font-medium ${paymentStatusStyle(
+                      lead.paymentStatus
+                    )}`}
+                  >
+                    {lead.paymentStatus}
+                  </span>
+                ) : (
+                  <p className="text-gray-300">&mdash;</p>
+                )}
+              </div>
+              <div className="col-span-2">
+                <p className="text-gray-400">Date de livraison</p>
+                {lead.deliveryDate ? (
+                  <p className="font-mono text-gray-700">{lead.deliveryDate}</p>
+                ) : (
+                  <p className="text-gray-300">&mdash;</p>
+                )}
               </div>
             </div>
           </div>
