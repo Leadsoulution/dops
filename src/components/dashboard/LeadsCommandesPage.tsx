@@ -386,7 +386,7 @@ export default function LeadsCommandesPage() {
   const filterOptions = {
     produits: uniqueValues((l) => l.productName),
     sources: uniqueValues((l) => l.source),
-    agents: uniqueValues((l) => l.assignedTo),
+    agents: uniqueValues((l) => assigneeName(l.lastModifiedBy)),
     confirmation: uniqueValues((l) => l.status),
     livraison: uniqueValues((l) => l.deliveryStatus),
     paiement: uniqueValues((l) => l.paymentStatus),
@@ -398,7 +398,8 @@ export default function LeadsCommandesPage() {
     (filters.produits.length === 0 ||
       filters.produits.includes(lead.productName)) &&
     (filters.sources.length === 0 || filters.sources.includes(lead.source)) &&
-    (filters.agents.length === 0 || filters.agents.includes(lead.assignedTo)) &&
+    (filters.agents.length === 0 ||
+      filters.agents.includes(assigneeName(lead.lastModifiedBy) ?? "")) &&
     (filters.confirmation.length === 0 ||
       filters.confirmation.includes(lead.status)) &&
     (filters.livraison.length === 0 ||
@@ -590,7 +591,7 @@ export default function LeadsCommandesPage() {
       "Client",
       "Telephone",
       "Source",
-      "Assigne a",
+      "Assigne",
       "Montant",
       "Statut",
       "Date",
@@ -601,7 +602,7 @@ export default function LeadsCommandesPage() {
       lead.client,
       lead.phone,
       lead.source,
-      lead.assignedTo,
+      assigneeName(lead.lastModifiedBy) ?? "",
       // Le montant arrondi : celui qui sera reellement encaisse.
       displayAmount(lead.amount),
       lead.status,
@@ -855,8 +856,8 @@ export default function LeadsCommandesPage() {
           key={`agents-${filtersResetKey}`}
           variant="chip"
           icon={User}
-          panelTitle="Assigne a"
-          pinnedLabel="Assigne a"
+          panelTitle="Assigne"
+          pinnedLabel="Assigne"
           allLabel="Tous les agents"
           options={filterOptions.agents}
           multi
@@ -1352,10 +1353,13 @@ export default function LeadsCommandesPage() {
                     {lead.client}
                   </p>
                   <p className="font-mono text-[12.5px] text-gray-400">{lead.phone}</p>
-                  <p className="mt-1 flex items-center gap-1 text-[12.5px] text-gray-500">
-                    <User className="h-3 w-3" />
-                    {lead.assignedTo}
-                  </p>
+                  {/* Rien a montrer tant que personne n'a pris la commande. */}
+                  {assigneeName(lead.lastModifiedBy) && (
+                    <p className="mt-1 flex items-center gap-1 text-[12.5px] text-gray-500">
+                      <User className="h-3 w-3" />
+                      {assigneeName(lead.lastModifiedBy)}
+                    </p>
+                  )}
                 </div>
               </div>
 
