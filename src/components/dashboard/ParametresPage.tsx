@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Ban,
@@ -29,11 +29,13 @@ import {
   Workflow,
   XCircle,
   Zap,
+  MessageCircle,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import SelectDropdown from "./SelectDropdown";
 import Toggle from "./Toggle";
 import DatabaseSizeCard from "./DatabaseSizeCard";
+import WhatsappMessagesPanel from "./WhatsappMessagesPanel";
 import {
   leadStatuses,
   shippingStatuses,
@@ -45,11 +47,17 @@ import {
   type StatusColor,
 } from "./settings-data";
 
-type TabKey = "general" | "workflow" | "notifications" | "integrations";
+type TabKey =
+  | "general"
+  | "workflow"
+  | "messages"
+  | "notifications"
+  | "integrations";
 
 const tabs: { key: TabKey; label: string; icon: typeof Settings }[] = [
   { key: "general", label: "General", icon: Settings },
   { key: "workflow", label: "Workflow", icon: Workflow },
+  { key: "messages", label: "Messages", icon: MessageCircle },
   { key: "notifications", label: "Notifications", icon: RefreshCw },
   { key: "integrations", label: "Integrations", icon: Zap },
 ];
@@ -158,6 +166,24 @@ export default function ParametresPage() {
   const [language, setLanguage] = useState(languageOptions[0]);
   const [mediaStorage, setMediaStorage] = useState<"local" | "s3">("local");
   const [saveState, setSaveState] = useState<"idle" | "saved">("idle");
+  // Les messages ne sont modifiables que par un administrateur ; le
+  // serveur refuse de toute facon l'ecriture aux autres.
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/auth/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.profile) setIsAdmin(data.profile.role === "Admin");
+      })
+      .catch(() => {
+        /* Sans profil connu, l'edition reste fermee. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [leadSyncState, setLeadSyncState] = useState<"idle" | "syncing" | "done">("idle");
   const [shippingSyncState, setShippingSyncState] = useState<"idle" | "syncing" | "done">(
     "idle"
@@ -429,6 +455,12 @@ export default function ParametresPage() {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {activeTab === "messages" && (
+        <div className="max-w-3xl space-y-4">
+          <WhatsappMessagesPanel isAdmin={isAdmin} />
         </div>
       )}
 

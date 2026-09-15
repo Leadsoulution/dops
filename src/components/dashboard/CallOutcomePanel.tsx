@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Check, ChevronDown, Loader2, Phone } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, ChevronDown, Loader2, MessageCircle, Phone } from "lucide-react";
 import { LEAD_STATUSES, type Lead, type LeadStatus } from "./leads-data";
+import { templateFor, whatsappLink, whatsappNumber } from "@/lib/whatsapp";
 import ConfirmDialog from "./ConfirmDialog";
 
 /**
@@ -33,6 +34,29 @@ export default function CallOutcomePanel({
   const [allOpen, setAllOpen] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<LeadStatus | null>(null);
+  const [templates, setTemplates] = useState<Record<string, string>>({});
+
+  // Les modeles de messages, relus a l'ouverture de la fiche : un
+  // administrateur peut les avoir changes depuis le dernier chargement.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/settings/whatsapp")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.templates) setTemplates(data.templates);
+      })
+      .catch(() => {
+        // Sans reglages enregistres, les textes par defaut s'appliquent.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Le message suit le statut du moment : une commande sans reponse
+  // n'appelle pas le meme mot qu'une commande confirmee.
+  const message = templateFor(lead.status, templates);
+  const reachable = Boolean(whatsappNumber(lead.phone));
 
   async function apply(status: LeadStatus) {
     setConfirming(null);
@@ -64,6 +88,23 @@ export default function CallOutcomePanel({
         <Phone className="h-4 w-4" />
         Appeler {lead.client.split(" ")[0] || "le client"}
       </a>
+      {reachable ? (
+        <a
+          href={whatsappLink(lead, message)}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={message}
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-[#25D366] py-2.5 text-[13.5px] font-medium text-white hover:bg-[#1eb855]"
+        >
+          <MessageCircle className="h-4 w-4" />
+          WhatsApp &mdash; {lead.status}
+        </a>
+      ) : (
+        <p className="mt-2 rounded-lg border border-gray-200 py-2 text-center text-[12px] text-gray-400">
+          Pas de numero utilisable pour WhatsApp
+        </p>
+      )}
+
       <p className="mt-1.5 text-center text-[11.5px] text-gray-400">
         Si votre navigateur n&apos;ouvre pas le composeur, copiez le numero :{" "}
         <span className="font-mono text-gray-500">{lead.phone}</span>
