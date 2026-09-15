@@ -21,6 +21,15 @@ const nextConfig = {
         ],
       },
       {
+        // L'agent de service doit pouvoir etre remplace. Mis en cache
+        // longtemps par un intermediaire, l'ancien resterait en place et
+        // les notifications continueraient de passer par du code perime.
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, must-revalidate" },
+        ],
+      },
+      {
         // Les reponses d'API dependent de qui les demande : /api/auth/me
         // renvoie l'identite de la personne connectee. Les marquer
         // `public`, meme avec revalidation, autorise un cache partage

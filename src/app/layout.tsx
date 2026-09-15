@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { ASSET_RECOVERY_SCRIPT } from "./asset-recovery";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta-sans",
@@ -29,6 +30,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${plusJakartaSans.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
+      <head>
+        {/*
+          Avant tout le reste : c'est ce script qui rattrape une page dont
+          les fichiers de build ont disparu apres un deploiement.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: ASSET_RECOVERY_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );

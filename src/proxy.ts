@@ -23,6 +23,20 @@ function isPublic(pathname: string) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+/**
+ * Supabase a-t-il vraiment refuse la session, ou n'a-t-il pas repondu ?
+ *
+ * Un refus porte un code HTTP de la famille 4xx : jeton expire, absent ou
+ * invalide. Tout le reste — pas de code du tout, ou une erreur 5xx — dit
+ * que la question n'a pas pu etre posee, et ne prouve rien sur la
+ * personne qui navigue.
+ */
+function isRejectedSession(error: { status?: number }): boolean {
+  return (
+    typeof error.status === "number" && error.status >= 400 && error.status < 500
+  );
+}
+
 export async function proxy(request: NextRequest) {
   const response = NextResponse.next({ request });
 
@@ -43,9 +57,27 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // `getUser()` interroge le serveur d'authentification Supabase a chaque
+  // requete. Une coupure reseau, un delai depasse ou une panne de leur
+  // cote ne doit pas emporter la page avec elle : sans ce filet, l'erreur
+  // remonte, Next.js repond 500, et le navigateur affiche une page morte
+  // — c'est exactement l'incident intermittent observe sur telephone.
+  //
+  // On distingue donc deux situations. Une session refusee : la personne
+  // n'est pas connectee, on la renvoie vers /login. Un serveur
+  // injoignable : on ne sait rien, et on laisse passer. Cette garde est
+  // optimiste par construction, l'autorisation reelle etant refaite dans
+  // chaque route d'API — qui echouera elle aussi proprement si Supabase
+  // reste muet. Mieux vaut une page vide qu'une page morte, et surtout
+  // pas de deconnexion en rafale a chaque hoquet du reseau.
+  let user = null;
+  try {
+    const { data, error } = await supabase.auth.getUser();
+    if (error && !isRejectedSession(error)) return response;
+    user = data?.user ?? null;
+  } catch {
+    return response;
+  }
 
   const { pathname, search } = request.nextUrl;
 
