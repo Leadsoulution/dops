@@ -650,7 +650,10 @@ export default function LeadsCommandesPage() {
               Leads &amp; Commandes
             </h1>
             <p className="text-[13px] text-gray-500">
-              <span className="font-mono">48745</span> leads au total
+              <span className="font-mono">
+                {leadsState.length.toLocaleString("fr-FR")}
+              </span>{" "}
+              {leadsState.length > 1 ? "leads au total" : "lead au total"}
             </p>
           </div>
         </div>
@@ -1286,12 +1289,12 @@ export default function LeadsCommandesPage() {
               </div>
 
               <div className="mb-3 flex items-center justify-between">
+                {/*
+                  Pas de badge de source ici : la carte est etroite, et
+                  la provenance se lit deja dans la reference. La colonne
+                  du tableau, elle, la garde.
+                */}
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span
-                    className={`rounded-md px-2 py-1 text-[11.5px] font-medium ${sourceBadgeStyles[lead.source]}`}
-                  >
-                    {lead.source}
-                  </span>
                   <span
                     className={`whitespace-nowrap rounded-md px-2 py-1 text-[11.5px] font-medium ${statusBadgeStyles[lead.status]}`}
                   >
