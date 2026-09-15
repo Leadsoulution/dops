@@ -280,6 +280,21 @@ export const tabs = tabDefinitions.map((tab) => ({
 }));
 
 /** La commande appartient-elle a cet onglet ? */
+/**
+ * Les automates qui touchent une commande sans etre quelqu'un.
+ *
+ * Ils creent et mettent a jour des commandes, mais on ne leur en assigne
+ * pas : une commande qu'aucune personne n'a encore prise n'est assignee
+ * a personne, et la colonne reste vide plutot que d'annoncer un robot.
+ */
+const AUTOMATIONS = new Set(["WooCommerce", "ForceLog", "Google Sheets"]);
+
+/** La personne qui s'occupe de la commande, si c'en est une. */
+export function assigneeName(name: string | undefined): string | undefined {
+  if (!name || AUTOMATIONS.has(name)) return undefined;
+  return name;
+}
+
 export function matchesTab(
   tab: { statuses: LeadStatus[] | null },
   status: LeadStatus

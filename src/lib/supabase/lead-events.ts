@@ -94,6 +94,13 @@ export async function recordLeadCreated(
       field: "Creation",
       new_value: detail,
     });
+
+    // Un automate — la boutique, le transporteur, la feuille de calcul —
+    // n'a pas de compte et ne prend pas la commande en charge. La
+    // creation reste au journal ci-dessus, mais la commande reste libre
+    // jusqu'a ce que quelqu'un s'en saisisse.
+    if (!actor.id) return;
+
     await supabase
       .from("leads")
       .update({

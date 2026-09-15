@@ -52,6 +52,7 @@ import {
   dateRanges,
   parseLeadDate,
   sourceBadgeStyles,
+  assigneeName,
   statusBadgeStyles,
   deliveryStatusStyles,
   paymentStatusStyle,
@@ -1007,7 +1008,7 @@ export default function LeadsCommandesPage() {
                 <th className="px-3 py-3">Client</th>
                 <th className="px-3 py-3">Ville / Tarif</th>
                 <th className="px-3 py-3">Source</th>
-                <th className="whitespace-nowrap px-3 py-3">Derniere modification</th>
+                <th className="whitespace-nowrap px-3 py-3">Assigne</th>
                 <th className="px-3 py-3">Montant</th>
                 <th className="whitespace-nowrap px-3 py-3">Statut</th>
                 <th className="px-3 py-3">Transporteur</th>
@@ -1126,23 +1127,32 @@ export default function LeadsCommandesPage() {
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 text-gray-600">
-                    {lead.lastModifiedBy ? (
-                      <span
-                        title={
-                          lead.lastModifiedAt
-                            ? new Date(lead.lastModifiedAt).toLocaleString("fr-FR", {
-                                timeZone: "Africa/Casablanca",
-                              })
-                            : undefined
-                        }
-                        className="flex items-center gap-1"
-                      >
-                        <User className="h-3 w-3 shrink-0 text-gray-400" />
-                        {lead.lastModifiedBy}
-                      </span>
-                    ) : (
-                      <span className="text-[12px] text-gray-300">&mdash;</span>
-                    )}
+                    {/*
+                      La derniere personne a avoir touche la commande :
+                      c'est elle qui s'en occupe. Une commande importee
+                      par la boutique n'a encore ete prise par personne,
+                      la case reste donc vide.
+                    */}
+                    {(() => {
+                      const assigne = assigneeName(lead.lastModifiedBy);
+                      return assigne ? (
+                        <span
+                          title={
+                            lead.lastModifiedAt
+                              ? new Date(lead.lastModifiedAt).toLocaleString("fr-FR", {
+                                  timeZone: "Africa/Casablanca",
+                                })
+                              : undefined
+                          }
+                          className="flex items-center gap-1"
+                        >
+                          <User className="h-3 w-3 shrink-0 text-gray-400" />
+                          {assigne}
+                        </span>
+                      ) : (
+                        <span className="text-[12px] text-gray-300">&mdash;</span>
+                      );
+                    })()}
                   </td>
                   <td className="px-3 py-3 font-mono font-semibold text-gray-900">
                     {displayAmount(lead.amount)}

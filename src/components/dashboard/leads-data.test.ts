@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { parseLeadDate, LEAD_STATUSES, tabs, matchesTab } from "./leads-data";
+import { parseLeadDate, LEAD_STATUSES, tabs, matchesTab,
+  assigneeName,
+} from "./leads-data";
 
 /**
  * La lecture des dates porte les filtres de periode. Deux formats
@@ -49,5 +51,24 @@ describe("onglets", () => {
   it("l'onglet Tous ne rejette rien", () => {
     const tous = tabs.find((t) => t.label === "Tous")!;
     for (const s of LEAD_STATUSES) expect(matchesTab(tous, s.label)).toBe(true);
+  });
+});
+
+describe("assigneeName", () => {
+  it("rend le nom d'une personne", () => {
+    expect(assigneeName("Centrecall")).toBe("Centrecall");
+    expect(assigneeName("Amine bahazzaz")).toBe("Amine bahazzaz");
+  });
+
+  it("ne rend rien pour un automate", () => {
+    // Une commande importee n'a encore ete prise par personne.
+    expect(assigneeName("WooCommerce")).toBeUndefined();
+    expect(assigneeName("ForceLog")).toBeUndefined();
+    expect(assigneeName("Google Sheets")).toBeUndefined();
+  });
+
+  it("ne rend rien quand la commande n'a jamais ete touchee", () => {
+    expect(assigneeName(undefined)).toBeUndefined();
+    expect(assigneeName("")).toBeUndefined();
   });
 });
