@@ -49,6 +49,7 @@ import Image from "next/image";
 import {
   tabs,
   matchesTab,
+  STALE_DAYS,
   dateRanges,
   parseLeadDate,
   sourceBadgeStyles,
@@ -368,11 +369,11 @@ export default function LeadsCommandesPage() {
 
   const dynamicTabs = tabs.map((tab) => ({
     ...tab,
-    count: rangedLeads.filter((lead) => matchesTab(tab, lead.status)).length,
+    count: rangedLeads.filter((lead) => matchesTab(tab, lead)).length,
   }));
   const activeTabDef = dynamicTabs.find((t) => t.label === activeTab) ?? dynamicTabs[0];
   const filteredLeads = rangedLeads.filter((lead) =>
-    matchesTab(activeTabDef, lead.status)
+    matchesTab(activeTabDef, lead)
   );
 
   // Les options proposees sont celles reellement presentes dans les
@@ -701,7 +702,30 @@ export default function LeadsCommandesPage() {
 
       <div className="mb-4 flex items-center gap-5 overflow-x-auto border-b border-gray-200 lg:gap-6 lg:overflow-visible">
         {dynamicTabs.map((tab) =>
-          tab.flagged ? (
+          tab.stale ? (
+            <button
+              key={tab.label}
+              onClick={() => setActiveTab(tab.label)}
+              title={`Commandes ouvertes depuis plus de ${STALE_DAYS} jours`}
+              className={`flex items-center gap-1.5 whitespace-nowrap border-b-2 pb-2.5 text-[13.5px] transition-colors ${
+                activeTab === tab.label
+                  ? "border-gray-900 font-semibold text-gray-900"
+                  : "border-transparent text-amber-600 hover:text-amber-700"
+              }`}
+            >
+              <Clock className="h-3.5 w-3.5" />
+              {tab.label}
+              <span
+                className={`rounded-full px-1.5 py-0.5 font-mono text-[10.5px] font-semibold ${
+                  tab.count > 0
+                    ? "bg-amber-500 text-white"
+                    : "bg-gray-100 text-gray-500"
+                }`}
+              >
+                {tab.count}
+              </span>
+            </button>
+          ) : tab.flagged ? (
             <button
               key={tab.label}
               onClick={() => setActiveTab(tab.label)}
