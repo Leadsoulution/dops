@@ -86,12 +86,19 @@ function SearchResultsPanel({
   );
 }
 
-/** "Mohamed Alaoui" -> "MA" ; une seule initiale si un seul mot. */
+type LeadStats = { total: number; confirmees: number; nonConfirmees: number };
+
+/** Un tiret tant que le compte n'est pas connu : zero serait un mensonge. */
+function formatCount(value?: number) {
+  return value === undefined ? "—" : value.toLocaleString("fr-FR");
+}
+
 /** La permission ne change pas toute seule : rien a surveiller. */
 function subscribeNothing() {
   return () => {};
 }
 
+/** "Mohamed Alaoui" -> "MA" ; une seule initiale si un seul mot. */
 function initials(name?: string) {
   if (!name) return "?";
   const parts = name.trim().split(/\s+/);
@@ -107,6 +114,35 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [profile, setProfile] = useState<SessionProfile | null>(null);
   const { signOut, signingOut } = useSignOut();
+  const [stats, setStats] = useState<LeadStats | null>(null);
+
+  /**
+   * Compteurs de commandes, relus toutes les trente secondes : une
+   * commande confirmee par un collegue doit se voir dans l'en-tete sans
+   * recharger la page.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    function load() {
+      if (document.hidden) return;
+      fetch("/api/leads/stats")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (!cancelled && data && !data.error) setStats(data);
+        })
+        .catch(() => {
+          /* Compteurs laisses en l'etat plutot qu'a zero. */
+        });
+    }
+
+    load();
+    const timer = setInterval(load, 30000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
   // La permission est un etat du navigateur, pas de React : la lire par
   // `useSyncExternalStore` evite un reglage fige au premier rendu, et le
   // serveur rend "default" comme le premier rendu du navigateur.
@@ -214,18 +250,27 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
 
         <div className="ml-auto flex items-center gap-1 lg:gap-2.5">
           <div className="hidden items-center gap-2.5 lg:flex">
-            <div className="relative flex items-center gap-1.5 rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1.5 text-[13px] font-medium text-blue-700">
+            <div
+              title="Total des commandes"
+              className="relative flex items-center gap-1.5 rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-1.5 text-[13px] font-medium text-blue-700"
+            >
               <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-blue-500" />
               <ShoppingCart className="h-3.5 w-3.5" />
-              <span className="font-mono">48745</span>
+              <span className="font-mono">{formatCount(stats?.total)}</span>
             </div>
-            <div className="flex items-center gap-1.5 rounded-lg border border-green-100 bg-green-50 px-2.5 py-1.5 text-[13px] font-medium text-green-700">
+            <div
+              title="Commandes confirmees"
+              className="flex items-center gap-1.5 rounded-lg border border-green-100 bg-green-50 px-2.5 py-1.5 text-[13px] font-medium text-green-700"
+            >
               <CheckCircle2 className="h-3.5 w-3.5" />
-              <span className="font-mono">31327</span>
+              <span className="font-mono">{formatCount(stats?.confirmees)}</span>
             </div>
-            <div className="flex items-center gap-1.5 rounded-lg border border-orange-100 bg-orange-50 px-2.5 py-1.5 text-[13px] font-medium text-orange-700">
+            <div
+              title="Commandes non confirmees"
+              className="flex items-center gap-1.5 rounded-lg border border-orange-100 bg-orange-50 px-2.5 py-1.5 text-[13px] font-medium text-orange-700"
+            >
               <PackageCheck className="h-3.5 w-3.5" />
-              <span className="font-mono">22869</span>
+              <span className="font-mono">{formatCount(stats?.nonConfirmees)}</span>
             </div>
           </div>
 
