@@ -3,7 +3,9 @@ import { addParcel } from "@/lib/forcelog/client";
 import { mapOrderToParcel, type MappableOrder } from "@/lib/forcelog/mapping";
 import { ForceLogApiError } from "@/lib/forcelog/types";
 import { dispatchBlocker } from "@/lib/forcelog/eligibility";
+import { resolveParcelType } from "@/lib/forcelog/parcel-type";
 import { deliverableCityKeys } from "@/lib/supabase/cities";
+import { parcelCatalogue } from "@/lib/supabase/products";
 
 export async function POST(request: NextRequest) {
   const apiKey = process.env.FORCELOG_API_KEY;
@@ -47,11 +49,28 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Le type de colis n'est pas demande a l'appelant : il se lit dans le
+  // catalogue, comme pour l'envoi automatique. Les deux chemins doivent
+  // aboutir au meme colis, sans quoi le resultat dependrait du bouton
+  // utilise.
+  try {
+    const choice = resolveParcelType(order, await parcelCatalogue());
+    order = { ...order, ...choice };
+  } catch {
+    // Catalogue illisible : la commande part telle qu'elle est decrite.
+  }
+
   try {
     const parcel = await addParcel(apiKey, mapOrderToParcel(order));
     // ForceLog n'expose pas d'identifiant interne distinct : le numero de
     // suivi est la seule reference exploitable.
-    return NextResponse.json({ trackingNumber: parcel.TRACKING_NUMBER });
+    return NextResponse.json({
+      trackingNumber: parcel.TRACKING_NUMBER,
+      // La liste reprend ces valeurs : sans elles, elle continuerait
+      // d'annoncer un colis simple alors qu'un colis de stock est parti.
+      parcelType: order.parcelType,
+      stockItems: order.stockItems,
+    });
   } catch (error) {
     const message =
       error instanceof ForceLogApiError

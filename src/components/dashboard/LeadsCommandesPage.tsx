@@ -475,6 +475,9 @@ export default function LeadsCommandesPage() {
           adresse: lead.adresse,
           amount: lead.amount,
           productName: lead.productName,
+          itemCount: lead.itemCount,
+          parcelType: lead.parcelType,
+          stockItems: lead.stockItems,
         }),
       });
       const data = await res.json();
@@ -485,6 +488,10 @@ export default function LeadsCommandesPage() {
         trackingError: res.ok
           ? undefined
           : data.error ?? "Erreur ForceLog inconnue.",
+        // Le serveur a pu relire le catalogue et changer le type de colis.
+        ...(res.ok && data.parcelType
+          ? { parcelType: data.parcelType, stockItems: data.stockItems }
+          : {}),
       });
     } catch {
       await persistChanges([lead.id], {

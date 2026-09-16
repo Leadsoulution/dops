@@ -4,7 +4,9 @@ import { ForceLogApiError } from "./types";
 import type { Lead } from "@/components/dashboard/leads-data";
 import { sendPushToAll } from "@/lib/push";
 import { dispatchBlocker } from "./eligibility";
+import { resolveParcelType, type ParcelChoice } from "./parcel-type";
 import { deliverableCityKeys } from "@/lib/supabase/cities";
+import { parcelCatalogue } from "@/lib/supabase/products";
 
 /** Statut a partir duquel une commande part automatiquement chez ForceLog. */
 export const AUTO_DISPATCH_STATUS = "Confirme";
@@ -49,6 +51,7 @@ export async function dispatchToForceLog(
     | "productName"
     | "parcelType"
     | "stockItems"
+    | "itemCount"
   >
 ): Promise<Partial<Lead>> {
   const apiKey = process.env.FORCELOG_API_KEY;
@@ -65,11 +68,27 @@ export async function dispatchToForceLog(
     return { trackingError: "Liste des villes indisponible." };
   }
 
+  // Le type de colis se decide ici, sur l'etat actuel du catalogue, et
+  // non sur ce qui avait ete fige a l'arrivee de la commande.
+  let choice: ParcelChoice = {
+    parcelType: lead.parcelType ?? "simple",
+    stockItems: lead.stockItems,
+  };
   try {
-    const parcel = await addParcel(apiKey, mapOrderToParcel(lead));
+    choice = resolveParcelType(lead, await parcelCatalogue());
+  } catch {
+    // Catalogue illisible : on part avec ce que porte la commande
+    // plutot que de bloquer une expedition.
+  }
+
+  try {
+    const parcel = await addParcel(apiKey, mapOrderToParcel({ ...lead, ...choice }));
     return {
       trackingNumber: parcel.TRACKING_NUMBER,
       trackingError: undefined,
+      // La commande retient ce qui est reellement parti.
+      parcelType: choice.parcelType,
+      stockItems: choice.stockItems,
       deliveryStatus: parcel.STATUS ?? "Nouveau colis",
       deliveryStatusCode: parcel.STATUS_CODE ?? "NEW_PARCEL",
       paymentStatus: parcel.SITUATION ?? "Non Paye",

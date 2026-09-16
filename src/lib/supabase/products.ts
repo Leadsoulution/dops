@@ -1,3 +1,4 @@
+import type { CatalogueProduct } from "@/lib/forcelog/parcel-type";
 import { getSupabaseServerClient } from "./server";
 
 /**
@@ -129,6 +130,29 @@ function toRow(input: Partial<ProductInput>) {
   if (input.status !== undefined) row.status = input.status;
   if (input.image !== undefined) row.image = input.image || null;
   return row;
+}
+
+/**
+ * Le catalogue reduit a ce qui decide du type de colis. Relu a chaque
+ * expedition : c'est l'etat du produit au moment de l'envoi qui compte,
+ * pas celui du jour ou la commande est arrivee.
+ */
+export async function parcelCatalogue(): Promise<CatalogueProduct[]> {
+  const supabase = getSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("name,forcelog_ref,default_parcel_type");
+  if (error) throw new Error(error.message);
+
+  return ((data ?? []) as {
+    name: string;
+    forcelog_ref: string | null;
+    default_parcel_type: string | null;
+  }[]).map((row) => ({
+    name: row.name,
+    forcelogRef: row.forcelog_ref ?? undefined,
+    defaultParcelType: row.default_parcel_type === "stock" ? "stock" : "simple",
+  }));
 }
 
 export async function listProducts(): Promise<StockProduct[]> {
