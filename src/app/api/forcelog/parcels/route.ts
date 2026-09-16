@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { addParcel } from "@/lib/forcelog/client";
 import { mapOrderToParcel, type MappableOrder } from "@/lib/forcelog/mapping";
 import { ForceLogApiError } from "@/lib/forcelog/types";
-import { dispatchBlocker } from "@/lib/forcelog/eligibility";
+import { carrierCity, dispatchBlocker } from "@/lib/forcelog/eligibility";
 import { resolveParcelType } from "@/lib/forcelog/parcel-type";
-import { deliverableCityKeys } from "@/lib/supabase/cities";
+import { deliverableCities } from "@/lib/supabase/cities";
 import { parcelCatalogue } from "@/lib/supabase/products";
 
 export async function POST(request: NextRequest) {
@@ -40,8 +40,10 @@ export async function POST(request: NextRequest) {
   // la liste des villes livrables, et la commande porter un nom et un
   // numero joignable.
   try {
-    const blocker = dispatchBlocker(order, await deliverableCityKeys());
+    const cities = await deliverableCities();
+    const blocker = dispatchBlocker(order, cities);
     if (blocker) return NextResponse.json({ error: blocker }, { status: 422 });
+    order = { ...order, carrierCity: carrierCity(order.ville, cities) };
   } catch {
     return NextResponse.json(
       { error: "Liste des villes indisponible." },

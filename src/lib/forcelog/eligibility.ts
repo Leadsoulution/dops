@@ -34,7 +34,9 @@ function hasUsablePhone(phone: string | undefined): boolean {
  */
 export function dispatchBlocker(
   order: DispatchCandidate,
-  deliverableCities: Set<string>
+  // Un Set de cles suffit a repondre, une Map de villes aussi : seule la
+  // presence est demandee ici.
+  deliverableCities: { has(key: string): boolean }
 ): string | null {
   if (!order.client?.trim()) {
     return "Saisir le nom du client";
@@ -53,4 +55,26 @@ export function dispatchBlocker(
   }
 
   return null;
+}
+
+/**
+ * Le libelle de ville a envoyer au transporteur.
+ *
+ * On lui donne son propre code plutot que le nom ecrit sur la commande.
+ * Verifie sur leur API : "Oulad berhil (Ouled Berhil)" est refuse avec
+ * "City Not Found" alors que c'est exactement le nom de leur liste — la
+ * parenthese casse leur recherche, et onze villes en portent une. Le
+ * code, lui, est exact et sans ambiguite : deux villes voisines peuvent
+ * partager presque le meme nom sans partager le code.
+ *
+ * Sans code connu, le nom part tel quel : mieux vaut tenter l'envoi que
+ * le refuser.
+ */
+export function carrierCity(
+  ville: string | undefined,
+  cities: Map<string, { name: string; carrierCode?: string }>
+): string {
+  const written = (ville ?? "").trim();
+  if (!written) return "";
+  return cities.get(cityKey(written))?.carrierCode ?? written;
 }

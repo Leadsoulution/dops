@@ -12,6 +12,11 @@ export type MappableOrder = {
   client: string;
   phone: string;
   ville?: string;
+  /**
+   * Ville telle que le transporteur la designe — son code. Resolue par
+   * l'appelant ; `ville` reste le nom lisible, qui sert a l'adresse.
+   */
+  carrierCity?: string;
   adresse?: string;
   amount: string;
   productName: string;
@@ -45,7 +50,7 @@ export function mapOrderToParcel(order: MappableOrder): AddParcelParams {
     ORDER_NUM: order.reference.slice(0, 20),
     RECEIVER: order.client.slice(0, 50),
     PHONE: order.phone.slice(0, 14),
-    CITY: (order.ville ?? "").slice(0, 50),
+    CITY: (order.carrierCity || order.ville || "").slice(0, 50),
     ADDRESS: (order.adresse ?? order.ville ?? "").slice(0, 100),
     PRODUCT_NATURE: order.productName.slice(0, 100),
     COD: parseAmount(order.amount),

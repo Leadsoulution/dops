@@ -10,6 +10,9 @@ import { getSupabaseServerClient } from "./server";
  * d'interet qu'affichee.
  */
 
+/** Une ville livrable, et la facon dont le transporteur la designe. */
+export type CarrierCity = { name: string; carrierCode?: string };
+
 export type TariffSource = "canonique" | "transporteur" | "force";
 
 export type City = {
@@ -144,28 +147,37 @@ export async function tariffByCityForm(): Promise<Map<string, number>> {
 }
 
 /**
- * Toutes les formes acceptees d'une ville livrable : sa cle, son nom et
- * chacun de ses alias, normalises.
+ * Toutes les formes acceptees d'une ville livrable — sa cle, son nom et
+ * chacun de ses alias, normalises — vers ce qu'il faut annoncer au
+ * transporteur.
  *
- * Sert a refuser une commande dont la ville est mal ecrite avant de
- * l'envoyer au transporteur. Les villes desactivees sont exclues : on ne
- * livre pas ou l'on a cesse de livrer.
+ * Sert deux fois : a refuser une commande dont la ville est mal ecrite,
+ * et a traduire cette ville en code transporteur au moment de l'envoi.
+ * Les villes desactivees sont exclues : on ne livre pas ou l'on a cesse
+ * de livrer.
  */
-export async function deliverableCityKeys(): Promise<Set<string>> {
+export async function deliverableCities(): Promise<Map<string, CarrierCity>> {
   const supabase = getSupabaseServerClient();
   const { data, error } = await supabase
     .from("cities")
-    .select("key,name,aliases")
+    .select("key,name,aliases,carrier_code")
     .eq("active", true);
   if (error) throw new Error(error.message);
 
-  const keys = new Set<string>();
-  for (const row of (data ?? []) as Pick<CityRow, "key" | "name" | "aliases">[]) {
-    keys.add(row.key);
-    keys.add(cityKey(row.name));
-    for (const alias of row.aliases ?? []) keys.add(cityKey(alias));
+  const cities = new Map<string, CarrierCity>();
+  for (const row of (data ?? []) as Pick<
+    CityRow,
+    "key" | "name" | "aliases" | "carrier_code"
+  >[]) {
+    const entry: CarrierCity = {
+      name: row.name,
+      carrierCode: row.carrier_code ?? undefined,
+    };
+    cities.set(row.key, entry);
+    cities.set(cityKey(row.name), entry);
+    for (const alias of row.aliases ?? []) cities.set(cityKey(alias), entry);
   }
-  return keys;
+  return cities;
 }
 
 export async function listCities(): Promise<City[]> {

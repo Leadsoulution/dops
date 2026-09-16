@@ -3,9 +3,9 @@ import { mapOrderToParcel } from "./mapping";
 import { ForceLogApiError } from "./types";
 import type { Lead } from "@/components/dashboard/leads-data";
 import { sendPushToAll } from "@/lib/push";
-import { dispatchBlocker } from "./eligibility";
+import { carrierCity, dispatchBlocker } from "./eligibility";
 import { resolveParcelType, type ParcelChoice } from "./parcel-type";
-import { deliverableCityKeys } from "@/lib/supabase/cities";
+import { deliverableCities } from "@/lib/supabase/cities";
 import { parcelCatalogue } from "@/lib/supabase/products";
 
 /** Statut a partir duquel une commande part automatiquement chez ForceLog. */
@@ -61,9 +61,12 @@ export async function dispatchToForceLog(
 
   // Controle avant appel : un colis cree avec une ville fantaisiste ne
   // peut plus etre supprime une fois qu'il a quitte l'etat NEW_PARCEL.
+  let city = "";
   try {
-    const blocker = dispatchBlocker(lead, await deliverableCityKeys());
+    const cities = await deliverableCities();
+    const blocker = dispatchBlocker(lead, cities);
     if (blocker) return { trackingNumber: undefined, trackingError: blocker };
+    city = carrierCity(lead.ville, cities);
   } catch {
     return { trackingError: "Liste des villes indisponible." };
   }
@@ -82,7 +85,7 @@ export async function dispatchToForceLog(
   }
 
   try {
-    const parcel = await addParcel(apiKey, mapOrderToParcel({ ...lead, ...choice }));
+    const parcel = await addParcel(apiKey, mapOrderToParcel({ ...lead, ...choice, carrierCity: city }));
     return {
       trackingNumber: parcel.TRACKING_NUMBER,
       trackingError: undefined,

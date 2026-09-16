@@ -60,6 +60,21 @@ describe("mapOrderToParcel", () => {
     expect(parcel.COD).toBeUndefined();
   });
 
+  it("envoie le code transporteur comme ville, en gardant le nom lisible pour l'adresse", () => {
+    const parcel = mapOrderToParcel({
+      reference: "spc-1006",
+      client: "Ahmed",
+      phone: "0681341881",
+      ville: "Oulad berhil (Ouled Berhil)",
+      carrierCity: "ODB",
+      amount: "200 MAD",
+      productName: "SAC LO",
+    });
+    // La parenthese du nom fait echouer leur recherche de ville.
+    expect(parcel.CITY).toBe("ODB");
+    expect(parcel.ADDRESS).toBe("Oulad berhil (Ouled Berhil)");
+  });
+
   it("truncates fields to ForceLog's documented max lengths", () => {
     const parcel = mapOrderToParcel({
       reference: "x".repeat(30),

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { dispatchBlocker } from "./eligibility";
+import { carrierCity, dispatchBlocker } from "./eligibility";
 
-// Les formes acceptees d'une ville, telles que `deliverableCityKeys` les
+// Les formes acceptees d'une ville, telles que `deliverableCities` les
 // produit : cle canonique, nom normalise et alias normalises.
 const CITIES = new Set(["casablanca", "rabat", "beni_mellal", "casa"]);
 
@@ -79,5 +79,43 @@ describe("dispatchBlocker", () => {
 
   it("refuse tout quand aucune ville n'est livrable", () => {
     expect(dispatchBlocker(VALID, new Set())).toContain("saisir la ville exacte");
+  });
+});
+
+describe("carrierCity", () => {
+  const CITIES = new Map([
+    ["oulad_berhil_ouled_berhil", { name: "Oulad berhil (Ouled Berhil)", carrierCode: "ODB" }],
+    ["ouled_berhil", { name: "Oulad berhil (Ouled Berhil)", carrierCode: "ODB" }],
+    ["oulad_berhili", { name: "Oulad berhili", carrierCode: "BER" }],
+    ["casablanca", { name: "Casablanca", carrierCode: "CSA" }],
+    ["ville_sans_code", { name: "Ville sans code" }],
+  ]);
+
+  it("traduit la ville en code transporteur", () => {
+    expect(carrierCity("Casablanca", CITIES)).toBe("CSA");
+  });
+
+  it("resout par alias comme par nom", () => {
+    // Le nom a parenthese est justement celui que ForceLog refuse.
+    expect(carrierCity("Oulad berhil (Ouled Berhil)", CITIES)).toBe("ODB");
+    expect(carrierCity("Ouled Berhil", CITIES)).toBe("ODB");
+  });
+
+  it("ne confond pas deux villes de nom voisin", () => {
+    expect(carrierCity("Oulad berhili", CITIES)).toBe("BER");
+  });
+
+  it("ignore la casse et les espaces", () => {
+    expect(carrierCity("  CASABLANCA  ", CITIES)).toBe("CSA");
+  });
+
+  it("envoie le nom quand aucun code n'est connu", () => {
+    expect(carrierCity("Ville sans code", CITIES)).toBe("Ville sans code");
+    expect(carrierCity("Ville absente", CITIES)).toBe("Ville absente");
+  });
+
+  it("ne rend rien sans ville", () => {
+    expect(carrierCity(undefined, CITIES)).toBe("");
+    expect(carrierCity("   ", CITIES)).toBe("");
   });
 });
