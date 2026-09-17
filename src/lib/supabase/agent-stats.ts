@@ -1,5 +1,6 @@
 import "server-only";
 import { getSupabaseServerClient } from "./server";
+import { resolveAttribution } from "./attribution";
 import type {
   AgentAction,
   AgentStats,
@@ -195,19 +196,6 @@ export async function getAgentStats(
   if (eventsRes.error) throw new Error(eventsRes.error.message);
   const events = (eventsRes.data ?? []) as EventRow[];
 
-  // Les evenements sont regroupes par auteur puis par commande : c'est
-  // ce double regroupement qui permet de compter des commandes
-  // distinctes, et non des clics.
-  const byActor = new Map<string, EventRow[]>();
-  for (const event of events) {
-    // Les automates (WooCommerce, ForceLog, Google Sheets) n'ont pas de
-    // compte : ils ne figurent pas dans la performance de l'equipe.
-    if (!event.actor_id) continue;
-    const list = byActor.get(event.actor_id);
-    if (list) list.push(event);
-    else byActor.set(event.actor_id, [event]);
-  }
-
   const profiles = (profilesRes.data ?? []) as {
     id: string;
     name: string;
@@ -217,7 +205,35 @@ export async function getAgentStats(
     avatar_color: string;
   }[];
 
-  const agents: AgentStats[] = profiles.map((profile) => {
+  // Seuls les agents ont une fiche de performance : ce sont eux qui
+  // appellent. Un administrateur passe corriger une commande de temps a
+  // autre, et ses gestes sont reportes sur l'agent a qui la commande
+  // revient.
+  const adminIds = new Set(
+    profiles.filter((p) => p.role === "Admin").map((p) => p.id)
+  );
+  const agentProfiles = profiles.filter((p) => p.role !== "Admin");
+  const agentIds = new Set(agentProfiles.map((p) => p.id));
+  const attribution = resolveAttribution(events, adminIds, agentIds);
+
+  /** L'agent credite d'un evenement, administrateur deja reporte. */
+  const creditedTo = (event: EventRow) => attribution.get(event) ?? null;
+
+  // Les evenements sont regroupes par auteur puis par commande : c'est
+  // ce double regroupement qui permet de compter des commandes
+  // distinctes, et non des clics.
+  const byActor = new Map<string, EventRow[]>();
+  for (const event of events) {
+    // Les automates (WooCommerce, ForceLog, Google Sheets) n'ont pas de
+    // compte : ils ne figurent pas dans la performance de l'equipe.
+    const credited = creditedTo(event);
+    if (!credited) continue;
+    const list = byActor.get(credited);
+    if (list) list.push(event);
+    else byActor.set(credited, [event]);
+  }
+
+  const agents: AgentStats[] = agentProfiles.map((profile) => {
     const own = byActor.get(profile.id) ?? [];
 
     const perLead = new Map<string, EventRow[]>();
@@ -311,7 +327,7 @@ export async function getAgentStats(
 
   const perLeadAll = new Map<string, EventRow[]>();
   for (const event of events) {
-    if (!event.actor_id) continue;
+    if (!creditedTo(event)) continue;
     teamTreated.add(event.lead_id);
     if (event.field === STATUS_FIELD && event.new_value) {
       if (REACHED.has(event.new_value)) teamContacted.add(event.lead_id);

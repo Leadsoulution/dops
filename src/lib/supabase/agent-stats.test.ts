@@ -92,8 +92,18 @@ const BOB: Profile = {
   id: "b",
   name: "Bob",
   email: "bob@example.com",
-  role: "Admin",
+  role: "Agent",
   status: "Inactif",
+  avatar_color: "bg-gray-900",
+};
+
+/** Un administrateur : il corrige, il n'appelle pas. */
+const PATRON: Profile = {
+  id: "p",
+  name: "Patron",
+  email: "patron@example.com",
+  role: "Admin",
+  status: "Actif",
   avatar_color: "bg-gray-900",
 };
 
@@ -383,5 +393,69 @@ describe("livraison", () => {
     );
     const { agents } = await getAgentStats();
     expect(agents[0].delivery).toMatchObject({ shipped: 0, delivered: 0, rate: 0 });
+  });
+});
+
+describe("administrateurs", () => {
+  it("ne donne pas de fiche a un administrateur", async () => {
+    stubTables(
+      [ALICE, PATRON],
+      [{ id: "1", reference: "A", phone: "06", status: "Confirme", created_at: at(0) }],
+      [statusEvent("1", ALICE, "Confirme", 1)]
+    );
+    const { agents } = await getAgentStats();
+    expect(agents.map((a) => a.name)).toEqual(["Alice"]);
+  });
+
+  it("rend a l'agent la commande que l'administrateur a confirmee", async () => {
+    // Alice a appele, le patron n'a fait que poser le statut final.
+    stubTables(
+      [ALICE, PATRON],
+      [{ id: "1", reference: "A", phone: "06", status: "Confirme", created_at: at(0) }],
+      [
+        statusEvent("1", ALICE, "Pas de rep 1", 1),
+        statusEvent("1", PATRON, "Confirme", 2, "Pas de rep 1"),
+      ]
+    );
+    const { agents } = await getAgentStats();
+    const alice = agents.find((a) => a.name === "Alice")!;
+    expect(alice.confirmed).toBe(1);
+    expect(alice.treated).toBe(1);
+  });
+
+  it("donne au seul agent actif une commande touchee par le seul administrateur", async () => {
+    stubTables(
+      [ALICE, PATRON],
+      [
+        { id: "1", reference: "A", phone: "06", status: "Rappel", created_at: at(0) },
+        { id: "2", reference: "B", phone: "06", status: "Confirme", created_at: at(0) },
+      ],
+      [
+        statusEvent("1", ALICE, "Rappel", 1),
+        statusEvent("2", PATRON, "Confirme", 2),
+      ]
+    );
+    const { agents } = await getAgentStats();
+    expect(agents.find((a) => a.name === "Alice")!.confirmed).toBe(1);
+  });
+
+  it("n'attribue pas au hasard quand deux agents travaillent", async () => {
+    stubTables(
+      [ALICE, BOB, PATRON],
+      [
+        { id: "1", reference: "A", phone: "06", status: "Rappel", created_at: at(0) },
+        { id: "2", reference: "B", phone: "06", status: "Rappel", created_at: at(0) },
+        { id: "3", reference: "C", phone: "06", status: "Confirme", created_at: at(0) },
+      ],
+      [
+        statusEvent("1", ALICE, "Rappel", 1),
+        statusEvent("2", BOB, "Rappel", 1),
+        statusEvent("3", PATRON, "Confirme", 2),
+      ]
+    );
+    const { agents } = await getAgentStats();
+    // Aucun des deux ne recoit une commande qu'il n'a jamais vue.
+    expect(agents.find((a) => a.name === "Alice")!.confirmed).toBe(0);
+    expect(agents.find((a) => a.name === "Bob")!.confirmed).toBe(0);
   });
 });
