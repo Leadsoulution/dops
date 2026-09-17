@@ -45,6 +45,40 @@ function ProductThumb({
   );
 }
 
+/**
+ * Les statuts de livraison de ForceLog, avec leur code machine.
+ * Le libelle s'affiche, le code decide de la couleur du badge et de ce
+ * qui compte comme livre dans les paiements.
+ */
+const DELIVERY_CHOICES: { label: string; code: string }[] = [
+  { label: "Nouveau Colis", code: "NEW_PARCEL" },
+  { label: "Attente De Ramassage", code: "WAITING_PICKUP" },
+  { label: "Recu Hub", code: "SENT" },
+  { label: "En cours de livraison", code: "DISTRIBUTION" },
+  { label: "Livre", code: "DELIVERED" },
+  { label: "Retourne", code: "RETURNED" },
+  { label: "Refuse", code: "REFUSE" },
+  { label: "Annule ( Suivi )", code: "CANCELED" },
+  { label: "Programme", code: "RELAUNCH" },
+  { label: "Hors zone", code: "OUT_OF_AREA" },
+  { label: "Pas de reponse", code: "NO_ANSWER" },
+];
+
+/** "AAAA-MM-JJ HH:MM" a l'heure du Maroc, comme les dates du transporteur. */
+function today(): string {
+  const parts = new Intl.DateTimeFormat("fr-FR", {
+    timeZone: "Africa/Casablanca",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}`;
+}
+
 export default function EditOrderModal({
   lead,
   onClose,
@@ -62,7 +96,14 @@ export default function EditOrderModal({
       : []
   );
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [externalStatus, setExternalStatus] = useState("");
+  // Statut de livraison, corrigeable a la main.
+  //
+  // Le transporteur ne rend que ses vingt colis les plus recents : passe
+  // cette fenetre, un colis livre reste affiche "en cours" pour
+  // toujours, et rien dans l'application ne permettait de le rectifier.
+  const [deliveryStatus, setDeliveryStatus] = useState(
+    lead.deliveryStatus ?? ""
+  );
 
   const [client, setClient] = useState(lead.client);
   const [phone, setPhone] = useState(lead.phone);
@@ -150,6 +191,22 @@ export default function EditOrderModal({
           quartier: quartier.trim(),
           adresse: adresse.trim(),
           amount: `${total.trim() || 0} MAD`,
+          // Corrige a la main : on enregistre aussi le code, dont
+          // dependent la couleur du badge et le calcul des paiements.
+          ...(deliveryStatus !== (lead.deliveryStatus ?? "")
+            ? {
+                deliveryStatus: deliveryStatus || undefined,
+                deliveryStatusCode:
+                  DELIVERY_CHOICES.find((c) => c.label === deliveryStatus)
+                    ?.code ?? undefined,
+                // Une commande passee a "Livre" sans date n'apparaitrait
+                // pas dans les paiements, qui trient sur cette date.
+                ...(DELIVERY_CHOICES.find((c) => c.label === deliveryStatus)
+                  ?.code === "DELIVERED" && !lead.deliveryDate
+                  ? { deliveryDate: today() }
+                  : {}),
+              }
+            : {}),
           ...(premier
             ? {
                 productName: premier.name,
@@ -422,15 +479,21 @@ export default function EditOrderModal({
             {advancedOpen && (
               <div className="mt-2">
                 <label className="mb-1 block text-[12.5px] text-gray-600">
-                  Statut externe (optionnel)
+                  Statut de livraison
                 </label>
-                <input
-                  type="text"
-                  value={externalStatus}
-                  onChange={(e) => setExternalStatus(e.target.value)}
-                  placeholder="unpaid, pending, ..."
-                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-800 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none"
+                <SelectDropdown
+                  variant="field"
+                  pinnedLabel="Non suivi"
+                  options={DELIVERY_CHOICES.map((c) => c.label)}
+                  value={deliveryStatus || undefined}
+                  onSelect={setDeliveryStatus}
                 />
+                <p className="mt-1.5 text-[11.5px] leading-relaxed text-gray-400">
+                  A corriger seulement quand le transporteur affiche autre
+                  chose que l&apos;application. Son API ne rend que ses vingt
+                  colis les plus recents : au-dela, elle ne peut plus rien
+                  nous apprendre.
+                </p>
               </div>
             )}
           </div>
