@@ -37,6 +37,7 @@ export const APP_SECTIONS: AppSection[] = [
     children: [
       { label: "Confirmation", href: "/confirmation/agents" },
       { label: "Livraison", href: "/confirmation/livraison" },
+      { label: "Paiement de confirmatrice", href: "/confirmation/paiement" },
     ],
   },
   { key: "perf-agents", label: "Perf. Agents", href: "/perf-agents", group: "PRINCIPAL" },

@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Loader2,
   Truck,
+  Wallet,
 } from "lucide-react";
 import DonutRing from "./DonutRing";
 import PeriodFilter from "./PeriodFilter";
@@ -58,6 +59,12 @@ export default function ConfirmationHome() {
   ];
 
   const accents = {
+    amber: {
+      ring: "#d97706",
+      bg: "bg-amber-50",
+      icon: "text-amber-600",
+      hover: "hover:border-amber-300",
+    },
     emerald: {
       ring: "#10b981",
       bg: "bg-emerald-50",
@@ -77,6 +84,29 @@ export default function ConfirmationHome() {
       <div className="mb-4">
         <PeriodFilter range={range} onChange={setRange} />
       </div>
+
+      {stats && (
+        <Link
+          href="/confirmation/paiement"
+          className="group mb-4 flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:border-amber-300"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50">
+            <Wallet className="h-5 w-5 text-amber-600" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] font-semibold text-gray-900">
+              Paiement de confirmatrice
+            </p>
+            <p className="text-[12.5px] text-gray-500">
+              Commissions dues sur les{" "}
+              <span className="font-mono">{stats.delivery.delivered}</span>{" "}
+              commande{stats.delivery.delivered > 1 ? "s" : ""} livree
+              {stats.delivery.delivered > 1 ? "s" : ""}
+            </p>
+          </div>
+          <ArrowRight className="h-4 w-4 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-500" />
+        </Link>
+      )}
 
       {error ? (
         <p className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[12.5px] text-red-700">

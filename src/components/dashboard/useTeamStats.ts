@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { TeamStats } from "./confirmation-data";
 
 /**
@@ -18,6 +18,51 @@ export type Range = {
   custom: { start: Date; end: Date } | null;
 };
 
+/**
+ * Bornes d'une periode. Fonction pure : le hook s'en sert, et les pages
+ * qui interrogent une autre route aussi, pour qu'un meme choix couvre
+ * partout le meme intervalle.
+ *
+ * Elles portent sur ce que les agents ont fait pendant l'intervalle, et
+ * non sur la date des commandes : c'est le travail qui est mesure.
+ */
+export function periodBounds(range: Range): { from?: string; to?: string } {
+  const now = new Date();
+  const startOfDay = (d: Date) =>
+    new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const endOfDay = (d: Date) =>
+    new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+  const span = (a: Date, b: Date) => ({
+    from: a.toISOString(),
+    to: b.toISOString(),
+  });
+
+  switch (range.label) {
+    case "Aujourd'hui":
+      return span(startOfDay(now), endOfDay(now));
+    case "Hier": {
+      const yesterday = new Date(now);
+      yesterday.setDate(now.getDate() - 1);
+      return span(startOfDay(yesterday), endOfDay(yesterday));
+    }
+    case "7 derniers jours": {
+      // Aujourd'hui compris, donc six jours en arriere.
+      const from = new Date(now);
+      from.setDate(now.getDate() - 6);
+      return span(startOfDay(from), endOfDay(now));
+    }
+    case "Ce mois-ci":
+      return span(new Date(now.getFullYear(), now.getMonth(), 1), endOfDay(now));
+    case "Personnalisee":
+      return range.custom
+        ? span(startOfDay(range.custom.start), endOfDay(range.custom.end))
+        : {};
+    // "Maximum" couvre tout l'historique.
+    default:
+      return {};
+  }
+}
+
 export function useTeamStats(range: Range) {
   // Le resultat porte la periode pour laquelle il a ete calcule : c'est
   // la comparaison avec la periode affichee qui dit si l'on attend.
@@ -27,49 +72,7 @@ export function useTeamStats(range: Range) {
     error: string | null;
   } | null>(null);
 
-  /**
-   * Bornes de la periode choisie. Elles portent sur ce que les agents
-   * ont fait pendant l'intervalle, et non sur la date des commandes :
-   * c'est le travail qui est mesure, pas le carnet.
-   */
-  const bounds = useCallback((): { from?: string; to?: string } => {
-    const now = new Date();
-    const startOfDay = (d: Date) =>
-      new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    const endOfDay = (d: Date) =>
-      new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
-    const span = (a: Date, b: Date) => ({
-      from: a.toISOString(),
-      to: b.toISOString(),
-    });
-
-    switch (range.label) {
-      case "Aujourd'hui":
-        return span(startOfDay(now), endOfDay(now));
-      case "Hier": {
-        const yesterday = new Date(now);
-        yesterday.setDate(now.getDate() - 1);
-        return span(startOfDay(yesterday), endOfDay(yesterday));
-      }
-      case "7 derniers jours": {
-        // Aujourd'hui compris, donc six jours en arriere.
-        const from = new Date(now);
-        from.setDate(now.getDate() - 6);
-        return span(startOfDay(from), endOfDay(now));
-      }
-      case "Ce mois-ci":
-        return span(new Date(now.getFullYear(), now.getMonth(), 1), endOfDay(now));
-      case "Personnalisee":
-        return range.custom
-          ? span(startOfDay(range.custom.start), endOfDay(range.custom.end))
-          : {};
-      // "Maximum" couvre tout l'historique.
-      default:
-        return {};
-    }
-  }, [range.label, range.custom]);
-
-  const { from, to } = bounds();
+  const { from, to } = periodBounds(range);
   const key = `${from ?? ""}|${to ?? ""}`;
 
   useEffect(() => {
