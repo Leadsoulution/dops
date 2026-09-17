@@ -16,12 +16,29 @@ export type AppSection = {
   href: string;
   /** Regroupement affiche dans la barre laterale. */
   group: string;
+  /**
+   * Pages filles, listees sous l'entree dans la barre laterale.
+   *
+   * Elles partagent l'acces du parent et ne figurent donc pas dans les
+   * cases a cocher d'un compte : une sous-page n'a pas de droit propre,
+   * elle detaille la section a laquelle on a deja acces.
+   */
+  children?: { label: string; href: string }[];
 };
 
 export const APP_SECTIONS: AppSection[] = [
   { key: "dashboard", label: "Tableau de bord", href: "/dashboard", group: "PRINCIPAL" },
   { key: "leads", label: "Leads / Commandes", href: "/", group: "PRINCIPAL" },
-  { key: "confirmation", label: "Confirmation", href: "/confirmation", group: "PRINCIPAL" },
+  {
+    key: "confirmation",
+    label: "Confirmation",
+    href: "/confirmation",
+    group: "PRINCIPAL",
+    children: [
+      { label: "Confirmation", href: "/confirmation/agents" },
+      { label: "Livraison", href: "/confirmation/livraison" },
+    ],
+  },
   { key: "perf-agents", label: "Perf. Agents", href: "/perf-agents", group: "PRINCIPAL" },
   { key: "products", label: "Produits", href: "/products", group: "COMMERCE" },
   { key: "integrations", label: "Integrations", href: "/integrations", group: "COMMERCE" },

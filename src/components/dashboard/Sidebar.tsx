@@ -141,6 +141,12 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
                 {items.map((item) => {
                   const Icon = ICONS[item.key];
                   const active = item.href === pathname;
+                  // Les pages filles ne se deplient qu'une fois dans la
+                  // section : les montrer en permanence allongerait la
+                  // barre pour des pages qu'on ne cherche pas encore.
+                  const inSection =
+                    pathname === item.href ||
+                    pathname.startsWith(`${item.href}/`);
                   return (
                     <li key={item.key}>
                       <Link
@@ -155,6 +161,26 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
                         <Icon className="h-[17px] w-[17px] shrink-0" />
                         <span>{item.label}</span>
                       </Link>
+
+                      {item.children && inSection && (
+                        <ul className="mt-0.5 ml-[26px] space-y-0.5 border-l border-white/10 pl-3">
+                          {item.children.map((child) => (
+                            <li key={child.href}>
+                              <Link
+                                href={child.href}
+                                onClick={onClose}
+                                className={`block rounded-lg px-2.5 py-1.5 text-[12.5px] transition-colors ${
+                                  pathname === child.href
+                                    ? "bg-white/10 font-medium text-white"
+                                    : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                                }`}
+                              >
+                                {child.label}
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </li>
                   );
                 })}

@@ -1,31 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Settings2,
   RefreshCw,
   Save,
-  Calendar,
-  Clock,
-  Activity,
-  Phone,
-  Target,
-  Maximize2,
   User,
   Info,
-  Loader2,
-  AlertCircle,
-  CheckCircle2,
-  Truck,
-  PackageCheck,
-  Undo2,
 } from "lucide-react";
-import DonutRing from "./DonutRing";
-import AgentPerformanceCard from "./AgentPerformanceCard";
+import ConfirmationHome from "./ConfirmationHome";
+import { useTeamStats } from "./useTeamStats";
 import Toggle from "./Toggle";
 import SelectDropdown from "./SelectDropdown";
 import RuleList from "./RuleList";
-import DateRangeCalendar from "./DateRangeCalendar";
 import {
   rebalanceModes,
   sourceKeyOptions,
@@ -35,17 +22,7 @@ import {
   initialSourceRules,
   initialRegionRules,
   type AssignedRule,
-  type TeamStats,
 } from "./confirmation-data";
-
-const dateRanges = [
-  "Aujourd'hui",
-  "Hier",
-  "7 derniers jours",
-  "Ce mois-ci",
-  "Maximum",
-  "Personnalisee",
-];
 
 const modeDescriptions: Record<string, string> = {
   "Par pourcentage":
@@ -64,10 +41,6 @@ export default function ConfirmationPage() {
   const [activeTab, setActiveTab] = useState<"performance" | "parametres">(
     "performance"
   );
-  const [activeRange, setActiveRange] = useState("Maximum");
-  const [calendarOpen, setCalendarOpen] = useState(false);
-  const [customRangeLabel, setCustomRangeLabel] = useState<string | null>(null);
-  const [customRange, setCustomRange] = useState<{ start: Date; end: Date } | null>(null);
   const [activeMode, setActiveMode] = useState(rebalanceModes[0]);
   const [autoAssign, setAutoAssign] = useState(true);
   const [autoReassign, setAutoReassign] = useState(true);
@@ -77,105 +50,18 @@ export default function ConfirmationPage() {
   const [sourceRules, setSourceRules] = useState<AssignedRule[]>(initialSourceRules);
   const [regionRules, setRegionRules] = useState<AssignedRule[]>(initialRegionRules);
   const [weights, setWeights] = useState<Record<string, number>>({});
-  // Le resultat porte la periode pour laquelle il a ete calcule : c'est
-  // la comparaison avec la periode affichee qui dit si l'on attend, sans
-  // avoir a poser un drapeau de chargement depuis l'effet.
-  const [loaded, setLoaded] = useState<{
-    key: string;
-    data: TeamStats | null;
-    error: string | null;
-  } | null>(null);
 
-  /**
-   * Bornes de la periode choisie. Les compteurs portent sur ce que les
-   * agents ont fait pendant cet intervalle, et non sur la date des
-   * commandes : c'est le travail qui est mesure, pas le carnet.
-   */
-  const rangeBounds = useCallback((): { from?: string; to?: string } => {
-    const now = new Date();
-    const startOfDay = (d: Date) =>
-      new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    const endOfDay = (d: Date) =>
-      new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
-    const span = (a: Date, b: Date) => ({
-      from: a.toISOString(),
-      to: b.toISOString(),
-    });
-
-    switch (activeRange) {
-      case "Aujourd'hui":
-        return span(startOfDay(now), endOfDay(now));
-      case "Hier": {
-        const yesterday = new Date(now);
-        yesterday.setDate(now.getDate() - 1);
-        return span(startOfDay(yesterday), endOfDay(yesterday));
-      }
-      case "7 derniers jours": {
-        // Aujourd'hui compris, donc six jours en arriere.
-        const from = new Date(now);
-        from.setDate(now.getDate() - 6);
-        return span(startOfDay(from), endOfDay(now));
-      }
-      case "Ce mois-ci":
-        return span(new Date(now.getFullYear(), now.getMonth(), 1), endOfDay(now));
-      case "Personnalisee":
-        return customRange
-          ? span(startOfDay(customRange.start), endOfDay(customRange.end))
-          : {};
-      // "Maximum" couvre tout l'historique.
-      default:
-        return {};
-    }
-  }, [activeRange, customRange]);
-
-  const { from: rangeFrom, to: rangeTo } = rangeBounds();
-  const rangeKey = `${rangeFrom ?? ""}|${rangeTo ?? ""}`;
-
-  useEffect(() => {
-    let cancelled = false;
-    const [from, to] = rangeKey.split("|");
-    const params = new URLSearchParams();
-    if (from) params.set("from", from);
-    if (to) params.set("to", to);
-
-    fetch(`/api/agents/stats?${params}`)
-      .then((res) => res.json())
-      .then((data: TeamStats & { error?: string }) => {
-        if (cancelled) return;
-        if (data.error) {
-          setLoaded({ key: rangeKey, data: null, error: data.error });
-          return;
-        }
-        setLoaded({ key: rangeKey, data, error: null });
-        // Un poids egal par defaut : la repartition ne privilegie
-        // personne tant que personne n'a decide du contraire.
-        setWeights((prev) =>
-          Object.fromEntries(data.agents.map((a) => [a.name, prev[a.name] ?? 10]))
-        );
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLoaded({
-            key: rangeKey,
-            data: null,
-            error: "Statistiques indisponibles.",
-          });
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [rangeKey]);
-
-  const stats = loaded?.data ?? null;
-  const error = loaded?.error ?? null;
-  const loading = loaded?.key !== rangeKey;
-
+  // Les regles d'assignation nomment des agents : on lit l'equipe sur
+  // tout l'historique, la liste des comptes ne dependant pas d'une
+  // periode.
+  const { stats } = useTeamStats({ label: "Maximum", custom: null });
   const agentList = stats?.agents ?? [];
   const agentNames = agentList.map((a) => a.name);
 
-  const totalWeight = Object.values(weights).reduce((sum, w) => sum + w, 0);
+  const totalWeight = agentNames.reduce(
+    (sum, name) => sum + (weights[name] ?? 10),
+    0
+  );
   const weightedRules = agentList.map((agent) => ({
     name: agent.name,
     avatarColor: agent.avatarColor,
@@ -191,29 +77,10 @@ export default function ConfirmationPage() {
     setWeights(Object.fromEntries(agentNames.map((name) => [name, 10])));
   }
 
-  const globalRate = stats?.team.confirmRate ?? 0;
-
   function toggleExcluded(name: string) {
     setExcluded((prev) =>
       prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
     );
-  }
-
-  function applyCustomRange(start: Date, end: Date) {
-    const fmt = (d: Date) =>
-      d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
-    setCustomRangeLabel(`${fmt(start)} - ${fmt(end)}`);
-    setCustomRange({ start, end });
-    setActiveRange("Personnalisee");
-    setCalendarOpen(false);
-  }
-
-  /** Retire la plage personnalisee et revient a la periode par defaut. */
-  function clearCustomRange() {
-    setCustomRange(null);
-    setCustomRangeLabel(null);
-    setActiveRange("Maximum");
-    setCalendarOpen(false);
   }
 
   const productOptions = productCatalog.map((p) => ({ label: p.name, sublabel: p.sku }));
@@ -281,236 +148,7 @@ export default function ConfirmationPage() {
       </div>
 
       {activeTab === "performance" ? (
-        <>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              {dateRanges.map((range) => (
-                <div key={range} className="relative">
-                  <button
-                    onClick={() => {
-                      if (range === "Personnalisee") {
-                        setCalendarOpen((v) => !v);
-                      } else {
-                        setActiveRange(range);
-                        setCalendarOpen(false);
-                      }
-                    }}
-                    className={`flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[12.5px] font-medium transition-colors ${
-                      activeRange === range
-                        ? "bg-gray-900 text-white"
-                        : "border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
-                    }`}
-                  >
-                    {range === "Maximum" && <Calendar className="h-3.5 w-3.5" />}
-                    {range === "Personnalisee" && customRangeLabel
-                      ? customRangeLabel
-                      : range}
-                  </button>
-                  {range === "Personnalisee" && calendarOpen && (
-                    <DateRangeCalendar
-                      initialStart={customRange?.start}
-                      initialEnd={customRange?.end}
-                      onApply={applyCustomRange}
-                      onClear={clearCustomRange}
-                      onCancel={() => setCalendarOpen(false)}
-                    />
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5">
-              <DonutRing percent={globalRate} size={32} strokeWidth={4} />
-              <p className="text-[12px] text-gray-500">
-                Taux de
-                <br />
-                confirmation
-              </p>
-            </div>
-          </div>
-
-          <div className="mb-3 flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-            <h2 className="text-h3 font-semibold text-gray-900">Confirmation</h2>
-            <span className="text-[12.5px] text-gray-400">
-              {(stats?.team.treated ?? 0).toLocaleString("fr-FR")} commandes
-              traitees &middot; {(stats?.team.confirmed ?? 0).toLocaleString("fr-FR")}{" "}
-              confirmees
-            </span>
-          </div>
-
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-stretch">
-            <div className="grid flex-1 grid-cols-2 gap-3 lg:grid-cols-4">
-              <div className="flex items-center gap-2.5 rounded-xl bg-violet-50 p-3.5">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white">
-                  <Clock className="h-4 w-4 text-violet-600" />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-mono text-[17px] font-semibold text-gray-900">
-                    {(stats?.team.treated ?? 0).toLocaleString("fr-FR")}
-                  </p>
-                  <p className="truncate text-[11.5px] text-gray-500">
-                    Total commandes traitees
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2.5 rounded-xl bg-violet-50 p-3.5">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white">
-                  <Activity className="h-4 w-4 text-violet-600" />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-mono text-[17px] font-semibold text-gray-900">
-                    {(stats?.team.confirmed ?? 0).toLocaleString("fr-FR")}
-                  </p>
-                  <p className="truncate text-[11.5px] text-gray-500">
-                    Commandes confirmees
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2.5 rounded-xl bg-blue-50 p-3.5">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white">
-                  <Phone className="h-4 w-4 text-blue-600" />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-mono text-[17px] font-semibold text-gray-900">
-                    {(stats?.team.contacted ?? 0).toLocaleString("fr-FR")}
-                  </p>
-                  <p className="truncate text-[11.5px] text-gray-500">
-                    Contactes (equipe)
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2.5 rounded-xl bg-emerald-50 p-3.5">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white">
-                  <Target className="h-4 w-4 text-emerald-600" />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-mono text-[17px] font-semibold text-gray-900">
-                    {globalRate}%
-                  </p>
-                  <p className="truncate text-[11.5px] text-gray-500">
-                    Taux de confirmation
-                  </p>
-                </div>
-              </div>
-            </div>
-            <button
-              disabled
-              title="Bientot disponible"
-              className="flex h-11 w-11 shrink-0 cursor-not-allowed items-center justify-center self-center rounded-lg bg-gray-200 text-gray-400 sm:self-stretch"
-            >
-              <Maximize2 className="h-4.5 w-4.5" />
-            </button>
-          </div>
-
-          {loading && !stats ? (
-            <div className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-16 text-[13px] text-gray-400">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Calcul des statistiques...
-            </div>
-          ) : error ? (
-            <p className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[12.5px] text-red-700">
-              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              {error}
-            </p>
-          ) : agentList.length === 0 ? (
-            <p className="rounded-xl border border-gray-200 bg-white py-16 text-center text-[13px] text-gray-400">
-              Aucun compte dans l&apos;equipe. Creez-en depuis la page
-              Utilisateurs.
-            </p>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {agentList.map((agent) => (
-                  <AgentPerformanceCard key={agent.id} agent={agent} />
-                ))}
-              </div>
-
-              {/*
-                Deuxieme question, posee sur le meme travail : ce que les
-                commandes confirmees sont devenues chez le transporteur.
-                Rien d'autre n'entre dans ce calcul — une commande jamais
-                confirmee n'avait pas a etre livree.
-              */}
-              <div className="mb-3 mt-8 flex items-center gap-2">
-                <Truck className="h-4 w-4 text-blue-600" />
-                <h2 className="text-h3 font-semibold text-gray-900">Livraison</h2>
-                <span className="text-[12.5px] text-gray-400">
-                  sur les {(stats?.team.confirmed ?? 0).toLocaleString("fr-FR")}{" "}
-                  commandes confirmees
-                </span>
-              </div>
-
-              <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <div className="flex items-center gap-2.5 rounded-xl bg-blue-50 p-3.5">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white">
-                    <Truck className="h-4 w-4 text-blue-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-mono text-[17px] font-semibold text-gray-900">
-                      {(stats?.delivery.shipped ?? 0).toLocaleString("fr-FR")}
-                    </p>
-                    <p className="truncate text-[11.5px] text-gray-500">
-                      Expediees au transporteur
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2.5 rounded-xl bg-emerald-50 p-3.5">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white">
-                    <PackageCheck className="h-4 w-4 text-emerald-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-mono text-[17px] font-semibold text-gray-900">
-                      {(stats?.delivery.delivered ?? 0).toLocaleString("fr-FR")}
-                    </p>
-                    <p className="truncate text-[11.5px] text-gray-500">
-                      Livrees
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2.5 rounded-xl bg-amber-50 p-3.5">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white">
-                    <Undo2 className="h-4 w-4 text-amber-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-mono text-[17px] font-semibold text-gray-900">
-                      {(stats?.delivery.returned ?? 0).toLocaleString("fr-FR")}
-                    </p>
-                    <p className="truncate text-[11.5px] text-gray-500">
-                      Retours et refus
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2.5 rounded-xl bg-emerald-50 p-3.5">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white">
-                    <Target className="h-4 w-4 text-emerald-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-mono text-[17px] font-semibold text-gray-900">
-                      {stats?.delivery.rate ?? 0}%
-                    </p>
-                    <p
-                      className="truncate text-[11.5px] text-gray-500"
-                      title="Livrees rapportees aux commandes reellement expediees"
-                    >
-                      Taux de livraison
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {agentList.map((agent) => (
-                  <AgentPerformanceCard
-                    key={`livraison-${agent.id}`}
-                    agent={agent}
-                    section="livraison"
-                  />
-                ))}
-              </div>
-            </>
-          )}
-        </>
+        <ConfirmationHome />
       ) : (
         <div className="max-w-3xl space-y-6">
           <div className="rounded-xl border border-gray-200 bg-white p-4">
