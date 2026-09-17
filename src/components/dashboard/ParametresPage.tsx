@@ -33,14 +33,13 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 import SelectDropdown from "./SelectDropdown";
-import Toggle from "./Toggle";
 import DatabaseSizeCard from "./DatabaseSizeCard";
 import WhatsappMessagesPanel from "./WhatsappMessagesPanel";
+import NotificationSettings from "./NotificationSettings";
 import { currentProfile } from "@/lib/session";
 import {
   leadStatuses,
   shippingStatuses,
-  notificationPrefs,
   currencyOptions,
   timezoneOptions,
   languageOptions,
@@ -157,9 +156,6 @@ export default function ParametresPage() {
   );
   const [shippingActive, setShippingActive] = useState<Record<string, boolean>>(
     Object.fromEntries(shippingStatuses.map((s) => [s.code, s.active]))
-  );
-  const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>(
-    Object.fromEntries(notificationPrefs.map((p) => [p.key, true]))
   );
 
   const [currency, setCurrency] = useState(currencyOptions[0]);
@@ -461,26 +457,8 @@ export default function ParametresPage() {
       )}
 
       {activeTab === "notifications" && (
-        <div className="max-w-3xl rounded-xl border border-gray-200 bg-white p-4">
-          <p className="mb-1 text-[13px] font-semibold text-gray-800">
-            Preferences de notifications
-          </p>
-          <div className="divide-y divide-gray-100">
-            {notificationPrefs.map((pref) => (
-              <Toggle
-                key={pref.key}
-                checked={notifPrefs[pref.key]}
-                onChange={() =>
-                  setNotifPrefs((prev) => ({
-                    ...prev,
-                    [pref.key]: !prev[pref.key],
-                  }))
-                }
-                label={pref.label}
-                description={pref.description}
-              />
-            ))}
-          </div>
+        <div className="max-w-3xl space-y-4">
+          <NotificationSettings />
         </div>
       )}
 

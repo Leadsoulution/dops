@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { leads, type Lead } from "./leads-data";
 import OrderWatcher from "./OrderWatcher";
+import NotificationNudge from "./NotificationNudge";
 import {
   askNotificationPermission,
   notificationState,
@@ -210,6 +211,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
     <header className="shrink-0 border-b border-gray-200 bg-white">
       {/* Surveille les commandes depuis toutes les pages. N'affiche rien. */}
       <OrderWatcher />
+      <NotificationNudge />
       <div className="flex h-16 items-center gap-2 px-4 lg:gap-4 lg:px-6">
         <button
           onClick={onMenuClick}
@@ -315,7 +317,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
                       <button
                         onClick={async () => {
                           notify("Test", "Une commande livree sonne ainsi.", {
-                            sound: "payment",
+                            kind: "payment",
                           });
                           const sent = await sendTestPush();
                           setPushNote(

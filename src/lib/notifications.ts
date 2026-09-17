@@ -13,6 +13,13 @@
  * en silence.
  */
 
+import {
+  readPrefs,
+  soundFor,
+  wants,
+  type EventKind,
+} from "./notification-prefs";
+
 let audioContext: AudioContext | null = null;
 
 function getContext(): AudioContext | null {
@@ -24,6 +31,56 @@ function getContext(): AudioContext | null {
   if (!Ctor) return null;
   if (!audioContext) audioContext = new Ctor();
   return audioContext;
+}
+
+/**
+ * Les sons proposes dans les reglages. Chacun est une suite de notes :
+ * une hauteur, un instant de depart, une duree, un volume et une forme
+ * d'onde. Les synthetiser evite cinq fichiers a telecharger et garantit
+ * qu'ils sonnent meme hors ligne.
+ */
+const RECIPES: Record<string, [number, number, number, number, OscillatorType][]> = {
+  // Deux notes montantes, breves.
+  carillon: [
+    [880, 0, 0.14, 0.18, "sine"],
+    [1174.66, 0.1, 0.2, 0.16, "sine"],
+  ],
+  // Une note pleine qui resonne.
+  cloche: [
+    [1318.5, 0, 0.5, 0.2, "sine"],
+    [2637, 0, 0.3, 0.07, "sine"],
+  ],
+  // Deux impulsions seches.
+  bip: [
+    [1000, 0, 0.07, 0.2, "square"],
+    [1000, 0.12, 0.07, 0.2, "square"],
+  ],
+  // Accord bref puis quinte tenue, comme un tiroir qui s'ouvre.
+  caisse: [
+    [1046.5, 0, 0.12, 0.16, "triangle"],
+    [1567.98, 0.07, 0.14, 0.14, "triangle"],
+    [2093, 0.15, 0.45, 0.13, "triangle"],
+    [1567.98, 0.15, 0.45, 0.08, "sine"],
+  ],
+  // Trois notes descendantes : quelque chose demande attention.
+  alerte: [
+    [988, 0, 0.12, 0.2, "sawtooth"],
+    [784, 0.14, 0.12, 0.2, "sawtooth"],
+    [659, 0.28, 0.22, 0.18, "sawtooth"],
+  ],
+};
+
+/** Joue un son du catalogue. "aucun" ne joue rien, volontairement. */
+export function playSound(name: string) {
+  const recipe = RECIPES[name];
+  if (!recipe) return;
+  const ctx = getContext();
+  if (!ctx) return;
+  void ctx.resume();
+  const now = ctx.currentTime;
+  for (const [frequency, delay, duration, gain, type] of recipe) {
+    note(ctx, frequency, now + delay, duration, gain, type);
+  }
 }
 
 export function unlockAudio() {
@@ -101,10 +158,16 @@ export async function askNotificationPermission(): Promise<NotificationPermissio
 export function notify(
   title: string,
   body: string,
-  options: { tag?: string; sound?: "order" | "payment" } = {}
+  options: { tag?: string; kind?: EventKind } = {}
 ) {
-  if (options.sound === "payment") playPaymentSound();
-  else if (options.sound === "order") playNewOrderSound();
+  const kind = options.kind;
+  // Les reglages de l'appareil decident : un evenement eteint ne sonne
+  // pas et n'affiche rien, meme si l'autorisation existe.
+  if (kind) {
+    const prefs = readPrefs();
+    if (!wants(kind, prefs)) return;
+    playSound(soundFor(kind, prefs));
+  }
 
   if (notificationState() !== "granted") return;
   try {

@@ -73,7 +73,7 @@ export default function OrderWatcher() {
           notify(
             "Nouvelle commande",
             `${lead.client} — ${lead.amount}${lead.ville ? ` — ${lead.ville}` : ""}`,
-            { tag: `commande-${lead.reference}`, sound: "order" }
+            { tag: `commande-${lead.reference}`, kind: "order" }
           );
         } else if (nouvelles.length > 1) {
           notify(
@@ -82,7 +82,7 @@ export default function OrderWatcher() {
               .slice(0, 3)
               .map((l) => l.client)
               .join(", "),
-            { tag: "commandes", sound: "order" }
+            { tag: "commandes", kind: "order" }
           );
         }
 
@@ -90,7 +90,7 @@ export default function OrderWatcher() {
           notify(
             "Commande livree",
             `${lead.client} — ${lead.amount} encaisse`,
-            { tag: `livree-${lead.reference}`, sound: "payment" }
+            { tag: `livree-${lead.reference}`, kind: "payment" }
           );
         }
       } catch {
