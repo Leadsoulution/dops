@@ -67,6 +67,18 @@ export async function recordLeadChanges(
   try {
     const supabase = getSupabaseServerClient();
     await supabase.from("lead_events").insert(rows);
+
+    // Un automate n'a pas de compte et ne prend pas la commande en
+    // charge : il ne doit pas s'inscrire comme assigne. La regle vaut ici
+    // autant qu'a la creation, et son absence coutait cher — ForceLog
+    // remonte un statut de livraison quelques secondes apres chaque
+    // confirmation, et effacait l'agent qui venait de confirmer.
+    //
+    // Le changement reste au journal ci-dessus : savoir que le
+    // transporteur a bouge le colis a son interet, se l'entendre
+    // attribuer comme assignation n'en a aucun.
+    if (!actor.id) return;
+
     await supabase
       .from("leads")
       .update({
