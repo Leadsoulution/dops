@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   AlertCircle,
   ArrowLeft,
@@ -10,6 +11,7 @@ import {
   Loader2,
   PackageCheck,
   Pencil,
+  Receipt,
   Truck,
   Wallet,
 } from "lucide-react";
@@ -31,6 +33,9 @@ type PayableOrder = {
   id: string;
   reference: string;
   client: string;
+  productName: string;
+  productLabel: string;
+  productImage?: string;
   trackingNumber: string;
   deliveryStatus: string;
   deliveryDate: string;
@@ -52,16 +57,71 @@ type AgentTotal = {
   dueAmount: number;
 };
 
+type PaymentBatch = {
+  paidAt: string;
+  paidBy: string;
+  count: number;
+  amount: number;
+  agents: string[];
+  references: string[];
+};
+
 type Report = {
   rate: number;
   orders: PayableOrder[];
   totals: AgentTotal[];
+  payments: PaymentBatch[];
   daily: { date: string; delivered: number; amount: number }[];
   canEdit: boolean;
   error?: string;
 };
 
 const dh = (n: number) => `${Math.round(n).toLocaleString("fr-FR")} DH`;
+
+/** "17 sept. 2026, 16:18", a l'heure du Maroc. */
+function whenText(iso: string) {
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Africa/Casablanca",
+  }).format(new Date(iso));
+}
+
+/** Vignette du produit, ou ses initiales quand il n'a pas de photo. */
+function ProductCell({ order }: { order: PayableOrder }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      {order.productImage ? (
+        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md border border-gray-100 bg-gray-50">
+          <Image
+            src={order.productImage}
+            alt=""
+            fill
+            sizes="36px"
+            className="object-cover"
+            unoptimized
+          />
+        </div>
+      ) : (
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-gray-100 text-[10px] font-medium text-gray-400">
+          {order.productLabel || "—"}
+        </div>
+      )}
+      <div className="min-w-0">
+        <p className="truncate text-[12.5px] text-gray-800">
+          {order.productName || "Produit inconnu"}
+        </p>
+        <p className="truncate font-mono text-[11px] text-gray-400">
+          {order.reference}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export default function ConfirmationPayPage() {
   const [range, setRange] = useState<Range>({ label: "Maximum", custom: null });
@@ -130,6 +190,8 @@ export default function ConfirmationPayPage() {
   const paidCount = report?.orders.filter((o) => o.paid).length ?? 0;
   const dueAmount = (report?.totals ?? []).reduce((s, t) => s + t.dueAmount, 0);
   const paidAmount = (report?.totals ?? []).reduce((s, t) => s + t.paidAmount, 0);
+  const payments = report?.payments ?? [];
+  const lastPayment = payments[0];
 
   async function apply(paid: boolean) {
     setConfirming(null);
@@ -287,6 +349,24 @@ export default function ConfirmationPayPage() {
             />
           </div>
 
+          {lastPayment && (
+            <p className="mb-4 flex flex-wrap items-center gap-x-1.5 gap-y-1 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-[12.5px] text-gray-600">
+              <Receipt className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+              Dernier paiement le{" "}
+              <span className="font-medium text-gray-800">
+                {whenText(lastPayment.paidAt)}
+              </span>
+              &middot; <span className="font-mono">{lastPayment.count}</span>{" "}
+              commande{lastPayment.count > 1 ? "s" : ""} pour{" "}
+              <span className="font-mono font-medium text-gray-800">
+                {dh(lastPayment.amount)}
+              </span>
+              {lastPayment.agents.length > 0 && (
+                <>&middot; {lastPayment.agents.join(", ")}</>
+              )}
+            </p>
+          )}
+
           <div className="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
             <div className="rounded-xl border border-gray-200 bg-white p-4 lg:col-span-2">
               <p className="mb-3 text-[12.5px] font-semibold text-gray-700">
@@ -440,7 +520,7 @@ export default function ConfirmationPayPage() {
                             />
                           </th>
                         )}
-                        <th className="px-3 py-3">REFERENCE</th>
+                        <th className="px-3 py-3">PRODUIT</th>
                         <th className="px-3 py-3">CLIENT</th>
                         <th className="px-3 py-3">CODE SUIVI</th>
                         <th className="px-3 py-3">DATE DE LIVRAISON</th>
@@ -462,8 +542,8 @@ export default function ConfirmationPayPage() {
                               />
                             </td>
                           )}
-                          <td className="whitespace-nowrap px-3 py-3 font-mono text-[12.5px] font-medium text-gray-800">
-                            {o.reference}
+                          <td className="max-w-[220px] px-3 py-3">
+                            <ProductCell order={o} />
                           </td>
                           <td className="px-3 py-3 text-[13px] text-gray-800">
                             {o.client}
@@ -498,18 +578,18 @@ export default function ConfirmationPayPage() {
                 <div className="divide-y divide-gray-100 lg:hidden">
                   {orders.map((o) => (
                     <div key={o.id} className="px-4 py-3">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <span className="flex items-center gap-2 font-mono text-[12.5px] font-medium text-gray-800">
+                      <div className="mb-2 flex items-start justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
                           {canEdit && (
                             <input
                               type="checkbox"
                               checked={selected.has(o.id)}
                               onChange={() => toggle(o.id)}
-                              className="h-3.5 w-3.5 rounded border-gray-300"
+                              className="h-3.5 w-3.5 shrink-0 rounded border-gray-300"
                             />
                           )}
-                          {o.reference}
-                        </span>
+                          <ProductCell order={o} />
+                        </div>
                         <PayBadge order={o} rate={rate} />
                       </div>
                       <p className="text-[13px] font-medium text-gray-800">
@@ -534,6 +614,22 @@ export default function ConfirmationPayPage() {
             )}
           </div>
         </>
+      )}
+
+      {payments.length > 0 && (
+        <div className="mt-4 rounded-xl border border-gray-200 bg-white">
+          <p className="border-b border-gray-100 px-4 py-3 text-[12.5px] font-semibold text-gray-700">
+            Historique des paiements
+            <span className="ml-1.5 font-normal text-gray-400">
+              {payments.length} versement{payments.length > 1 ? "s" : ""}
+            </span>
+          </p>
+          <div className="divide-y divide-gray-50">
+            {payments.map((batch) => (
+              <PaymentRow key={batch.paidAt} batch={batch} />
+            ))}
+          </div>
+        </div>
       )}
 
       {confirming && (
@@ -574,6 +670,52 @@ export default function ConfirmationPayPage() {
           onConfirm={() => apply(confirming === "pay")}
           onCancel={() => setConfirming(null)}
         />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Un versement, depliable sur les commandes qu'il a payees : c'est la
+ * question qu'on se pose devant une ligne de paiement.
+ */
+function PaymentRow({ batch }: { batch: PaymentBatch }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-left hover:bg-gray-50"
+      >
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-50">
+          <Check className="h-3.5 w-3.5 text-emerald-600" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[12.5px] font-medium text-gray-800">
+            {whenText(batch.paidAt)}
+          </span>
+          <span className="block text-[11.5px] text-gray-500">
+            {batch.count} commande{batch.count > 1 ? "s" : ""}
+            {batch.agents.length > 0 && <> &middot; {batch.agents.join(", ")}</>}
+            {batch.paidBy && <> &middot; par {batch.paidBy}</>}
+          </span>
+        </span>
+        <span className="shrink-0 font-mono text-[13px] font-semibold text-gray-900">
+          {dh(batch.amount)}
+        </span>
+      </button>
+
+      {open && (
+        <div className="flex flex-wrap gap-1.5 border-t border-gray-100 bg-gray-50/60 px-4 py-2.5">
+          {batch.references.map((ref) => (
+            <span
+              key={ref}
+              className="rounded-md border border-gray-200 bg-white px-1.5 py-0.5 font-mono text-[11px] text-gray-600"
+            >
+              {ref}
+            </span>
+          ))}
+        </div>
       )}
     </div>
   );

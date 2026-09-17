@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -12,7 +12,27 @@ import {
 } from "lucide-react";
 import DonutRing from "./DonutRing";
 import PeriodFilter from "./PeriodFilter";
-import { useTeamStats, type Range } from "./useTeamStats";
+import { periodBounds, useTeamStats, type Range } from "./useTeamStats";
+
+type PayReport = {
+  rate: number;
+  orders: { paid: boolean }[];
+  totals: { dueAmount: number }[];
+  payments: { paidAt: string; count: number; amount: number; paidBy: string }[];
+};
+
+/** "17 sept. 2026, 16:18", a l'heure du Maroc. */
+function whenText(iso: string) {
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Africa/Casablanca",
+  }).format(new Date(iso));
+}
 
 /**
  * Entree de la confirmation : deux cadres, deux questions.
@@ -26,6 +46,38 @@ import { useTeamStats, type Range } from "./useTeamStats";
 export default function ConfirmationHome() {
   const [range, setRange] = useState<Range>({ label: "Maximum", custom: null });
   const { stats, error, loading } = useTeamStats(range);
+
+  // Le suivi des paiements vient d'une autre route : il lit les
+  // livraisons et non le journal des agents. Son absence ne doit pas
+  // emporter la page — tant que la migration n'est pas passee, le cadre
+  // s'affiche sans chiffres plutot que de disparaitre.
+  const [pay, setPay] = useState<PayReport | null>(null);
+  const bounds = periodBounds(range);
+  const payKey = `${bounds.from ?? ""}|${bounds.to ?? ""}`;
+
+  useEffect(() => {
+    let cancelled = false;
+    const [from, to] = payKey.split("|");
+    const params = new URLSearchParams();
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    fetch(`/api/confirmation-payments?${params}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && !data.error) setPay(data);
+      })
+      .catch(() => {
+        /* Cadre sans chiffres : le detail reste accessible. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [payKey]);
+
+  const delivered = pay?.orders.length ?? 0;
+  const paidCount = pay?.orders.filter((o) => o.paid).length ?? 0;
+  const dueAmount = (pay?.totals ?? []).reduce((s, t) => s + t.dueAmount, 0);
+  const lastPayment = pay?.payments[0];
 
   const cards = [
     {
@@ -84,29 +136,6 @@ export default function ConfirmationHome() {
       <div className="mb-4">
         <PeriodFilter range={range} onChange={setRange} />
       </div>
-
-      {stats && (
-        <Link
-          href="/confirmation/paiement"
-          className="group mb-4 flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:border-amber-300"
-        >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50">
-            <Wallet className="h-5 w-5 text-amber-600" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-semibold text-gray-900">
-              Paiement de confirmatrice
-            </p>
-            <p className="text-[12.5px] text-gray-500">
-              Commissions dues sur les{" "}
-              <span className="font-mono">{stats.delivery.delivered}</span>{" "}
-              commande{stats.delivery.delivered > 1 ? "s" : ""} livree
-              {stats.delivery.delivered > 1 ? "s" : ""}
-            </p>
-          </div>
-          <ArrowRight className="h-4 w-4 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-500" />
-        </Link>
-      )}
 
       {error ? (
         <p className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[12.5px] text-red-700">
@@ -177,8 +206,93 @@ export default function ConfirmationHome() {
               </Link>
             );
           })}
+
+          {/*
+            Troisieme cadre, pleine largeur : le paiement decoule des deux
+            premiers — on confirme, la commande est livree, l'agent est
+            paye. Il vient donc apres, et non a cote.
+          */}
+          <Link
+            href="/confirmation/paiement"
+            className="group flex flex-col rounded-xl border border-gray-200 bg-white p-5 transition-colors hover:border-amber-300 lg:col-span-2"
+          >
+            <div className="mb-4 flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50">
+                <Wallet className="h-5 w-5 text-amber-600" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-h2 font-semibold text-gray-900">
+                  Paiement de confirmatrice
+                </p>
+                <p className="mt-0.5 text-[12.5px] text-gray-500">
+                  Commission versee a l&apos;agent pour chaque commande livree
+                  &middot;{" "}
+                  <span className="font-mono">{pay?.rate ?? 11} DH</span> par
+                  commande
+                </p>
+              </div>
+              <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-500" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-4 sm:grid-cols-4">
+              <Figure value={delivered} label="Commandes livrees" />
+              <Figure value={paidCount} label="Payees" tone="text-emerald-600" />
+              <Figure
+                value={delivered - paidCount}
+                label="Non payees"
+                tone="text-amber-600"
+              />
+              <div className="min-w-0">
+                <p className="font-mono text-[19px] font-semibold text-gray-900">
+                  {dueAmount.toLocaleString("fr-FR")} DH
+                </p>
+                <p className="truncate text-[11.5px] text-gray-500">
+                  Reste a payer
+                </p>
+              </div>
+            </div>
+
+            <p className="mt-4 border-t border-gray-100 pt-3 text-[12px] text-gray-500">
+              {lastPayment ? (
+                <>
+                  Dernier paiement le{" "}
+                  <span className="font-medium text-gray-700">
+                    {whenText(lastPayment.paidAt)}
+                  </span>{" "}
+                  &middot;{" "}
+                  <span className="font-mono">{lastPayment.count}</span> commande
+                  {lastPayment.count > 1 ? "s" : ""} pour{" "}
+                  <span className="font-mono font-medium text-gray-700">
+                    {Math.round(lastPayment.amount)} DH
+                  </span>
+                  {lastPayment.paidBy && <> &middot; par {lastPayment.paidBy}</>}
+                </>
+              ) : (
+                "Aucun paiement enregistre pour l'instant."
+              )}
+            </p>
+          </Link>
         </div>
       )}
     </>
+  );
+}
+
+function Figure({
+  value,
+  label,
+  tone = "text-gray-900",
+}: {
+  value: number;
+  label: string;
+  tone?: string;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className={`font-mono text-[19px] font-semibold ${tone}`}>
+        {value.toLocaleString("fr-FR")}
+      </p>
+      <p className="truncate text-[11.5px] text-gray-500">{label}</p>
+    </div>
   );
 }

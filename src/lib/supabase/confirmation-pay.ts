@@ -27,6 +27,10 @@ export type PayableOrder = {
   id: string;
   reference: string;
   client: string;
+  productName: string;
+  /** Initiales du produit, quand il n'a pas de photo. */
+  productLabel: string;
+  productImage?: string;
   trackingNumber: string;
   deliveryStatus: string;
   deliveryDate: string;
@@ -52,12 +56,28 @@ export type AgentTotal = {
   dueAmount: number;
 };
 
+/**
+ * Un versement : toutes les commandes marquees payees d'un meme geste
+ * portent le meme horodatage, ce qui suffit a les regrouper sans table
+ * supplementaire.
+ */
+export type PaymentBatch = {
+  paidAt: string;
+  paidBy: string;
+  count: number;
+  amount: number;
+  agents: string[];
+  references: string[];
+};
+
 export type PaymentReport = {
   rate: number;
   orders: PayableOrder[];
   totals: AgentTotal[];
   /** Livraisons par jour, pour la courbe. */
   daily: { date: string; delivered: number; amount: number }[];
+  /** Versements passes, du plus recent au plus ancien. */
+  payments: PaymentBatch[];
 };
 
 export async function getPaymentRate(): Promise<number> {
@@ -70,6 +90,8 @@ type LeadRow = {
   id: string;
   reference: string;
   client: string;
+  product_name: string | null;
+  product_label: string | null;
   ville: string | null;
   amount: string | null;
   tracking_number: string | null;
@@ -96,15 +118,16 @@ export async function getPaymentReport(
 ): Promise<PaymentReport> {
   const supabase = getSupabaseServerClient();
 
-  const [rate, leadsRes, profilesRes, eventsRes] = await Promise.all([
+  const [rate, leadsRes, profilesRes, productsRes, eventsRes] = await Promise.all([
     getPaymentRate(),
     supabase
       .from("leads")
       .select(
-        "id,reference,client,ville,amount,tracking_number,delivery_status,delivery_status_code,delivery_date,confirmation_paid_at,confirmation_paid_amount,confirmation_paid_by"
+        "id,reference,client,product_name,product_label,ville,amount,tracking_number,delivery_status,delivery_status_code,delivery_date,confirmation_paid_at,confirmation_paid_amount,confirmation_paid_by"
       )
       .eq("delivery_status_code", DELIVERED),
     supabase.from("profiles").select("id,name,role"),
+    supabase.from("products").select("name,image").not("image", "is", null),
     supabase
       .from("lead_events")
       .select("lead_id,actor_id,actor_name,field,new_value,created_at")
@@ -114,6 +137,16 @@ export async function getPaymentReport(
   if (leadsRes.error) throw new Error(leadsRes.error.message);
   if (profilesRes.error) throw new Error(profilesRes.error.message);
   if (eventsRes.error) throw new Error(eventsRes.error.message);
+
+  // La photo du produit, rapprochee par son nom comme ailleurs dans
+  // l'application : une ligne de paiement se reconnait mieux a l'image
+  // du produit qu'a une reference.
+  const imageByProduct = new Map(
+    ((productsRes.data ?? []) as { name: string; image: string }[]).map((p) => [
+      p.name.trim().toLowerCase(),
+      p.image,
+    ])
+  );
 
   const profiles = (profilesRes.data ?? []) as {
     id: string;
@@ -149,6 +182,11 @@ export async function getPaymentReport(
       id: lead.id,
       reference: lead.reference,
       client: lead.client,
+      productName: lead.product_name ?? "",
+      productLabel: lead.product_label ?? "",
+      productImage: imageByProduct.get(
+        (lead.product_name ?? "").trim().toLowerCase()
+      ),
       trackingNumber: lead.tracking_number ?? "",
       deliveryStatus: lead.delivery_status ?? "Livre",
       deliveryDate: lead.delivery_date ?? "",
@@ -195,9 +233,35 @@ export async function getPaymentReport(
     perDay.set(day, entry);
   }
 
+  // Les versements, regroupes sur l'horodatage commun d'un meme geste.
+  const batches = new Map<string, PaymentBatch>();
+  for (const order of orders) {
+    if (!order.paid || !order.paidAt) continue;
+    const batch =
+      batches.get(order.paidAt) ??
+      {
+        paidAt: order.paidAt,
+        paidBy: order.paidBy ?? "",
+        count: 0,
+        amount: 0,
+        agents: [] as string[],
+        references: [] as string[],
+      };
+    batch.count += 1;
+    batch.amount += order.paidAmount ?? 0;
+    if (order.agent && !batch.agents.includes(order.agent)) {
+      batch.agents.push(order.agent);
+    }
+    batch.references.push(order.reference);
+    batches.set(order.paidAt, batch);
+  }
+
   return {
     rate,
     orders,
+    payments: [...batches.values()].sort((a, b) =>
+      b.paidAt.localeCompare(a.paidAt)
+    ),
     totals: [...byAgent.values()].sort((a, b) => b.delivered - a.delivered),
     daily: [...perDay.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
