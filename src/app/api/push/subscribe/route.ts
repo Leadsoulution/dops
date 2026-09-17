@@ -27,13 +27,15 @@ export async function POST(request: Request) {
     // Un essai declenche l'envoi vers cet appareil, pour verifier toute la
     // chaine sans attendre une vraie commande.
     if (body.test) {
-      const sent = await sendPushToAll({
+      const result = await sendPushToAll({
         title: "Orderly",
         body: "Les notifications fonctionnent sur cet appareil.",
         kind: "payment",
         tag: "test",
       });
-      return NextResponse.json({ sent });
+      // La raison du refus repart avec la reponse : sans elle, un essai
+      // qui echoue ne dit rien de plus qu'un zero.
+      return NextResponse.json(result);
     }
 
     const { endpoint, keys } = body.subscription ?? {};

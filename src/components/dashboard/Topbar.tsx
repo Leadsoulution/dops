@@ -319,11 +319,11 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
                           notify("Test", "Une commande livree sonne ainsi.", {
                             kind: "payment",
                           });
-                          const sent = await sendTestPush();
+                          const { sent, reason } = await sendTestPush();
                           setPushNote(
                             sent > 0
                               ? `Envoye a ${sent} appareil(s).`
-                              : "Aucun appareil abonne pour l'instant."
+                              : (reason ?? "Aucun appareil abonne pour l'instant.")
                           );
                         }}
                         className="ml-auto rounded px-1.5 py-0.5 text-[11px] font-medium text-blue-600 hover:bg-blue-50"

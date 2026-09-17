@@ -207,9 +207,23 @@ export async function subscribeToPush(): Promise<
     }
 
     const registration = await navigator.serviceWorker.ready;
+
+    // Un abonnement est lie a la clef publique avec laquelle il a ete
+    // cree. Celui qui traine sur l'appareil depuis une autre clef — ou
+    // d'avant leur mise en place — est accepte par le navigateur mais
+    // refuse par le service push au moment de l'envoi, et l'application
+    // croit alors etre abonnee sans recevoir quoi que ce soit. On le
+    // compare donc a la clef du serveur, et on le refait s'il differe.
     const existing = await registration.pushManager.getSubscription();
+    if (existing && !matchesServerKey(existing, info.publicKey)) {
+      await existing.unsubscribe().catch(() => {
+        /* Deja revoque : la souscription suivante fait foi. */
+      });
+    }
+
+    const current = await registration.pushManager.getSubscription();
     const subscription =
-      existing ??
+      current ??
       (await registration.pushManager.subscribe({
         // Obligatoire : un abonnement muet, sans notification visible,
         // serait refuse par les navigateurs.
@@ -237,13 +251,55 @@ export async function subscribeToPush(): Promise<
   }
 }
 
-/** Demande au serveur d'envoyer une notification a cet appareil. */
-export async function sendTestPush(): Promise<number> {
+/**
+ * L'abonnement existant a-t-il ete cree avec la clef que le serveur
+ * utilise aujourd'hui ?
+ *
+ * La clef est rendue par le navigateur sous forme binaire ; on la
+ * ramene a l'ecriture base64url du serveur pour les comparer.
+ */
+function matchesServerKey(
+  subscription: PushSubscription,
+  serverKey: string
+): boolean {
+  const raw = subscription.options?.applicationServerKey;
+  if (!raw) return false;
+  try {
+    const bytes = new Uint8Array(raw as ArrayBuffer);
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    const encoded = btoa(binary)
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+    return encoded === serverKey.replace(/=+$/, "");
+  } catch {
+    // Dans le doute, on refait l'abonnement : le refaire pour rien ne
+    // coute qu'un aller-retour, le garder a tort coute les alertes.
+    return false;
+  }
+}
+
+/**
+ * Demande au serveur d'envoyer une notification a cet appareil, et
+ * rapporte ce qui s'est passe : un essai qui echoue doit dire pourquoi,
+ * sinon il ne dit rien de plus qu'un zero.
+ */
+export async function sendTestPush(): Promise<{
+  sent: number;
+  reason?: string;
+}> {
   const res = await fetch("/api/push/subscribe", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ test: true }),
   });
   const data = await res.json();
-  return data.sent ?? 0;
+  const failure = data.failures?.[0];
+  return {
+    sent: data.sent ?? 0,
+    reason: failure
+      ? `${failure.message}${failure.status ? ` (code ${failure.status})` : ""}`
+      : undefined,
+  };
 }

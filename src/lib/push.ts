@@ -78,8 +78,16 @@ export async function removeSubscription(endpoint: string): Promise<void> {
  * N'echoue jamais : une notification manquee ne doit pas faire echouer
  * l'import d'une commande.
  */
-export async function sendPushToAll(payload: PushPayload): Promise<number> {
-  if (!isSupabaseServerConfigured || !ensureConfigured()) return 0;
+export type PushResult = {
+  sent: number;
+  /** Ce que le service push a repondu, quand il a refuse. */
+  failures: { status?: number; message: string; removed: boolean }[];
+};
+
+export async function sendPushToAll(payload: PushPayload): Promise<PushResult> {
+  if (!isSupabaseServerConfigured || !ensureConfigured()) {
+    return { sent: 0, failures: [{ message: "Clefs push non configurees.", removed: false }] };
+  }
 
   const supabase = getSupabaseServerClient();
   const { data } = await supabase
@@ -91,10 +99,13 @@ export async function sendPushToAll(payload: PushPayload): Promise<number> {
     p256dh: string;
     auth: string;
   }[];
-  if (subscriptions.length === 0) return 0;
+  if (subscriptions.length === 0) {
+    return { sent: 0, failures: [{ message: "Aucun appareil abonne.", removed: false }] };
+  }
 
   const body = JSON.stringify(payload);
   let sent = 0;
+  const failures: PushResult["failures"] = [];
 
   await Promise.all(
     subscriptions.map(async (sub) => {
@@ -110,12 +121,24 @@ export async function sendPushToAll(payload: PushPayload): Promise<number> {
         sent += 1;
       } catch (error) {
         const status = (error as { statusCode?: number }).statusCode;
-        if (status === 404 || status === 410) {
-          await removeSubscription(sub.endpoint);
-        }
+        // 404 et 410 disent que l'abonnement n'existe plus chez le
+        // service push : le garder ferait grossir la table d'adresses
+        // mortes. Les autres codes decrivent un probleme de notre cote
+        // — clef qui ne correspond pas, charge trop lourde — et
+        // l'abonnement, lui, reste valable.
+        const gone = status === 404 || status === 410;
+        if (gone) await removeSubscription(sub.endpoint);
+        failures.push({
+          status,
+          message:
+            (error as { body?: string; message?: string }).body ??
+            (error as Error).message ??
+            "Envoi refuse.",
+          removed: gone,
+        });
       }
     })
   );
 
-  return sent;
+  return { sent, failures };
 }

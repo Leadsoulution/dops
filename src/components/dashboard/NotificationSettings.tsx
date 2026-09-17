@@ -90,11 +90,11 @@ export default function NotificationSettings() {
   async function test() {
     setWorking(true);
     try {
-      const sent = await sendTestPush();
+      const { sent, reason } = await sendTestPush();
       setNote(
         sent > 0
           ? `Notification envoyee a ${sent} appareil${sent > 1 ? "s" : ""}.`
-          : "Aucun appareil abonne : activez les alertes ci-dessus."
+          : `Echec de l'envoi : ${reason ?? "raison inconnue"}.`
       );
     } finally {
       setWorking(false);
