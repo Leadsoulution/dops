@@ -36,6 +36,7 @@ import SelectDropdown from "./SelectDropdown";
 import Toggle from "./Toggle";
 import DatabaseSizeCard from "./DatabaseSizeCard";
 import WhatsappMessagesPanel from "./WhatsappMessagesPanel";
+import { currentProfile } from "@/lib/session";
 import {
   leadStatuses,
   shippingStatuses,
@@ -172,14 +173,9 @@ export default function ParametresPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/auth/me")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!cancelled && data?.profile) setIsAdmin(data.profile.role === "Admin");
-      })
-      .catch(() => {
-        /* Sans profil connu, l'edition reste fermee. */
-      });
+    currentProfile().then((profile) => {
+      if (!cancelled && profile) setIsAdmin(profile.role === "Admin");
+    });
     return () => {
       cancelled = true;
     };

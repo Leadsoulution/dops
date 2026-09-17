@@ -60,6 +60,7 @@ import {
   type LeadStatus,
 } from "./leads-data";
 import { displayAmount } from "@/lib/amount";
+import { currentProfile } from "@/lib/session";
 import RowActionsMenu from "./RowActionsMenu";
 import CreateCommandeModal from "./CreateCommandeModal";
 import OrderDetailsModal from "./OrderDetailsModal";
@@ -72,6 +73,16 @@ import DateRangeCalendar from "./DateRangeCalendar";
 
 /** Transporteur integre a l'application. */
 const CARRIER_NAME = "ForceLog";
+
+/**
+ * Commandes affichees d'un coup.
+ *
+ * Vingt-cinq lignes tiennent a l'ecran et se dessinent sans attendre.
+ * Le tableau donne les pages suivantes par ses fleches ; sur telephone,
+ * elles se chargent en atteignant la derniere carte, ou personne n'a
+ * envie de viser une fleche.
+ */
+const PAGE_SIZE = 25;
 
 /**
  * Icone d'un statut. Une fonction plutot qu'une table : les paliers
@@ -157,6 +168,10 @@ export default function LeadsCommandesPage() {
   const [confirmDelete, setConfirmDelete] = useState<Lead | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [page, setPage] = useState(1);
+  /** Sur telephone la liste s'allonge au lieu de tourner les pages. */
+  const [mobileCount, setMobileCount] = useState(PAGE_SIZE);
+  const mobileSentinel = useRef<HTMLDivElement>(null);
 
   // L'id d'une eventuelle arrivee depuis la recherche globale (?lead=<id>),
   // capture une seule fois : `searchParams` change d'identite a chaque
@@ -167,16 +182,18 @@ export default function LeadsCommandesPage() {
   useEffect(() => {
     let cancelled = false;
 
-    // Reprend d'abord les commandes de la boutique, puis lit la base :
-    // l'ordre importe, sinon une commande arrivee entre les deux
-    // n'apparaitrait qu'au prochain passage.
-    fetch("/api/woocommerce/orders", { method: "POST" })
-      .catch(() => {
-        /* Boutique non connectee ou injoignable : on affiche la base. */
-      })
-      .then(() => {
-        if (!cancelled) loadLeads();
-      });
+    // Une seule requete au chargement : celle qui ramene les commandes.
+    //
+    // L'import de la boutique et la synchronisation du transporteur
+    // partaient d'ici en meme temps. Ils interrogent des serveurs
+    // distants, prennent plusieurs secondes, et monopolisaient le
+    // serveur pendant que la requete utile attendait son tour : mesuree
+    // a 0,7 s seule, elle montait a 7,7 s en leur compagnie.
+    //
+    // `OrderWatcher`, dans l'en-tete, s'en charge deja et les rejoue
+    // regulierement. Les faire ici aussi ne les rendait pas plus frais,
+    // seulement plus couteux.
+    loadLeads();
 
     function loadLeads() {
     fetch("/api/leads")
@@ -193,26 +210,6 @@ export default function LeadsCommandesPage() {
             : undefined;
           if (lead) setModal({ type: "details", lead });
 
-          // Rafraichit en arriere-plan les statuts de livraison depuis
-          // ForceLog, sans bloquer l'affichage de la liste.
-          if (loaded.some((l) => l.trackingNumber)) {
-            fetch("/api/leads/sync", { method: "POST" })
-              .then((res) => res.json())
-              .then((sync) => {
-                if (cancelled || !sync.updated?.length) return;
-                setLeadsState((prev) =>
-                  prev.map((l) => {
-                    const fresh = (sync.updated as Lead[]).find(
-                      (u) => u.id === l.id
-                    );
-                    return fresh ?? l;
-                  })
-                );
-              })
-              .catch(() => {
-                /* Synchronisation silencieuse : ne derange pas l'ecran. */
-              });
-          }
         }
       })
       .catch(() => {
@@ -232,14 +229,9 @@ export default function LeadsCommandesPage() {
   // Le serveur refuse de toute facon la requete aux autres.
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/auth/me")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!cancelled && data?.profile) setIsAdmin(data.profile.role === "Admin");
-      })
-      .catch(() => {
-        /* Sans profil connu, les suppressions restent masquees. */
-      });
+    currentProfile().then((profile) => {
+      if (!cancelled && profile) setIsAdmin(profile.role === "Admin");
+    });
     return () => {
       cancelled = true;
     };
@@ -435,6 +427,52 @@ export default function LeadsCommandesPage() {
         lead.client.toLowerCase().includes(query) ||
         lead.phone.includes(query))
   );
+
+  // Changer d'onglet, de filtre, de periode ou de recherche redonne une
+  // liste differente : rester a la page 7 d'un resultat qui n'en compte
+  // plus que deux n'aurait pas de sens.
+  const listKey = `${activeTab}|${activeRange}|${searchQuery}|${JSON.stringify(filters)}`;
+  // Ajustement pendant le rendu plutot que dans un effet : React
+  // recommence aussitot avec la bonne page, sans afficher un instant la
+  // mauvaise.
+  const [lastListKey, setLastListKey] = useState(listKey);
+  if (lastListKey !== listKey) {
+    setLastListKey(listKey);
+    setPage(1);
+    setMobileCount(PAGE_SIZE);
+  }
+
+  const pageCount = Math.max(1, Math.ceil(visibleLeads.length / PAGE_SIZE));
+  // Un filtre qui reduit la liste peut laisser la page courante au-dela
+  // de la fin : on retombe alors sur la derniere page reelle.
+  const currentPage = Math.min(page, pageCount);
+  const pagedLeads = visibleLeads.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+  const mobileLeads = visibleLeads.slice(0, mobileCount);
+  const hasMoreOnMobile = mobileCount < visibleLeads.length;
+
+  // Telephone : la suite se charge en arrivant au bas de la liste,
+  // plutot qu'en visant une fleche au pouce.
+  useEffect(() => {
+    const target = mobileSentinel.current;
+    if (!target || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setMobileCount((n) => n + PAGE_SIZE);
+        }
+      },
+      // Declenche un peu avant le bord : la suite est prete quand on y
+      // arrive, sans a-coup.
+      { rootMargin: "300px" }
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [mobileLeads.length, hasMoreOnMobile]);
+
 
   const allVisibleSelected =
     visibleLeads.length > 0 && visibleLeads.every((l) => selectedIds.has(l.id));
@@ -1050,7 +1088,7 @@ export default function LeadsCommandesPage() {
                   </td>
                 </tr>
               )}
-              {visibleLeads.map((lead) => (
+              {pagedLeads.map((lead) => (
                 <tr
                   key={lead.id}
                   onClick={() => setModal({ type: "details", lead })}
@@ -1256,24 +1294,34 @@ export default function LeadsCommandesPage() {
         <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3">
           <p className="text-[12px] text-gray-500">
             <span className="font-mono">
-              {visibleLeads.length > 0 ? 1 : 0}-{visibleLeads.length} /{" "}
+              {visibleLeads.length === 0
+                ? 0
+                : (currentPage - 1) * PAGE_SIZE + 1}
+              -{Math.min(currentPage * PAGE_SIZE, visibleLeads.length)} /{" "}
               {visibleLeads.length}
             </span>{" "}
             resultats
           </p>
           <div className="flex items-center gap-2">
             <button
-              disabled
-              className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 text-gray-300"
+              onClick={() => setPage(currentPage - 1)}
+              disabled={currentPage <= 1}
+              title="Page precedente"
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:text-gray-300 disabled:hover:bg-transparent"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
             </button>
             <span className="text-[12px] text-gray-600">
-              Page <span className="font-mono">1 / 1</span>
+              Page{" "}
+              <span className="font-mono">
+                {currentPage} / {pageCount}
+              </span>
             </span>
             <button
-              disabled
-              className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 text-gray-300"
+              onClick={() => setPage(currentPage + 1)}
+              disabled={currentPage >= pageCount}
+              title="Page suivante"
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:text-gray-300 disabled:hover:bg-transparent"
             >
               <ChevronRight className="h-3.5 w-3.5" />
             </button>
@@ -1294,7 +1342,7 @@ export default function LeadsCommandesPage() {
             <p className="text-[13px]">Aucune commande dans cette categorie.</p>
           </div>
         )}
-        {visibleLeads.map((lead) => {
+        {mobileLeads.map((lead) => {
           const actions = getRowActions(lead);
           return (
             <div
@@ -1422,6 +1470,29 @@ export default function LeadsCommandesPage() {
             </div>
           );
         })}
+
+        {/*
+          Sentinelle du defilement : des qu'elle entre dans l'ecran, la
+          suite se charge. Un bouton reste dessous pour les navigateurs
+          sans observateur d'intersection, et pour qui prefere cliquer.
+        */}
+        {hasMoreOnMobile && (
+          <div ref={mobileSentinel} className="pt-1">
+            <button
+              onClick={() => setMobileCount((n) => n + PAGE_SIZE)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-3 text-[12.5px] font-medium text-gray-500"
+            >
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Chargement des commandes suivantes
+            </button>
+          </div>
+        )}
+
+        {!loading && !hasMoreOnMobile && visibleLeads.length > PAGE_SIZE && (
+          <p className="py-3 text-center text-[12px] text-gray-400">
+            {visibleLeads.length} commandes affichees
+          </p>
+        )}
       </div>
 
       <button

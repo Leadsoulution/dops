@@ -30,6 +30,7 @@ import {
   firstAllowedHref,
 } from "@/lib/access";
 import type { SessionProfile } from "@/lib/supabase/auth";
+import { currentProfile } from "@/lib/session";
 
 const ICONS: Record<string, ComponentType<{ className?: string }>> = {
   dashboard: LayoutDashboard,
@@ -66,13 +67,12 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
    */
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/auth/me")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (cancelled || !data?.profile) return;
-        setProfile(data.profile);
-        if (!canAccess(data.profile, pathname)) {
-          router.replace(firstAllowedHref(data.profile));
+    currentProfile()
+      .then((profile) => {
+        if (cancelled || !profile) return;
+        setProfile(profile);
+        if (!canAccess(profile, pathname)) {
+          router.replace(firstAllowedHref(profile));
         }
       })
       .catch(() => {

@@ -100,7 +100,10 @@ export default function OrderWatcher() {
       }
     }
 
-    check();
+    // Laisse la page s'afficher avant d'aller interroger la boutique et
+    // le transporteur : ces deux appels durent plusieurs secondes et
+    // retarderaient les commandes qu'on attend a l'ecran.
+    timer = setTimeout(check, 4000);
 
     return () => {
       cancelled = true;

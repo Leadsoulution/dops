@@ -31,6 +31,7 @@ import {
 } from "@/lib/notifications";
 import type { SessionProfile } from "@/lib/supabase/auth";
 import { useSignOut } from "@/components/auth/useSignOut";
+import { currentProfile } from "@/lib/session";
 
 const notifications = [
   {
@@ -163,14 +164,9 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   // pas se l'inventer.
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/auth/me")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!cancelled && data?.profile) setProfile(data.profile);
-      })
-      .catch(() => {
-        /* En-tete sans nom plutot qu'un ecran d'erreur. */
-      });
+    currentProfile().then((profile) => {
+      if (!cancelled && profile) setProfile(profile);
+    });
     return () => {
       cancelled = true;
     };
