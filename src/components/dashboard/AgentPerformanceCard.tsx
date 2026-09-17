@@ -1,7 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Clock, History, Mail, PhoneCall, Timer, X } from "lucide-react";
+import {
+  CheckCircle2,
+  Clock,
+  History,
+  Mail,
+  PackageX,
+  PhoneCall,
+  Timer,
+  X,
+} from "lucide-react";
 import DonutRing from "./DonutRing";
 import { LEAD_STATUSES } from "./leads-data";
 import type { AgentStats } from "./confirmation-data";
@@ -11,9 +20,54 @@ const badgeByStatus = new Map(
   LEAD_STATUSES.map((s) => [s.label as string, s.badge as string])
 );
 
-export default function AgentPerformanceCard({ agent }: { agent: AgentStats }) {
+/**
+ * La meme carte sert les deux sections. Elles posent deux questions
+ * differentes sur le meme agent : ce qu'il a confirme, et ce que ses
+ * confirmations sont devenues chez le transporteur.
+ */
+export type CardSection = "confirmation" | "livraison";
+
+export default function AgentPerformanceCard({
+  agent,
+  section = "confirmation",
+}: {
+  agent: AgentStats;
+  section?: CardSection;
+}) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const initial = agent.name.trim().charAt(0).toUpperCase();
+  const livraison = section === "livraison";
+
+  // Le taux montre par l'anneau : confirmations obtenues, ou colis
+  // remis. Le second ne se calcule que sur les commandes expediees.
+  const percent = livraison ? agent.delivery.rate : agent.confirmRate;
+
+  const tiles = livraison
+    ? [
+        { value: agent.delivery.shipped, label: "Expediees", tone: "purple" },
+        { value: agent.delivery.delivered, label: "Livrees", tone: "emerald" },
+        { value: agent.delivery.inTransit, label: "En cours", tone: "cyan" },
+        { value: agent.delivery.returned, label: "Retours", tone: "amber" },
+      ]
+    : [
+        { value: agent.treated, label: "Traitees", tone: "purple" },
+        { value: agent.contacted, label: "Contactes", tone: "cyan" },
+        { value: agent.confirmed, label: "Confirmes", tone: "emerald" },
+        { value: agent.pending, label: "En cours", tone: "amber" },
+      ];
+
+  const toneClasses: Record<string, string> = {
+    purple: "bg-purple-50 text-purple-700",
+    cyan: "bg-cyan-50 text-cyan-700",
+    emerald: "bg-emerald-50 text-emerald-700",
+    amber: "bg-amber-50 text-amber-700",
+  };
+  const toneLabel: Record<string, string> = {
+    purple: "text-purple-500",
+    cyan: "text-cyan-600",
+    emerald: "text-emerald-600",
+    amber: "text-amber-600",
+  };
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
@@ -46,25 +100,43 @@ export default function AgentPerformanceCard({ agent }: { agent: AgentStats }) {
       </div>
 
       <div className="mb-3 flex items-center gap-3 border-b border-gray-100 pb-3">
-        <DonutRing
-          percent={agent.confirmRate}
-          color={agent.confirmRate === 0 ? "#d1d5db" : "#10b981"}
-        />
+        <DonutRing percent={percent} color={percent === 0 ? "#d1d5db" : "#10b981"} />
         <div className="min-w-0 flex-1 space-y-1">
-          <p className="text-[11px] font-medium text-gray-400">Taux Confs</p>
-          <div className="flex items-center gap-1.5 text-[12px] text-gray-600">
-            <Clock
-              className="h-3 w-3 shrink-0 text-blue-400"
-              aria-label="Delai de prise en charge"
-            />
-            <span className="font-mono" title="Delai moyen de prise en charge">
-              {agent.avgFirstTouch}
-            </span>
-            <span className="text-gray-300">·</span>
-            <span className="font-mono" title="Duree moyenne de traitement">
-              {agent.avgHandling}
-            </span>
-          </div>
+          <p className="text-[11px] font-medium text-gray-400">
+            {livraison ? "Taux de livraison" : "Taux Confs"}
+          </p>
+          {livraison ? (
+            <p className="text-[12px] text-gray-600">
+              sur{" "}
+              <span className="font-mono">{agent.confirmed}</span> commande
+              {agent.confirmed > 1 ? "s" : ""} confirmee
+              {agent.confirmed > 1 ? "s" : ""}
+              {agent.delivery.notShipped > 0 && (
+                <span
+                  className="text-amber-600"
+                  title="Confirmees mais jamais envoyees au transporteur"
+                >
+                  {" "}
+                  &middot; {agent.delivery.notShipped} non expediee
+                  {agent.delivery.notShipped > 1 ? "s" : ""}
+                </span>
+              )}
+            </p>
+          ) : (
+            <div className="flex items-center gap-1.5 text-[12px] text-gray-600">
+              <Clock
+                className="h-3 w-3 shrink-0 text-blue-400"
+                aria-label="Delai de prise en charge"
+              />
+              <span className="font-mono" title="Delai moyen de prise en charge">
+                {agent.avgFirstTouch}
+              </span>
+              <span className="text-gray-300">·</span>
+              <span className="font-mono" title="Duree moyenne de traitement">
+                {agent.avgHandling}
+              </span>
+            </div>
+          )}
         </div>
         <button
           onClick={() => setHistoryOpen(true)}
@@ -77,30 +149,17 @@ export default function AgentPerformanceCard({ agent }: { agent: AgentStats }) {
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-md bg-purple-50 px-2.5 py-1.5">
-          <p className="font-mono text-[13px] font-semibold text-purple-700">
-            {agent.treated.toLocaleString("fr-FR")}
-          </p>
-          <p className="text-[10.5px] text-purple-500">Traitees</p>
-        </div>
-        <div className="rounded-md bg-cyan-50 px-2.5 py-1.5">
-          <p className="font-mono text-[13px] font-semibold text-cyan-700">
-            {agent.contacted.toLocaleString("fr-FR")}
-          </p>
-          <p className="text-[10.5px] text-cyan-600">Contactes</p>
-        </div>
-        <div className="rounded-md bg-emerald-50 px-2.5 py-1.5">
-          <p className="font-mono text-[13px] font-semibold text-emerald-700">
-            {agent.confirmed.toLocaleString("fr-FR")}
-          </p>
-          <p className="text-[10.5px] text-emerald-600">Confirmes</p>
-        </div>
-        <div className="rounded-md bg-amber-50 px-2.5 py-1.5">
-          <p className="font-mono text-[13px] font-semibold text-amber-700">
-            {agent.pending.toLocaleString("fr-FR")}
-          </p>
-          <p className="text-[10.5px] text-amber-600">En cours</p>
-        </div>
+        {tiles.map((tile) => (
+          <div
+            key={tile.label}
+            className={`rounded-md px-2.5 py-1.5 ${toneClasses[tile.tone]}`}
+          >
+            <p className="font-mono text-[13px] font-semibold">
+              {tile.value.toLocaleString("fr-FR")}
+            </p>
+            <p className={`text-[10.5px] ${toneLabel[tile.tone]}`}>{tile.label}</p>
+          </div>
+        ))}
       </div>
 
       <button
@@ -136,58 +195,69 @@ export default function AgentPerformanceCard({ agent }: { agent: AgentStats }) {
             </div>
 
             <div className="grid grid-cols-4 gap-1.5 px-4 pt-3">
-              <div className="rounded-md bg-purple-50 px-1.5 py-1.5 text-center">
-                <p className="font-mono text-[12px] font-semibold text-purple-700">
-                  {agent.treated.toLocaleString("fr-FR")}
-                </p>
-                <p className="text-[9.5px] text-purple-500">Traitees</p>
-              </div>
-              <div className="rounded-md bg-cyan-50 px-1.5 py-1.5 text-center">
-                <p className="font-mono text-[12px] font-semibold text-cyan-700">
-                  {agent.contacted.toLocaleString("fr-FR")}
-                </p>
-                <p className="text-[9.5px] text-cyan-600">Contactes</p>
-              </div>
-              <div className="rounded-md bg-emerald-50 px-1.5 py-1.5 text-center">
-                <p className="font-mono text-[12px] font-semibold text-emerald-700">
-                  {agent.confirmed.toLocaleString("fr-FR")}
-                </p>
-                <p className="text-[9.5px] text-emerald-600">Confirmes</p>
-              </div>
-              <div className="rounded-md bg-amber-50 px-1.5 py-1.5 text-center">
-                <p className="font-mono text-[12px] font-semibold text-amber-700">
-                  {agent.pending.toLocaleString("fr-FR")}
-                </p>
-                <p className="text-[9.5px] text-amber-600">En cours</p>
-              </div>
+              {tiles.map((tile) => (
+                <div
+                  key={tile.label}
+                  className={`rounded-md px-1.5 py-1.5 text-center ${toneClasses[tile.tone]}`}
+                >
+                  <p className="font-mono text-[12px] font-semibold">
+                    {tile.value.toLocaleString("fr-FR")}
+                  </p>
+                  <p className={`text-[9.5px] ${toneLabel[tile.tone]}`}>
+                    {tile.label}
+                  </p>
+                </div>
+              ))}
             </div>
 
-            <div className="grid grid-cols-3 gap-1.5 px-4 pt-2">
-              <div className="flex flex-col items-center gap-0.5 rounded-md bg-gray-50 py-1.5">
-                <Clock className="h-3.5 w-3.5 text-blue-400" />
-                <p className="font-mono text-[11.5px] font-medium text-gray-700">
-                  {agent.avgFirstTouch}
-                </p>
-                <p className="text-[9px] text-gray-400">Prise en charge</p>
+            {livraison ? (
+              <div className="grid grid-cols-2 gap-1.5 px-4 pt-2">
+                <div className="flex flex-col items-center gap-0.5 rounded-md bg-gray-50 py-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                  <p className="font-mono text-[11.5px] font-medium text-gray-700">
+                    {agent.confirmed.toLocaleString("fr-FR")}
+                  </p>
+                  <p className="text-[9px] text-gray-400">Confirmees</p>
+                </div>
+                <div
+                  className="flex flex-col items-center gap-0.5 rounded-md bg-gray-50 py-1.5"
+                  title="Confirmees mais jamais envoyees au transporteur"
+                >
+                  <PackageX className="h-3.5 w-3.5 text-amber-400" />
+                  <p className="font-mono text-[11.5px] font-medium text-gray-700">
+                    {agent.delivery.notShipped.toLocaleString("fr-FR")}
+                  </p>
+                  <p className="text-[9px] text-gray-400">Non expediees</p>
+                </div>
               </div>
-              <div className="flex flex-col items-center gap-0.5 rounded-md bg-gray-50 py-1.5">
-                <Timer className="h-3.5 w-3.5 text-violet-400" />
-                <p className="font-mono text-[11.5px] font-medium text-gray-700">
-                  {agent.avgHandling}
-                </p>
-                <p className="text-[9px] text-gray-400">Duree traitement</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-1.5 px-4 pt-2">
+                <div className="flex flex-col items-center gap-0.5 rounded-md bg-gray-50 py-1.5">
+                  <Clock className="h-3.5 w-3.5 text-blue-400" />
+                  <p className="font-mono text-[11.5px] font-medium text-gray-700">
+                    {agent.avgFirstTouch}
+                  </p>
+                  <p className="text-[9px] text-gray-400">Prise en charge</p>
+                </div>
+                <div className="flex flex-col items-center gap-0.5 rounded-md bg-gray-50 py-1.5">
+                  <Timer className="h-3.5 w-3.5 text-violet-400" />
+                  <p className="font-mono text-[11.5px] font-medium text-gray-700">
+                    {agent.avgHandling}
+                  </p>
+                  <p className="text-[9px] text-gray-400">Duree traitement</p>
+                </div>
+                <div
+                  className="flex flex-col items-center gap-0.5 rounded-md bg-gray-50 py-1.5"
+                  title="Non mesure : l'application ne passe pas les appels."
+                >
+                  <PhoneCall className="h-3.5 w-3.5 text-gray-300" />
+                  <p className="font-mono text-[11.5px] font-medium text-gray-400">
+                    {agent.avgCallDuration}
+                  </p>
+                  <p className="text-[9px] text-gray-400">Duree appels</p>
+                </div>
               </div>
-              <div
-                className="flex flex-col items-center gap-0.5 rounded-md bg-gray-50 py-1.5"
-                title="Non mesure : l'application ne passe pas les appels."
-              >
-                <PhoneCall className="h-3.5 w-3.5 text-gray-300" />
-                <p className="font-mono text-[11.5px] font-medium text-gray-400">
-                  {agent.avgCallDuration}
-                </p>
-                <p className="text-[9px] text-gray-400">Duree appels</p>
-              </div>
-            </div>
+            )}
 
             <p className="px-4 pb-1 pt-3 text-[11px] font-semibold tracking-wide text-gray-500">
               HISTORIQUE DES ACTIONS

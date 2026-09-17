@@ -3,6 +3,7 @@ import { getSupabaseServerClient } from "./server";
 import type {
   AgentAction,
   AgentStats,
+  DeliveryStats,
   TeamStats,
 } from "@/components/dashboard/confirmation-data";
 
@@ -49,6 +50,55 @@ const CLOSED = new Set([
 ]);
 
 const STATUS_FIELD = "Statut de confirmation";
+
+/** Code ForceLog d'un colis remis au client. */
+const DELIVERED = "DELIVERED";
+
+/**
+ * Codes qui disent qu'un colis ne sera pas remis : retour, refus,
+ * annulation, hors zone. Tout autre code est une livraison en cours.
+ */
+const FAILED = new Set(["RETURNED", "REFUSE", "CANCELED", "OUT_OF_AREA"]);
+
+/**
+ * Devenir des commandes confirmees, une fois chez le transporteur.
+ *
+ * On part des commandes confirmees et d'elles seules : une commande
+ * jamais confirmee n'avait pas a etre livree, la compter ferait passer
+ * un travail de confirmation pour un echec de livraison.
+ */
+function deliveryOf(
+  confirmedIds: Iterable<string>,
+  leads: Map<string, LeadRow>
+): DeliveryStats {
+  let shipped = 0;
+  let delivered = 0;
+  let returned = 0;
+  let notShipped = 0;
+
+  for (const id of confirmedIds) {
+    const lead = leads.get(id);
+    if (!lead) continue;
+    // Sans numero de suivi, la commande n'est jamais partie.
+    if (!lead.tracking_number) {
+      notShipped += 1;
+      continue;
+    }
+    shipped += 1;
+    const code = lead.delivery_status_code ?? "";
+    if (code === DELIVERED) delivered += 1;
+    else if (FAILED.has(code)) returned += 1;
+  }
+
+  return {
+    shipped,
+    delivered,
+    returned,
+    inTransit: shipped - delivered - returned,
+    notShipped,
+    rate: shipped > 0 ? Math.round((delivered / shipped) * 100) : 0,
+  };
+}
 
 /** "17h 8m", "3m 37s", "45s" — jamais plus de deux unites. */
 function formatDuration(ms: number | null): string {
@@ -105,6 +155,8 @@ type LeadRow = {
   phone: string | null;
   status: string;
   created_at: string;
+  tracking_number: string | null;
+  delivery_status_code: string | null;
 };
 
 export async function getAgentStats(
@@ -118,7 +170,11 @@ export async function getAgentStats(
       .from("profiles")
       .select("id,name,email,role,status,avatar_color")
       .order("name"),
-    supabase.from("leads").select("id,reference,phone,status,created_at"),
+    supabase
+      .from("leads")
+      .select(
+        "id,reference,phone,status,created_at,tracking_number,delivery_status_code"
+      ),
   ]);
 
   if (profilesRes.error) throw new Error(profilesRes.error.message);
@@ -240,6 +296,7 @@ export async function getAgentStats(
       avgCallDuration: "—",
       actions: own.length,
       history,
+      delivery: deliveryOf(confirmed, leads),
     };
   });
 
@@ -290,5 +347,6 @@ export async function getAgentStats(
       avgHandling: formatDuration(average(teamHandling)),
       avgFirstTouch: formatDuration(average(teamFirstTouch)),
     },
+    delivery: deliveryOf(teamConfirmed, leads),
   };
 }

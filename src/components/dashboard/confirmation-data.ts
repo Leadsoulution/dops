@@ -13,6 +13,27 @@ export type AgentAction = {
   to: string;
 };
 
+/**
+ * Suite d'une commande confirmee chez le transporteur.
+ *
+ * Ne portent que sur les commandes que l'agent a lui-meme confirmees :
+ * on mesure ce que devient son travail, pas celui de l'equipe entiere.
+ */
+export type DeliveryStats = {
+  /** Commandes confirmees effectivement parties chez le transporteur. */
+  shipped: number;
+  /** Remises au client. */
+  delivered: number;
+  /** Retournees, refusees, annulees ou hors zone. */
+  returned: number;
+  /** Parties, ni livrees ni retournees a ce jour. */
+  inTransit: number;
+  /** Confirmees mais jamais expediees. */
+  notShipped: number;
+  /** Livrees rapportees aux expediees. */
+  rate: number;
+};
+
 export type AgentStats = {
   id: string;
   name: string;
@@ -37,6 +58,7 @@ export type AgentStats = {
   avgCallDuration: string;
   actions: number;
   history: AgentAction[];
+  delivery: DeliveryStats;
 };
 
 export type TeamStats = {
@@ -49,6 +71,7 @@ export type TeamStats = {
     avgHandling: string;
     avgFirstTouch: string;
   };
+  delivery: DeliveryStats;
 };
 
 

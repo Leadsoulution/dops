@@ -15,6 +15,10 @@ import {
   Info,
   Loader2,
   AlertCircle,
+  CheckCircle2,
+  Truck,
+  PackageCheck,
+  Undo2,
 } from "lucide-react";
 import DonutRing from "./DonutRing";
 import AgentPerformanceCard from "./AgentPerformanceCard";
@@ -325,6 +329,16 @@ export default function ConfirmationPage() {
             </div>
           </div>
 
+          <div className="mb-3 flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+            <h2 className="text-h3 font-semibold text-gray-900">Confirmation</h2>
+            <span className="text-[12.5px] text-gray-400">
+              {(stats?.team.treated ?? 0).toLocaleString("fr-FR")} commandes
+              traitees &middot; {(stats?.team.confirmed ?? 0).toLocaleString("fr-FR")}{" "}
+              confirmees
+            </span>
+          </div>
+
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-stretch">
             <div className="grid flex-1 grid-cols-2 gap-3 lg:grid-cols-4">
               <div className="flex items-center gap-2.5 rounded-xl bg-violet-50 p-3.5">
@@ -333,10 +347,10 @@ export default function ConfirmationPage() {
                 </div>
                 <div className="min-w-0">
                   <p className="font-mono text-[17px] font-semibold text-gray-900">
-                    {stats?.team.avgHandling ?? "—"}
+                    {(stats?.team.treated ?? 0).toLocaleString("fr-FR")}
                   </p>
                   <p className="truncate text-[11.5px] text-gray-500">
-                    Duree moy. traitement
+                    Total commandes traitees
                   </p>
                 </div>
               </div>
@@ -346,13 +360,10 @@ export default function ConfirmationPage() {
                 </div>
                 <div className="min-w-0">
                   <p className="font-mono text-[17px] font-semibold text-gray-900">
-                    {stats?.team.avgFirstTouch ?? "—"}
+                    {(stats?.team.confirmed ?? 0).toLocaleString("fr-FR")}
                   </p>
-                  <p
-                    className="truncate text-[11.5px] text-gray-500"
-                    title="Delai entre l'arrivee d'une commande et le premier geste d'un agent"
-                  >
-                    Delai moy. prise en charge
+                  <p className="truncate text-[11.5px] text-gray-500">
+                    Commandes confirmees
                   </p>
                 </div>
               </div>
@@ -378,7 +389,7 @@ export default function ConfirmationPage() {
                     {globalRate}%
                   </p>
                   <p className="truncate text-[11.5px] text-gray-500">
-                    Taux conv. equipe
+                    Taux de confirmation
                   </p>
                 </div>
               </div>
@@ -408,11 +419,96 @@ export default function ConfirmationPage() {
               Utilisateurs.
             </p>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {agentList.map((agent) => (
-                <AgentPerformanceCard key={agent.id} agent={agent} />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {agentList.map((agent) => (
+                  <AgentPerformanceCard key={agent.id} agent={agent} />
+                ))}
+              </div>
+
+              {/*
+                Deuxieme question, posee sur le meme travail : ce que les
+                commandes confirmees sont devenues chez le transporteur.
+                Rien d'autre n'entre dans ce calcul — une commande jamais
+                confirmee n'avait pas a etre livree.
+              */}
+              <div className="mb-3 mt-8 flex items-center gap-2">
+                <Truck className="h-4 w-4 text-blue-600" />
+                <h2 className="text-h3 font-semibold text-gray-900">Livraison</h2>
+                <span className="text-[12.5px] text-gray-400">
+                  sur les {(stats?.team.confirmed ?? 0).toLocaleString("fr-FR")}{" "}
+                  commandes confirmees
+                </span>
+              </div>
+
+              <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <div className="flex items-center gap-2.5 rounded-xl bg-blue-50 p-3.5">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white">
+                    <Truck className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-mono text-[17px] font-semibold text-gray-900">
+                      {(stats?.delivery.shipped ?? 0).toLocaleString("fr-FR")}
+                    </p>
+                    <p className="truncate text-[11.5px] text-gray-500">
+                      Expediees au transporteur
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5 rounded-xl bg-emerald-50 p-3.5">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white">
+                    <PackageCheck className="h-4 w-4 text-emerald-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-mono text-[17px] font-semibold text-gray-900">
+                      {(stats?.delivery.delivered ?? 0).toLocaleString("fr-FR")}
+                    </p>
+                    <p className="truncate text-[11.5px] text-gray-500">
+                      Livrees
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5 rounded-xl bg-amber-50 p-3.5">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white">
+                    <Undo2 className="h-4 w-4 text-amber-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-mono text-[17px] font-semibold text-gray-900">
+                      {(stats?.delivery.returned ?? 0).toLocaleString("fr-FR")}
+                    </p>
+                    <p className="truncate text-[11.5px] text-gray-500">
+                      Retours et refus
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2.5 rounded-xl bg-emerald-50 p-3.5">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white">
+                    <Target className="h-4 w-4 text-emerald-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-mono text-[17px] font-semibold text-gray-900">
+                      {stats?.delivery.rate ?? 0}%
+                    </p>
+                    <p
+                      className="truncate text-[11.5px] text-gray-500"
+                      title="Livrees rapportees aux commandes reellement expediees"
+                    >
+                      Taux de livraison
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {agentList.map((agent) => (
+                  <AgentPerformanceCard
+                    key={`livraison-${agent.id}`}
+                    agent={agent}
+                    section="livraison"
+                  />
+                ))}
+              </div>
+            </>
           )}
         </>
       ) : (

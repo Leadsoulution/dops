@@ -26,6 +26,8 @@ type Lead = {
   phone: string;
   status: string;
   created_at: string;
+  tracking_number?: string | null;
+  delivery_status_code?: string | null;
 };
 
 type Event = {
@@ -294,5 +296,92 @@ describe("getAgentStats", () => {
     expect(agents[0].history.map((h) => h.to)).toEqual(["Confirme", "Pas de rep 1"]);
     expect(agents[0].history[0].reference).toBe("WC-1");
     expect(agents[0].history[0].phone).toBe("0600000000");
+  });
+});
+
+describe("livraison", () => {
+  it("ne compte que les commandes que l'agent a confirmees", () => {
+    // Celle qu'Alice a seulement rappelee est livree, mais ce n'est pas
+    // elle qui l'a confirmee : elle n'entre pas dans son taux.
+    stubTables(
+      [ALICE],
+      [
+        { id: "1", reference: "A", phone: "06", status: "Confirme", created_at: at(0),
+          tracking_number: "F-1", delivery_status_code: "DELIVERED" },
+        { id: "2", reference: "B", phone: "06", status: "Confirme", created_at: at(0),
+          tracking_number: "F-2", delivery_status_code: "DELIVERED" },
+      ],
+      [
+        statusEvent("1", ALICE, "Confirme", 1),
+        statusEvent("2", ALICE, "Rappel", 1),
+      ]
+    );
+    return getAgentStats().then(({ agents }) => {
+      expect(agents[0].delivery.shipped).toBe(1);
+      expect(agents[0].delivery.delivered).toBe(1);
+      expect(agents[0].delivery.rate).toBe(100);
+    });
+  });
+
+  it("separe livrees, retours et livraisons en cours", async () => {
+    stubTables(
+      [ALICE],
+      [
+        { id: "1", reference: "A", phone: "06", status: "Confirme", created_at: at(0),
+          tracking_number: "F-1", delivery_status_code: "DELIVERED" },
+        { id: "2", reference: "B", phone: "06", status: "Confirme", created_at: at(0),
+          tracking_number: "F-2", delivery_status_code: "RETURNED" },
+        { id: "3", reference: "C", phone: "06", status: "Confirme", created_at: at(0),
+          tracking_number: "F-3", delivery_status_code: "DISTRIBUTION" },
+        { id: "4", reference: "D", phone: "06", status: "Confirme", created_at: at(0),
+          tracking_number: "F-4", delivery_status_code: "REFUSE" },
+      ],
+      ["1", "2", "3", "4"].map((id) => statusEvent(id, ALICE, "Confirme", 1))
+    );
+    const { agents } = await getAgentStats();
+    expect(agents[0].delivery).toMatchObject({
+      shipped: 4, delivered: 1, returned: 2, inTransit: 1, notShipped: 0, rate: 25,
+    });
+  });
+
+  it("compte a part une commande confirmee jamais expediee", async () => {
+    stubTables(
+      [ALICE],
+      [
+        { id: "1", reference: "A", phone: "06", status: "Confirme", created_at: at(0),
+          tracking_number: null, delivery_status_code: null },
+        { id: "2", reference: "B", phone: "06", status: "Confirme", created_at: at(0),
+          tracking_number: "F-2", delivery_status_code: "DELIVERED" },
+      ],
+      ["1", "2"].map((id) => statusEvent(id, ALICE, "Confirme", 1))
+    );
+    const { agents } = await getAgentStats();
+    // Le taux porte sur ce qui est parti, pas sur ce qui aurait du partir.
+    expect(agents[0].delivery).toMatchObject({
+      shipped: 1, delivered: 1, notShipped: 1, rate: 100,
+    });
+  });
+
+  it("ne compte pas deux fois une commande confirmee par deux agents", async () => {
+    stubTables(
+      [ALICE, BOB],
+      [{ id: "1", reference: "A", phone: "06", status: "Confirme", created_at: at(0),
+         tracking_number: "F-1", delivery_status_code: "DELIVERED" }],
+      [statusEvent("1", ALICE, "Confirme", 1), statusEvent("1", BOB, "EXPIDER", 2, "Confirme")]
+    );
+    // `delivery` est au niveau du resultat, a cote de `team`.
+    const { delivery } = await getAgentStats();
+    expect(delivery.shipped).toBe(1);
+    expect(delivery.delivered).toBe(1);
+  });
+
+  it("ne rend aucun taux sans commande expediee", async () => {
+    stubTables(
+      [ALICE],
+      [{ id: "1", reference: "A", phone: "06", status: "Nouveau", created_at: at(0) }],
+      [statusEvent("1", ALICE, "Pas de rep 1", 1)]
+    );
+    const { agents } = await getAgentStats();
+    expect(agents[0].delivery).toMatchObject({ shipped: 0, delivered: 0, rate: 0 });
   });
 });
