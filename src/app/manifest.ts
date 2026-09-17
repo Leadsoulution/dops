@@ -12,6 +12,10 @@ import type { MetadataRoute } from "next";
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
+    // Identite stable de l'application, independante de `start_url` :
+    // sans elle, deplacer la page d'accueil creerait une seconde
+    // application au lieu de mettre a jour celle qui est installee.
+    id: "/",
     name: "Orderly - Gestion des commandes",
     short_name: "Orderly",
     description:

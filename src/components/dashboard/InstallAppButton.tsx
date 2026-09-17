@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { Check, Download, Share, X } from "lucide-react";
+import { AlertTriangle, Check, Download, Share, X } from "lucide-react";
 
 /**
  * Installation d'Orderly comme application.
@@ -50,6 +50,22 @@ function isIOSDevice() {
   return /iPad|iPhone|iPod/.test(ua) && !/CriOS|FxiOS/.test(ua);
 }
 
+/**
+ * Android, mais pas dans Chrome.
+ *
+ * L'application installee depuis le navigateur est un vrai paquet
+ * Android, fabrique par le navigateur — pas par nous. Rien dans le
+ * manifeste ne decide de la version d'Android qu'il vise, et Play
+ * Protect refuse ceux qui visent trop vieux : "Unsafe app blocked, this
+ * app was built for an older version of Android". Ceux que fabrique
+ * Chrome ne posent pas ce probleme.
+ */
+function isAndroidOutsideChrome() {
+  const ua = window.navigator.userAgent;
+  if (!/Android/.test(ua)) return false;
+  return /SamsungBrowser|FxiOS|Firefox|OPR|OPX|UCBrowser|MiuiBrowser/.test(ua);
+}
+
 export default function InstallAppButton() {
   const [prompt, setPrompt] = useState<InstallPromptEvent | null>(null);
   const [justInstalled, setJustInstalled] = useState(false);
@@ -61,6 +77,11 @@ export default function InstallAppButton() {
     () => false
   );
   const isIOS = useSyncExternalStore(subscribeNothing, isIOSDevice, () => false);
+  const androidOtherBrowser = useSyncExternalStore(
+    subscribeNothing,
+    isAndroidOutsideChrome,
+    () => false
+  );
   const installed = standalone || justInstalled;
 
   useEffect(() => {
@@ -156,19 +177,29 @@ export default function InstallAppButton() {
   if (!prompt) return null;
 
   return (
-    <button
-      onClick={async () => {
-        await prompt.prompt();
-        const choice = await prompt.userChoice;
-        if (choice.outcome === "accepted") setJustInstalled(true);
-        // Un evenement ne se rejoue pas : le navigateur en emettra un
-        // nouveau s'il juge l'installation toujours possible.
-        setPrompt(null);
-      }}
-      className="flex w-full items-center gap-2.5 rounded-lg bg-blue-600/10 px-3 py-2 text-left text-[13px] font-medium text-blue-300 transition-colors hover:bg-blue-600/20"
-    >
-      <Download className="h-[17px] w-[17px] shrink-0" />
-      <span>Installer l&apos;application</span>
-    </button>
+    <>
+      <button
+        onClick={async () => {
+          await prompt.prompt();
+          const choice = await prompt.userChoice;
+          if (choice.outcome === "accepted") setJustInstalled(true);
+          // Un evenement ne se rejoue pas : le navigateur en emettra un
+          // nouveau s'il juge l'installation toujours possible.
+          setPrompt(null);
+        }}
+        className="flex w-full items-center gap-2.5 rounded-lg bg-blue-600/10 px-3 py-2 text-left text-[13px] font-medium text-blue-300 transition-colors hover:bg-blue-600/20"
+      >
+        <Download className="h-[17px] w-[17px] shrink-0" />
+        <span>Installer l&apos;application</span>
+      </button>
+
+      {androidOtherBrowser && (
+        <p className="mt-1.5 flex items-start gap-2 px-3 text-[11.5px] leading-relaxed text-amber-300/80">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          Installez depuis Chrome : depuis ce navigateur, Android peut
+          refuser l&apos;installation.
+        </p>
+      )}
+    </>
   );
 }
