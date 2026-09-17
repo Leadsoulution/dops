@@ -21,8 +21,6 @@ import {
   UserPlus,
   RefreshCw,
   X,
-  ChevronLeft,
-  ChevronRight,
   MapPin,
   Flag,
   Sparkles,
@@ -43,6 +41,7 @@ import {
   BatteryCharging,
   Loader2,
   AlertCircle,
+  ChevronDown,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import Image from "next/image";
@@ -168,9 +167,11 @@ export default function LeadsCommandesPage() {
   const [confirmDelete, setConfirmDelete] = useState<Lead | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [page, setPage] = useState(1);
-  /** Sur telephone la liste s'allonge au lieu de tourner les pages. */
-  const [mobileCount, setMobileCount] = useState(PAGE_SIZE);
+  /**
+   * Commandes affichees. La liste s'allonge plutot que de se paginer :
+   * un bouton "Voir plus" sur ordinateur, le defilement sur telephone.
+   */
+  const [shownCount, setShownCount] = useState(PAGE_SIZE);
   const mobileSentinel = useRef<HTMLDivElement>(null);
 
   // L'id d'une eventuelle arrivee depuis la recherche globale (?lead=<id>),
@@ -438,20 +439,11 @@ export default function LeadsCommandesPage() {
   const [lastListKey, setLastListKey] = useState(listKey);
   if (lastListKey !== listKey) {
     setLastListKey(listKey);
-    setPage(1);
-    setMobileCount(PAGE_SIZE);
+    setShownCount(PAGE_SIZE);
   }
 
-  const pageCount = Math.max(1, Math.ceil(visibleLeads.length / PAGE_SIZE));
-  // Un filtre qui reduit la liste peut laisser la page courante au-dela
-  // de la fin : on retombe alors sur la derniere page reelle.
-  const currentPage = Math.min(page, pageCount);
-  const pagedLeads = visibleLeads.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE
-  );
-  const mobileLeads = visibleLeads.slice(0, mobileCount);
-  const hasMoreOnMobile = mobileCount < visibleLeads.length;
+  const shownLeads = visibleLeads.slice(0, shownCount);
+  const hasMore = shownCount < visibleLeads.length;
 
   // Telephone : la suite se charge en arrivant au bas de la liste,
   // plutot qu'en visant une fleche au pouce.
@@ -462,7 +454,7 @@ export default function LeadsCommandesPage() {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) {
-          setMobileCount((n) => n + PAGE_SIZE);
+          setShownCount((n) => n + PAGE_SIZE);
         }
       },
       // Declenche un peu avant le bord : la suite est prete quand on y
@@ -471,7 +463,7 @@ export default function LeadsCommandesPage() {
     );
     observer.observe(target);
     return () => observer.disconnect();
-  }, [mobileLeads.length, hasMoreOnMobile]);
+  }, [shownLeads.length, hasMore]);
 
 
   const allVisibleSelected =
@@ -1088,7 +1080,7 @@ export default function LeadsCommandesPage() {
                   </td>
                 </tr>
               )}
-              {pagedLeads.map((lead) => (
+              {shownLeads.map((lead) => (
                 <tr
                   key={lead.id}
                   onClick={() => setModal({ type: "details", lead })}
@@ -1291,42 +1283,24 @@ export default function LeadsCommandesPage() {
           </table>
         </div>
 
-        <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3">
-          <p className="text-[12px] text-gray-500">
-            <span className="font-mono">
-              {visibleLeads.length === 0
-                ? 0
-                : (currentPage - 1) * PAGE_SIZE + 1}
-              -{Math.min(currentPage * PAGE_SIZE, visibleLeads.length)} /{" "}
-              {visibleLeads.length}
-            </span>{" "}
-            resultats
-          </p>
-          <div className="flex items-center gap-2">
+        {/*
+          La liste s'allonge d'un clic plutot que de se paginer : on garde
+          sous les yeux ce qu'on vient de lire au lieu de le remplacer.
+        */}
+        {hasMore && (
+          <div className="flex justify-center border-t border-gray-100 px-5 py-3">
             <button
-              onClick={() => setPage(currentPage - 1)}
-              disabled={currentPage <= 1}
-              title="Page precedente"
-              className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:text-gray-300 disabled:hover:bg-transparent"
+              onClick={() => setShownCount((n) => n + PAGE_SIZE)}
+              className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 py-2 text-[12.5px] font-medium text-gray-700 hover:bg-gray-50"
             >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </button>
-            <span className="text-[12px] text-gray-600">
-              Page{" "}
-              <span className="font-mono">
-                {currentPage} / {pageCount}
+              <ChevronDown className="h-3.5 w-3.5" />
+              Voir plus
+              <span className="font-mono text-gray-400">
+                ({shownLeads.length}/{visibleLeads.length})
               </span>
-            </span>
-            <button
-              onClick={() => setPage(currentPage + 1)}
-              disabled={currentPage >= pageCount}
-              title="Page suivante"
-              className="flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:text-gray-300 disabled:hover:bg-transparent"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
-        </div>
+        )}
       </div>
 
       <div className="space-y-3 lg:hidden">
@@ -1342,7 +1316,7 @@ export default function LeadsCommandesPage() {
             <p className="text-[13px]">Aucune commande dans cette categorie.</p>
           </div>
         )}
-        {mobileLeads.map((lead) => {
+        {shownLeads.map((lead) => {
           const actions = getRowActions(lead);
           return (
             <div
@@ -1476,10 +1450,10 @@ export default function LeadsCommandesPage() {
           suite se charge. Un bouton reste dessous pour les navigateurs
           sans observateur d'intersection, et pour qui prefere cliquer.
         */}
-        {hasMoreOnMobile && (
+        {hasMore && (
           <div ref={mobileSentinel} className="pt-1">
             <button
-              onClick={() => setMobileCount((n) => n + PAGE_SIZE)}
+              onClick={() => setShownCount((n) => n + PAGE_SIZE)}
               className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-3 text-[12.5px] font-medium text-gray-500"
             >
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1488,7 +1462,7 @@ export default function LeadsCommandesPage() {
           </div>
         )}
 
-        {!loading && !hasMoreOnMobile && visibleLeads.length > PAGE_SIZE && (
+        {!loading && !hasMore && visibleLeads.length > PAGE_SIZE && (
           <p className="py-3 text-center text-[12px] text-gray-400">
             {visibleLeads.length} commandes affichees
           </p>
