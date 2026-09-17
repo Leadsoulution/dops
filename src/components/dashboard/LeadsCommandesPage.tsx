@@ -1291,11 +1291,11 @@ export default function LeadsCommandesPage() {
           <div className="flex justify-center border-t border-gray-100 px-5 py-3">
             <button
               onClick={() => setShownCount((n) => n + PAGE_SIZE)}
-              className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 py-2 text-[12.5px] font-medium text-gray-700 hover:bg-gray-50"
+              className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-[12.5px] font-medium text-white hover:bg-blue-700"
             >
               <ChevronDown className="h-3.5 w-3.5" />
               Voir plus
-              <span className="font-mono text-gray-400">
+              <span className="font-mono text-blue-200">
                 ({shownLeads.length}/{visibleLeads.length})
               </span>
             </button>
