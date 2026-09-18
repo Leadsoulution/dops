@@ -61,8 +61,27 @@ export type AgentStats = {
   delivery: DeliveryStats;
 };
 
+/**
+ * Ce qu'un produit donne, de la confirmation a la livraison.
+ *
+ * Deux produits ne se confirment pas au meme rythme et ne se livrent pas
+ * aussi bien : un taux global les confond, alors que c'est la comparaison
+ * entre eux qui dit lequel vaut la peine d'etre pousse.
+ */
+export type ProductStats = {
+  product: string;
+  image?: string;
+  treated: number;
+  contacted: number;
+  confirmed: number;
+  confirmRate: number;
+  delivery: DeliveryStats;
+};
+
 export type TeamStats = {
   agents: AgentStats[];
+  /** Du plus traite au moins traite. */
+  products: ProductStats[];
   team: {
     treated: number;
     contacted: number;

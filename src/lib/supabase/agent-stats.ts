@@ -5,6 +5,7 @@ import type {
   AgentAction,
   AgentStats,
   DeliveryStats,
+  ProductStats,
   TeamStats,
 } from "@/components/dashboard/confirmation-data";
 
@@ -158,6 +159,7 @@ type LeadRow = {
   created_at: string;
   tracking_number: string | null;
   delivery_status_code: string | null;
+  product_name: string | null;
 };
 
 export async function getAgentStats(
@@ -166,7 +168,7 @@ export async function getAgentStats(
 ): Promise<TeamStats> {
   const supabase = getSupabaseServerClient();
 
-  const [profilesRes, leadsRes] = await Promise.all([
+  const [profilesRes, leadsRes, productsRes] = await Promise.all([
     supabase
       .from("profiles")
       .select("id,name,email,role,status,avatar_color")
@@ -174,8 +176,9 @@ export async function getAgentStats(
     supabase
       .from("leads")
       .select(
-        "id,reference,phone,status,created_at,tracking_number,delivery_status_code"
+        "id,reference,phone,status,created_at,tracking_number,delivery_status_code,product_name"
       ),
+    supabase.from("products").select("name,image").not("image", "is", null),
   ]);
 
   if (profilesRes.error) throw new Error(profilesRes.error.message);
@@ -350,8 +353,56 @@ export async function getAgentStats(
     if (leadEvents.length > 1) teamHandling.push(last - first);
   }
 
+  // Ventilation par produit. Les memes definitions que pour l'equipe,
+  // appliquees a un sous-ensemble : traitees, contactees, confirmees, et
+  // le devenir des confirmees chez le transporteur.
+  const byProduct = new Map<
+    string,
+    { treated: Set<string>; contacted: Set<string>; confirmed: Set<string> }
+  >();
+
+  const productOf = (leadId: string) =>
+    (leads.get(leadId)?.product_name ?? "").trim() || "Sans produit";
+
+  for (const event of events) {
+    if (!creditedTo(event)) continue;
+    const key = productOf(event.lead_id);
+    const entry =
+      byProduct.get(key) ??
+      { treated: new Set<string>(), contacted: new Set<string>(), confirmed: new Set<string>() };
+    entry.treated.add(event.lead_id);
+    if (event.field === STATUS_FIELD && event.new_value) {
+      if (REACHED.has(event.new_value)) entry.contacted.add(event.lead_id);
+      if (CONFIRMED.has(event.new_value)) entry.confirmed.add(event.lead_id);
+    }
+    byProduct.set(key, entry);
+  }
+
+  const imageByProduct = new Map(
+    ((productsRes.data ?? []) as { name: string; image: string }[]).map((p) => [
+      p.name.trim().toLowerCase(),
+      p.image,
+    ])
+  );
+
+  const products: ProductStats[] = [...byProduct.entries()]
+    .map(([product, entry]) => ({
+      product,
+      image: imageByProduct.get(product.toLowerCase()),
+      treated: entry.treated.size,
+      contacted: entry.contacted.size,
+      confirmed: entry.confirmed.size,
+      confirmRate:
+        entry.treated.size > 0
+          ? Math.round((entry.confirmed.size / entry.treated.size) * 100)
+          : 0,
+      delivery: deliveryOf(entry.confirmed, leads),
+    }))
+    .sort((a, b) => b.treated - a.treated);
+
   return {
     agents,
+    products,
     team: {
       treated: teamTreated.size,
       contacted: teamContacted.size,

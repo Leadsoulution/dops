@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   AlertCircle,
   ArrowRight,
@@ -93,6 +94,13 @@ export default function ConfirmationHome() {
         { value: stats?.team.confirmed ?? 0, label: "Confirmees" },
         { value: stats?.team.contacted ?? 0, label: "Contactes" },
       ],
+      columns: ["Traitees", "Confirm.", "Contact."],
+      rows: (stats?.products ?? []).map((p) => ({
+        product: p.product,
+        image: p.image,
+        rate: p.confirmRate,
+        values: [p.treated, p.confirmed, p.contacted],
+      })),
     },
     {
       href: "/confirmation/livraison",
@@ -107,27 +115,46 @@ export default function ConfirmationHome() {
         { value: stats?.delivery.delivered ?? 0, label: "Livrees" },
         { value: stats?.delivery.returned ?? 0, label: "Retours" },
       ],
+      columns: ["Expediees", "Livrees", "Retours"],
+      rows: (stats?.products ?? [])
+        // Un produit jamais expedie n'a rien a dire sur la livraison.
+        .filter((p) => p.delivery.shipped > 0)
+        .map((p) => ({
+          product: p.product,
+          image: p.image,
+          rate: p.delivery.rate,
+          values: [
+            p.delivery.shipped,
+            p.delivery.delivered,
+            p.delivery.returned,
+          ],
+        })),
     },
   ];
 
+  // Un cadre net par section, de sa couleur : on repere la partie qu'on
+  // cherche sans lire les titres.
   const accents = {
     amber: {
       ring: "#d97706",
       bg: "bg-amber-50",
       icon: "text-amber-600",
-      hover: "hover:border-amber-300",
+      border: "border-amber-400 hover:border-amber-500",
+      line: "border-amber-200",
     },
     emerald: {
       ring: "#10b981",
       bg: "bg-emerald-50",
       icon: "text-emerald-600",
-      hover: "hover:border-emerald-300",
+      border: "border-emerald-400 hover:border-emerald-500",
+      line: "border-emerald-200",
     },
     blue: {
       ring: "#2563eb",
       bg: "bg-blue-50",
       icon: "text-blue-600",
-      hover: "hover:border-blue-300",
+      border: "border-blue-400 hover:border-blue-500",
+      line: "border-blue-200",
     },
   };
 
@@ -156,7 +183,7 @@ export default function ConfirmationHome() {
               <Link
                 key={card.href}
                 href={card.href}
-                className={`group flex flex-col rounded-xl border border-gray-200 bg-white p-5 transition-colors ${a.hover}`}
+                className={`group flex flex-col rounded-xl border-2 bg-white p-5 transition-colors ${a.border}`}
               >
                 <div className="mb-4 flex items-start gap-3">
                   <div
@@ -175,7 +202,7 @@ export default function ConfirmationHome() {
                   <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-500" />
                 </div>
 
-                <div className="flex items-center gap-5 border-t border-gray-100 pt-4">
+                <div className={`flex items-center gap-5 border-t pt-4 ${a.line}`}>
                   <div className="flex shrink-0 flex-col items-center gap-1.5">
                     <DonutRing
                       percent={card.percent}
@@ -200,6 +227,85 @@ export default function ConfirmationHome() {
                   </div>
                 </div>
 
+                {card.rows.length > 0 && (
+                  <div className={`mt-4 border-t pt-3 ${a.line}`}>
+                    <p className="mb-1.5 text-[9.5px] font-semibold tracking-wide text-gray-400">
+                      PAR PRODUIT
+                    </p>
+
+                    {/*
+                      Un tableau aligne demande de la largeur. Sur
+                      telephone il ecraserait le nom du produit a deux
+                      lettres, donc les chiffres passent sous le nom,
+                      chacun avec son intitule.
+                    */}
+                    <div className="hidden sm:mb-1 sm:flex sm:items-center sm:gap-2 sm:text-[9.5px] sm:font-semibold sm:tracking-wide sm:text-gray-400">
+                      <span className="min-w-0 flex-1" />
+                      {card.columns.map((c) => (
+                        <span key={c} className="w-16 shrink-0 text-right">
+                          {c.toUpperCase()}
+                        </span>
+                      ))}
+                      <span className="w-11 shrink-0 text-right">TAUX</span>
+                    </div>
+
+                    <div className="space-y-2 sm:space-y-1">
+                      {card.rows.map((row) => (
+                        <div
+                          key={row.product}
+                          className="text-[12px] sm:flex sm:items-center sm:gap-2"
+                        >
+                          <span className="flex min-w-0 items-center gap-1.5 sm:flex-1">
+                            {row.image ? (
+                              <Image
+                                src={row.image}
+                                alt=""
+                                width={20}
+                                height={20}
+                                className="h-5 w-5 shrink-0 rounded object-cover"
+                                unoptimized
+                              />
+                            ) : (
+                              <span className="h-5 w-5 shrink-0 rounded bg-gray-100" />
+                            )}
+                            <span className="truncate text-gray-700">
+                              {row.product}
+                            </span>
+                          </span>
+
+                          {/* Telephone : les chiffres sous le nom, etiquetes. */}
+                          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 pl-[26px] text-[11.5px] text-gray-500 sm:hidden">
+                            {row.values.map((v, i) => (
+                              <span key={i}>
+                                <span className="font-mono text-gray-700">{v}</span>{" "}
+                                {card.columns[i].toLowerCase()}
+                              </span>
+                            ))}
+                            <span className={`font-mono font-semibold ${a.icon}`}>
+                              {row.rate}%
+                            </span>
+                          </span>
+
+                          {/* Ordinateur : en colonnes, sous les intitules. */}
+                          {row.values.map((v, i) => (
+                            <span
+                              key={i}
+                              className="hidden w-16 shrink-0 text-right font-mono text-gray-600 sm:inline"
+                            >
+                              {v}
+                            </span>
+                          ))}
+                          <span
+                            className={`hidden w-11 shrink-0 text-right font-mono font-semibold sm:inline ${a.icon}`}
+                          >
+                            {row.rate}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <p className="mt-4 text-[12.5px] font-medium text-gray-500 group-hover:text-gray-700">
                   Voir le detail par agent
                 </p>
@@ -214,7 +320,7 @@ export default function ConfirmationHome() {
           */}
           <Link
             href="/confirmation/paiement"
-            className="group flex flex-col rounded-xl border border-gray-200 bg-white p-5 transition-colors hover:border-amber-300 lg:col-span-2"
+            className="group flex flex-col rounded-xl border-2 border-amber-400 bg-white p-5 transition-colors hover:border-amber-500 lg:col-span-2"
           >
             <div className="mb-4 flex items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50">
@@ -234,7 +340,7 @@ export default function ConfirmationHome() {
               <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-500" />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 border-t border-gray-100 pt-4 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4 border-t border-amber-200 pt-4 sm:grid-cols-4">
               <Figure value={delivered} label="Commandes livrees" />
               <Figure value={paidCount} label="Payees" tone="text-emerald-600" />
               <Figure
@@ -252,7 +358,7 @@ export default function ConfirmationHome() {
               </div>
             </div>
 
-            <p className="mt-4 border-t border-gray-100 pt-3 text-[12px] text-gray-500">
+            <p className="mt-4 border-t border-amber-200 pt-3 text-[12px] text-gray-500">
               {lastPayment ? (
                 <>
                   Dernier paiement le{" "}
