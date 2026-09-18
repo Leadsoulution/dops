@@ -28,6 +28,7 @@ type Lead = {
   created_at: string;
   tracking_number?: string | null;
   delivery_status_code?: string | null;
+  product_name?: string | null;
 };
 
 type Event = {
