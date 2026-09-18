@@ -4,7 +4,11 @@ import {
   getIntegrationSettings,
   saveIntegrationSettings,
 } from "@/lib/supabase/integrations";
-import { MESSAGE_STATUSES } from "@/lib/whatsapp";
+import {
+  DELIVERY_PREFIX,
+  DELIVERY_STATUSES,
+  MESSAGE_STATUSES,
+} from "@/lib/whatsapp";
 
 /**
  * Modeles de messages WhatsApp, un par statut.
@@ -50,11 +54,19 @@ export async function PUT(request: Request) {
     // Seuls les statuts existants sont retenus, et un modele vide n'est
     // pas enregistre : il signifie "reprendre le texte par defaut", et
     // le stocker figerait une chaine vide a sa place.
+    // Deux familles de cles : les statuts de confirmation, et les codes
+    // de livraison prefixes. Les lister explicitement empeche qu'une cle
+    // arbitraire n'entre dans les reglages.
+    const known = [
+      ...MESSAGE_STATUSES,
+      ...DELIVERY_STATUSES.map((s) => DELIVERY_PREFIX + s.code),
+    ];
+
     const templates: Record<string, string> = {};
-    for (const status of MESSAGE_STATUSES) {
-      const value = incoming[status];
+    for (const key of known) {
+      const value = incoming[key];
       if (typeof value === "string" && value.trim()) {
-        templates[status] = value;
+        templates[key] = value;
       }
     }
 

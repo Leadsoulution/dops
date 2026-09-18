@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
+  DELIVERY_PREFIX,
+  DELIVERY_STATUSES,
+  messageKeyFor,
+  messageLabelFor,
   MESSAGE_STATUSES,
   defaultTemplate,
   fillTemplate,
@@ -128,5 +132,63 @@ describe("whatsappLink", () => {
   it("encode les retours a la ligne du message", () => {
     const link = whatsappLink(ORDER, "Ligne 1\nLigne 2");
     expect(link).toContain("Ligne%201%0ALigne%202");
+  });
+});
+
+describe("choix du message selon l'etape", () => {
+  const base = { status: "Nouveau", deliveryStatusCode: undefined };
+
+  it("parle de confirmation tant que la commande n'est pas confirmee", () => {
+    expect(messageKeyFor({ ...base, status: "Pas de rep 1" })).toBe("Pas de rep 1");
+    expect(messageKeyFor({ ...base, status: "En attente" })).toBe("En attente");
+  });
+
+  it("parle de livraison des que le colis est parti", () => {
+    // Le cas demande : confirmee et en cours de livraison.
+    expect(
+      messageKeyFor({ status: "Confirme", deliveryStatusCode: "DISTRIBUTION" })
+    ).toBe("livraison:DISTRIBUTION");
+    expect(
+      messageKeyFor({ status: "EXPIDER", deliveryStatusCode: "DELIVERED" })
+    ).toBe("livraison:DELIVERED");
+  });
+
+  it("garde le message de confirmation tant qu'aucun colis n'existe", () => {
+    // Confirmee mais pas encore chez le transporteur.
+    expect(messageKeyFor({ status: "Confirme" })).toBe("Confirme");
+  });
+
+  it("ignore le statut de livraison d'une commande annulee", () => {
+    // Annulee apres expedition : c'est l'annulation qui prime.
+    expect(
+      messageKeyFor({ status: "Annulee", deliveryStatusCode: "RETURNED" })
+    ).toBe("Annulee");
+  });
+
+  it("donne au bouton l'intitule lisible du statut", () => {
+    expect(messageLabelFor("livraison:DISTRIBUTION")).toBe("En cours de livraison");
+    expect(messageLabelFor("livraison:DELIVERED")).toBe("Livre");
+    expect(messageLabelFor("Pas de rep 1")).toBe("Pas de rep 1");
+  });
+
+  it("propose un texte pour chaque statut de livraison", () => {
+    for (const s of DELIVERY_STATUSES) {
+      const text = templateFor(DELIVERY_PREFIX + s.code, undefined);
+      expect(text.length).toBeGreaterThan(20);
+      expect(text).toContain("{produit}");
+      expect(text).toContain("{prix}");
+    }
+  });
+
+  it("parle bien de livraison en cours pour un colis en distribution", () => {
+    expect(templateFor("livraison:DISTRIBUTION", undefined)).toContain(
+      "en cours de livraison"
+    );
+  });
+
+  it("prefere le modele enregistre au texte propose", () => {
+    expect(
+      templateFor("livraison:DELIVERED", { "livraison:DELIVERED": "Mon texte" })
+    ).toBe("Mon texte");
   });
 });

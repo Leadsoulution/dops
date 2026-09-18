@@ -9,11 +9,13 @@ import {
   RotateCcw,
   Save,
 } from "lucide-react";
-import { LEAD_STATUSES } from "./leads-data";
+import { LEAD_STATUSES, deliveryStatusStyles } from "./leads-data";
 import {
+  DELIVERY_PREFIX,
+  DELIVERY_STATUSES,
   PLACEHOLDERS,
-  defaultTemplate,
   fillTemplate,
+  templateFor,
   type MessageOrder,
 } from "@/lib/whatsapp";
 
@@ -69,16 +71,48 @@ export default function WhatsappMessagesPanel({
   }, []);
 
   /** Le texte en cours d'edition, ou celui propose par defaut. */
-  function textOf(status: string): string {
-    const own = templates?.[status];
-    return own !== undefined ? own : defaultTemplate(status);
+  function textOf(key: string): string {
+    const own = templates?.[key];
+    return own !== undefined ? own : templateFor(key, undefined);
   }
 
   /** Un modele identique au texte propose n'a pas ete personnalise. */
-  function isCustom(status: string): boolean {
-    const own = templates?.[status];
-    return own !== undefined && own.trim() !== defaultTemplate(status).trim();
+  function isCustom(key: string): boolean {
+    const own = templates?.[key];
+    return (
+      own !== undefined &&
+      own.trim() !== templateFor(key, undefined).trim()
+    );
   }
+
+  /**
+   * Les deux familles de messages.
+   *
+   * Avant l'expedition, on parle de la commande : c'est le statut de
+   * confirmation qui commande. Une fois le colis parti, le client n'a
+   * plus rien a confirmer et veut savoir ou il en est : c'est le statut
+   * du transporteur qui prend le relais.
+   */
+  const groupes = [
+    {
+      titre: "Avant l'expedition — statut de confirmation",
+      aide: "Utilise tant que la commande n'est pas partie chez le transporteur.",
+      entrees: LEAD_STATUSES.map((s) => ({
+        key: s.label as string,
+        label: s.label as string,
+        badge: s.badge as string,
+      })),
+    },
+    {
+      titre: "Apres l'expedition — statut de livraison",
+      aide: "Prend le relais des que le colis est chez le transporteur.",
+      entrees: DELIVERY_STATUSES.map((s) => ({
+        key: DELIVERY_PREFIX + s.code,
+        label: s.label,
+        badge: deliveryStatusStyles[s.code] ?? "bg-gray-100 text-gray-600",
+      })),
+    },
+  ];
 
   function setText(status: string, value: string) {
     setTemplates((prev) => ({ ...(prev ?? {}), [status]: value }));
@@ -154,64 +188,74 @@ export default function WhatsappMessagesPanel({
           Lecture des messages...
         </p>
       ) : (
-        <div className="divide-y divide-gray-100 rounded-lg border border-gray-100">
-          {LEAD_STATUSES.map((status) => {
-            const label = status.label as string;
-            const open = openStatus === label;
-            return (
-              <div key={label}>
-                <button
-                  onClick={() => setOpenStatus(open ? null : label)}
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-gray-50"
-                >
-                  <span
-                    className={`shrink-0 rounded-md px-2 py-1 text-[11.5px] font-medium ${status.badge}`}
-                  >
-                    {label}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-[12px] text-gray-400">
-                    {textOf(label).split("\n")[0]}
-                  </span>
-                  {isCustom(label) && (
-                    <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[10.5px] font-medium text-blue-600">
-                      Personnalise
-                    </span>
-                  )}
-                </button>
+        <div className="space-y-4">
+          {groupes.map((groupe) => (
+            <div key={groupe.titre}>
+              <p className="text-[12px] font-semibold text-gray-700">
+                {groupe.titre}
+              </p>
+              <p className="mb-1.5 text-[11.5px] text-gray-400">{groupe.aide}</p>
 
-                {open && (
-                  <div className="space-y-2 border-t border-gray-100 bg-gray-50/60 px-3 py-3">
-                    <textarea
-                      value={textOf(label)}
-                      onChange={(e) => setText(label, e.target.value)}
-                      disabled={!isAdmin}
-                      rows={7}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12.5px] text-gray-700 focus:border-blue-400 focus:outline-none disabled:bg-gray-100 disabled:text-gray-500"
-                    />
-
-                    <div>
-                      <p className="mb-1 text-[11px] font-semibold tracking-wide text-gray-500">
-                        APERCU
-                      </p>
-                      <p className="whitespace-pre-wrap rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-[12.5px] text-gray-700">
-                        {fillTemplate(textOf(label), SAMPLE)}
-                      </p>
-                    </div>
-
-                    {isAdmin && isCustom(label) && (
+              <div className="divide-y divide-gray-100 rounded-lg border border-gray-100">
+                {groupe.entrees.map((entree) => {
+                  const open = openStatus === entree.key;
+                  return (
+                    <div key={entree.key}>
                       <button
-                        onClick={() => reset(label)}
-                        className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 hover:text-gray-700"
+                        onClick={() => setOpenStatus(open ? null : entree.key)}
+                        className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-gray-50"
                       >
-                        <RotateCcw className="h-3 w-3" />
-                        Revenir au texte propose
+                        <span
+                          className={`shrink-0 rounded-md px-2 py-1 text-[11.5px] font-medium ${entree.badge}`}
+                        >
+                          {entree.label}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-[12px] text-gray-400">
+                          {textOf(entree.key).split("\n")[0]}
+                        </span>
+                        {isCustom(entree.key) && (
+                          <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[10.5px] font-medium text-blue-600">
+                            Personnalise
+                          </span>
+                        )}
                       </button>
-                    )}
-                  </div>
-                )}
+
+                      {open && (
+                        <div className="space-y-2 border-t border-gray-100 bg-gray-50/60 px-3 py-3">
+                          <textarea
+                            value={textOf(entree.key)}
+                            onChange={(e) => setText(entree.key, e.target.value)}
+                            disabled={!isAdmin}
+                            rows={7}
+                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-[12.5px] text-gray-700 focus:border-blue-400 focus:outline-none disabled:bg-gray-100 disabled:text-gray-500"
+                          />
+
+                          <div>
+                            <p className="mb-1 text-[11px] font-semibold tracking-wide text-gray-500">
+                              APERCU
+                            </p>
+                            <p className="whitespace-pre-wrap rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-[12.5px] text-gray-700">
+                              {fillTemplate(textOf(entree.key), SAMPLE)}
+                            </p>
+                          </div>
+
+                          {isAdmin && isCustom(entree.key) && (
+                            <button
+                              onClick={() => reset(entree.key)}
+                              className="flex items-center gap-1.5 text-[12px] font-medium text-gray-500 hover:text-gray-700"
+                            >
+                              <RotateCcw className="h-3 w-3" />
+                              Revenir au texte propose
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       )}
 

@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import { Check, ChevronDown, Loader2, MessageCircle, Phone } from "lucide-react";
 import { LEAD_STATUSES, type Lead, type LeadStatus } from "./leads-data";
-import { templateFor, whatsappLink, whatsappNumber } from "@/lib/whatsapp";
+import {
+  messageKeyFor,
+  messageLabelFor,
+  templateFor,
+  whatsappLink,
+  whatsappNumber,
+} from "@/lib/whatsapp";
 import ConfirmDialog from "./ConfirmDialog";
 
 /**
@@ -53,9 +59,11 @@ export default function CallOutcomePanel({
     };
   }, []);
 
-  // Le message suit le statut du moment : une commande sans reponse
-  // n'appelle pas le meme mot qu'une commande confirmee.
-  const message = templateFor(lead.status, templates);
+  // Le message suit ce dont le client a besoin d'entendre parler. Tant
+  // que la commande n'est pas confirmee, c'est la commande ; une fois
+  // partie chez le transporteur, c'est ou se trouve son colis.
+  const messageKey = messageKeyFor(lead);
+  const message = templateFor(messageKey, templates);
   const reachable = Boolean(whatsappNumber(lead.phone));
 
   async function apply(status: LeadStatus) {
@@ -97,7 +105,7 @@ export default function CallOutcomePanel({
           className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-[#25D366] py-2.5 text-[13.5px] font-medium text-white hover:bg-[#1eb855]"
         >
           <MessageCircle className="h-4 w-4" />
-          WhatsApp &mdash; {lead.status}
+          WhatsApp &mdash; {messageLabelFor(messageKey)}
         </a>
       ) : (
         <p className="mt-2 rounded-lg border border-gray-200 py-2 text-center text-[12px] text-gray-400">

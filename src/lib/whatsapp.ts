@@ -140,6 +140,151 @@ export function defaultTemplate(status: string): string {
 export const MESSAGE_STATUSES = LEAD_STATUSES.map((s) => s.label as string);
 
 /**
+ * Statuts de livraison du transporteur, pour lesquels un message existe
+ * aussi. Ranges sous leur code machine et non sous leur libelle : le
+ * transporteur renomme ses statuts — "Expedie vers la ville" est devenu
+ * "Recu ville" — et un modele range sous l'ancien nom serait perdu.
+ */
+export const DELIVERY_STATUSES: { code: string; label: string }[] = [
+  { code: "NEW_PARCEL", label: "Nouveau colis" },
+  { code: "WAITING_PICKUP", label: "Attente de ramassage" },
+  { code: "TSUIVI", label: "Traitement suivi en cours" },
+  { code: "DISTRIBUTION", label: "En cours de livraison" },
+  { code: "PROGRAMMED", label: "Programme" },
+  { code: "POSTPONED", label: "Reporte" },
+  { code: "NO_ANSWER", label: "Pas de reponse (livreur)" },
+  { code: "UNREACHABLE", label: "Injoignable (livreur)" },
+  { code: "UNREACHABLE_TEAM", label: "Injoignable (suivi)" },
+  { code: "OUT_OF_AREA", label: "Hors zone" },
+  { code: "RELAUNCH", label: "Relancer" },
+  { code: "DELIVERED", label: "Livre" },
+  { code: "RETURNED", label: "Retourne" },
+  { code: "CANCELED", label: "Annule" },
+];
+
+/**
+ * Prefixe des modeles de livraison dans les reglages. Il evite qu'un
+ * code transporteur et un statut de confirmation ne se disputent la
+ * meme entree.
+ */
+export const DELIVERY_PREFIX = "livraison:";
+
+/** Statuts de confirmation apres lesquels la commande est partie. */
+const CONFIRMED = new Set(["Confirme", "EXPIDER"]);
+
+/**
+ * De quoi parler au client : de sa confirmation, ou de sa livraison ?
+ *
+ * Tant que la commande n'est pas confirmee, le sujet est la commande
+ * elle-meme. Une fois partie chez le transporteur, le client n'a plus
+ * rien a confirmer : ce qui l'interesse est ou se trouve son colis.
+ */
+export function messageKeyFor(lead: {
+  status: string;
+  deliveryStatusCode?: string;
+}): string {
+  if (CONFIRMED.has(lead.status) && lead.deliveryStatusCode) {
+    return DELIVERY_PREFIX + lead.deliveryStatusCode;
+  }
+  return lead.status;
+}
+
+/** L'intitule a porter sur le bouton, pour la cle retenue. */
+export function messageLabelFor(key: string): string {
+  if (!key.startsWith(DELIVERY_PREFIX)) return key;
+  const code = key.slice(DELIVERY_PREFIX.length);
+  return DELIVERY_STATUSES.find((s) => s.code === code)?.label ?? code;
+}
+
+/** Le texte propose pour un statut de livraison. */
+export function defaultDeliveryTemplate(code: string): string {
+  const recap =
+    "Commande : {produit} (x{quantite})\n" +
+    "Prix a payer a la livraison : {prix}\n" +
+    "Adresse : {adresse}\n" +
+    "Reference : {reference}";
+  const suivi = "\n\nCode de suivi : {suivi}";
+
+  switch (code) {
+    case "NEW_PARCEL":
+    case "WAITING_PICKUP":
+    case "TSUIVI":
+      return (
+        "Bonjour {prenom}, votre commande est prete et part chez notre " +
+        "transporteur.\n\n" +
+        recap +
+        "\n\nVous serez prevenu des que le livreur prend la route."
+      );
+    case "DISTRIBUTION":
+      return (
+        "Bonjour {prenom}, votre colis est en cours de livraison " +
+        "aujourd'hui.\n\n" +
+        recap +
+        suivi +
+        "\n\nMerci de rester joignable, le livreur vous appellera."
+      );
+    case "PROGRAMMED":
+      return (
+        "Bonjour {prenom}, votre livraison est programmee.\n\n" +
+        recap +
+        suivi +
+        "\n\nLe livreur vous contactera avant de passer."
+      );
+    case "POSTPONED":
+      return (
+        "Bonjour {prenom}, votre livraison a ete reportee.\n\n" +
+        recap +
+        "\n\nQuel jour vous conviendrait pour une nouvelle tentative ?"
+      );
+    case "NO_ANSWER":
+    case "UNREACHABLE":
+    case "UNREACHABLE_TEAM":
+      return (
+        "Bonjour {prenom}, notre livreur a essaye de vous joindre sans " +
+        "succes pour vous remettre votre colis.\n\n" +
+        recap +
+        suivi +
+        "\n\nMerci de nous indiquer quand vous serez disponible."
+      );
+    case "OUT_OF_AREA":
+      return (
+        "Bonjour {prenom}, votre adresse se trouve hors de notre zone de " +
+        "livraison habituelle.\n\n" +
+        recap +
+        "\n\nPouvez-vous nous indiquer une autre adresse de livraison ?"
+      );
+    case "RELAUNCH":
+      return (
+        "Bonjour {prenom}, nous relancons la livraison de votre " +
+        "commande.\n\n" +
+        recap +
+        suivi
+      );
+    case "DELIVERED":
+      return (
+        "Bonjour {prenom}, votre commande vous a bien ete remise. Merci " +
+        "de votre confiance !\n\n" +
+        recap +
+        "\n\nN'hesitez pas a nous ecrire si quelque chose ne va pas."
+      );
+    case "RETURNED":
+    case "CANCELED":
+      return (
+        "Bonjour {prenom}, votre colis nous est revenu sans avoir pu vous " +
+        "etre remis.\n\n" +
+        recap +
+        "\n\nSouhaitez-vous que nous tentions une nouvelle livraison ?"
+      );
+    default:
+      return (
+        "Bonjour {prenom}, voici des nouvelles de votre commande.\n\n" +
+        recap +
+        suivi
+      );
+  }
+}
+
+/**
  * Remplace les champs entre accolades par leurs valeurs. Un champ
  * inconnu est laisse tel quel : mieux vaut le voir dans le message que
  * de l'effacer en silence, l'agent comprend alors qu'il s'est trompe.
@@ -179,11 +324,17 @@ export function whatsappLink(order: MessageOrder, template: string): string {
   return `https://wa.me/${number}?text=${text}`;
 }
 
-/** Le modele enregistre pour ce statut, ou celui propose par defaut. */
+/**
+ * Le modele enregistre pour cette cle, ou celui propose par defaut.
+ * La cle est un statut de confirmation, ou un code de livraison prefixe.
+ */
 export function templateFor(
-  status: string,
+  key: string,
   saved: Record<string, string> | undefined
 ): string {
-  const own = saved?.[status];
-  return own && own.trim() ? own : defaultTemplate(status);
+  const own = saved?.[key];
+  if (own && own.trim()) return own;
+  return key.startsWith(DELIVERY_PREFIX)
+    ? defaultDeliveryTemplate(key.slice(DELIVERY_PREFIX.length))
+    : defaultTemplate(key);
 }
