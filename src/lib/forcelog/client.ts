@@ -251,22 +251,63 @@ export function getParcels(
  * Renvoie, pour les colis recents, le statut de livraison et le statut de
  * paiement, indexes par numero de suivi.
  */
+/** Plafond constate de LIMIT : au-dela, la reponse reste a cent colis. */
+const MAX_PARCELS_PER_CALL = 100;
+
+type ParcelStatus = { status: string; statusCode: string; situation: string };
+
+function toStatus(parcel: ForceLogParcel): ParcelStatus {
+  return {
+    status: parcel.STATUS ?? "",
+    statusCode: parcel.STATUS_CODE ?? "",
+    situation: parcel.SITUATION ?? "",
+  };
+}
+
+/**
+ * Statuts des colis suivis.
+ *
+ * Un seul appel ramene les cent derniers, ce qui couvre largement une
+ * semaine d'activite. Les numeros qui n'y figurent pas — un colis ancien
+ * encore en cours, ou un volume superieur a cent sur la periode — sont
+ * demandes un par un : `CODE` rend exactement ce colis, quel que soit son
+ * age.
+ *
+ * Cette recherche individuelle n'existait pas avant le 18 septembre
+ * 2026 : l'API ne rendait alors que vingt colis, sans pagination ni
+ * recherche, et les statuts plus anciens etaient irrattrapables.
+ */
 export async function getRecentParcelStatuses(
-  apiKey: string
-): Promise<Map<string, { status: string; statusCode: string; situation: string }>> {
-  const { PARCELS } = await getParcels(apiKey);
-  const map = new Map<
-    string,
-    { status: string; statusCode: string; situation: string }
-  >();
+  apiKey: string,
+  trackingNumbers: string[] = []
+): Promise<Map<string, ParcelStatus>> {
+  const { PARCELS } = await getParcels(apiKey, { limit: MAX_PARCELS_PER_CALL });
+
+  const map = new Map<string, ParcelStatus>();
   for (const parcel of PARCELS ?? []) {
     if (!parcel.TRACKING_NUMBER) continue;
-    map.set(parcel.TRACKING_NUMBER, {
-      status: parcel.STATUS ?? "",
-      statusCode: parcel.STATUS_CODE ?? "",
-      situation: parcel.SITUATION ?? "",
-    });
+    map.set(parcel.TRACKING_NUMBER, toStatus(parcel));
   }
+
+  const missing = trackingNumbers.filter((code) => code && !map.has(code));
+  if (missing.length === 0) return map;
+
+  // Un colis introuvable ou une erreur ponctuelle ne doit pas emporter
+  // la synchronisation des autres.
+  await Promise.all(
+    missing.map(async (code) => {
+      try {
+        const single = await getParcels(apiKey, { code });
+        const parcel = single.PARCELS?.[0];
+        if (parcel?.TRACKING_NUMBER) {
+          map.set(parcel.TRACKING_NUMBER, toStatus(parcel));
+        }
+      } catch {
+        /* Ce colis restera sur son dernier statut connu. */
+      }
+    })
+  );
+
   return map;
 }
 

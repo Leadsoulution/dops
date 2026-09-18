@@ -53,15 +53,18 @@ function ProductThumb({
 const DELIVERY_CHOICES: { label: string; code: string }[] = [
   { label: "Nouveau Colis", code: "NEW_PARCEL" },
   { label: "Attente De Ramassage", code: "WAITING_PICKUP" },
-  { label: "Recu Hub", code: "SENT" },
+  { label: "Traitement Suivi en cours", code: "TSUIVI" },
   { label: "En cours de livraison", code: "DISTRIBUTION" },
+  { label: "Programme", code: "PROGRAMMED" },
+  { label: "Reporte", code: "POSTPONED" },
+  { label: "Pas de reponse", code: "NO_ANSWER" },
+  { label: "Injoignable", code: "UNREACHABLE" },
+  { label: "Injoignable ( Suivi )", code: "UNREACHABLE_TEAM" },
   { label: "Livre", code: "DELIVERED" },
   { label: "Retourne", code: "RETURNED" },
-  { label: "Refuse", code: "REFUSE" },
-  { label: "Annule ( Suivi )", code: "CANCELED" },
-  { label: "Programme", code: "RELAUNCH" },
-  { label: "Hors zone", code: "OUT_OF_AREA" },
-  { label: "Pas de reponse", code: "NO_ANSWER" },
+  { label: "Annule", code: "CANCELED" },
+  { label: "Hors-zone", code: "OUT_OF_AREA" },
+  { label: "Relancer", code: "RELAUNCH" },
 ];
 
 /** "AAAA-MM-JJ HH:MM" a l'heure du Maroc, comme les dates du transporteur. */

@@ -375,9 +375,13 @@ export const sourceBadgeStyles: Record<LeadSource, string> = {
 
 /**
  * Style des badges de statut de livraison, par code ForceLog.
- * Codes observes sur l'API reelle : NEW_PARCEL, WAITING_PICKUP, SENT,
- * DISTRIBUTION, DELIVERED, RETURNED, REFUSE, CANCELED, RELAUNCH,
- * OUT_OF_AREA, NO_ANSWER.
+ *
+ * Releves sur leur API en service. Un code inconnu retombe sur un gris
+ * neutre plutot que de disparaitre : mieux vaut un badge terne qu'un
+ * statut invisible.
+ *
+ * Les couleurs disent l'issue d'un coup d'oeil : vert remis, rouge
+ * perdu, orange revenu, ambre en attente d'action, bleu en route.
  */
 export const deliveryStatusStyles: Record<string, string> = {
   NEW_PARCEL: "bg-sky-500 text-white",
@@ -391,6 +395,12 @@ export const deliveryStatusStyles: Record<string, string> = {
   RELAUNCH: "bg-violet-500 text-white",
   OUT_OF_AREA: "bg-gray-500 text-white",
   NO_ANSWER: "bg-gray-500 text-white",
+  // Ajoutes apres la mise a jour de leur API, le 18 septembre 2026.
+  POSTPONED: "bg-amber-500 text-white",
+  PROGRAMMED: "bg-violet-500 text-white",
+  TSUIVI: "bg-slate-500 text-white",
+  UNREACHABLE: "bg-gray-500 text-white",
+  UNREACHABLE_TEAM: "bg-gray-600 text-white",
 };
 
 /** Style des badges de statut de paiement (champ SITUATION de ForceLog). */

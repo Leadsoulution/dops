@@ -134,7 +134,10 @@ export async function collectStatusUpdates(
 
   let statuses: Awaited<ReturnType<typeof getRecentParcelStatuses>>;
   try {
-    statuses = await getRecentParcelStatuses(apiKey);
+    statuses = await getRecentParcelStatuses(
+      apiKey,
+      tracked.map((l) => l.trackingNumber!)
+    );
   } catch (error) {
     return {
       updates: new Map(),
