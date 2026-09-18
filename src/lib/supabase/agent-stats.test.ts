@@ -54,6 +54,11 @@ function stubTables(profiles: Profile[], leads: Lead[], events: Event[]) {
     if (table === "leads") {
       return { select: () => ({ data: leads, error: null }) };
     }
+    // Les photos de produits : la ventilation par produit les demande,
+    // et elles n'ont pas d'incidence sur les comptes.
+    if (table === "products") {
+      return { select: () => ({ not: () => ({ data: [], error: null }) }) };
+    }
     let lower: string | undefined;
     let upper: string | undefined;
     const chain = {
@@ -457,5 +462,59 @@ describe("administrateurs", () => {
     // Aucun des deux ne recoit une commande qu'il n'a jamais vue.
     expect(agents.find((a) => a.name === "Alice")!.confirmed).toBe(0);
     expect(agents.find((a) => a.name === "Bob")!.confirmed).toBe(0);
+  });
+});
+
+describe("ventilation par produit", () => {
+  it("compte chaque produit separement", async () => {
+    stubTables(
+      [ALICE],
+      [
+        { id: "1", reference: "A", phone: "06", status: "Confirme", created_at: at(0),
+          product_name: "Collier", tracking_number: "F-1", delivery_status_code: "DELIVERED" },
+        { id: "2", reference: "B", phone: "06", status: "Pas de rep 1", created_at: at(0),
+          product_name: "Collier" },
+        { id: "3", reference: "C", phone: "06", status: "Confirme", created_at: at(0),
+          product_name: "Bracelet", tracking_number: "F-3", delivery_status_code: "RETURNED" },
+      ],
+      [
+        statusEvent("1", ALICE, "Confirme", 1),
+        statusEvent("2", ALICE, "Pas de rep 1", 1),
+        statusEvent("3", ALICE, "Confirme", 1),
+      ]
+    );
+
+    const { products } = await getAgentStats();
+    const collier = products.find((p) => p.product === "Collier")!;
+    const bracelet = products.find((p) => p.product === "Bracelet")!;
+
+    expect(collier).toMatchObject({ treated: 2, confirmed: 1, confirmRate: 50 });
+    expect(collier.delivery).toMatchObject({ shipped: 1, delivered: 1, rate: 100 });
+    expect(bracelet).toMatchObject({ treated: 1, confirmed: 1, confirmRate: 100 });
+    expect(bracelet.delivery).toMatchObject({ shipped: 1, returned: 1, rate: 0 });
+  });
+
+  it("classe du plus traite au moins traite", async () => {
+    stubTables(
+      [ALICE],
+      [
+        { id: "1", reference: "A", phone: "06", status: "Nouveau", created_at: at(0), product_name: "Rare" },
+        { id: "2", reference: "B", phone: "06", status: "Nouveau", created_at: at(0), product_name: "Courant" },
+        { id: "3", reference: "C", phone: "06", status: "Nouveau", created_at: at(0), product_name: "Courant" },
+      ],
+      ["1", "2", "3"].map((id) => statusEvent(id, ALICE, "Pas de rep 1", 1))
+    );
+    const { products } = await getAgentStats();
+    expect(products.map((p) => p.product)).toEqual(["Courant", "Rare"]);
+  });
+
+  it("regroupe sous un intitule les commandes sans produit", async () => {
+    stubTables(
+      [ALICE],
+      [{ id: "1", reference: "A", phone: "06", status: "Nouveau", created_at: at(0), product_name: null }],
+      [statusEvent("1", ALICE, "Pas de rep 1", 1)]
+    );
+    const { products } = await getAgentStats();
+    expect(products[0].product).toBe("Sans produit");
   });
 });
