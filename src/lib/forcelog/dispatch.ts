@@ -14,6 +14,33 @@ export const AUTO_DISPATCH_STATUS = "Confirme";
 /** Code ForceLog d'un colis remis au client. */
 const DELIVERED_CODE = "DELIVERED";
 
+/** Statuts dont un colis ne ressort plus. */
+const FINAL_CODES = new Set(["DELIVERED", "RETURNED", "CANCELED", "REFUSE"]);
+
+/**
+ * Un colis clos et regle ne changera plus.
+ *
+ * Le statut ne suffit pas : un colis livre reste "Non Paye" tant que le
+ * transporteur ne l'a pas facture, et cette facturation nous interesse.
+ * C'est donc la conjonction des deux qui met un colis hors de la
+ * surveillance — sans quoi un carnet de plusieurs milliers de colis
+ * livres serait relu indefiniment.
+ */
+function isSettled(lead: Lead): boolean {
+  if (!FINAL_CODES.has(lead.deliveryStatusCode ?? "")) return false;
+
+  const situation = (lead.paymentStatus ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "");
+
+  // "Non Paye" contient "paye" : chercher le mot seul classerait un
+  // impaye comme regle, et la commande sortirait de la surveillance
+  // juste avant le moment qui nous interesse.
+  if (situation.startsWith("non")) return false;
+  return situation.includes("factur") || situation.includes("paye");
+}
+
 /**
  * Horodatage "AAAA-MM-JJ HH:MM" a l'heure du Maroc, meme format que les
  * dates renvoyees par ForceLog. Le fuseau est fixe explicitement : le
@@ -124,7 +151,10 @@ export async function dispatchToForceLog(
 export async function collectStatusUpdates(
   leads: Lead[]
 ): Promise<{ updates: Map<string, Partial<Lead>>; checked: number; error?: string }> {
-  const tracked = leads.filter((l) => l.trackingNumber);
+  // On n'interroge que ce qui peut encore bouger : un colis livre et
+  // facture est une ligne close, la redemander a chaque passage coute
+  // sans rien apprendre.
+  const tracked = leads.filter((l) => l.trackingNumber && !isSettled(l));
   if (tracked.length === 0) return { updates: new Map(), checked: 0 };
 
   const apiKey = process.env.FORCELOG_API_KEY;

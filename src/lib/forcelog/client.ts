@@ -252,7 +252,25 @@ export function getParcels(
  * paiement, indexes par numero de suivi.
  */
 /** Plafond constate de LIMIT : au-dela, la reponse reste a cent colis. */
-const MAX_PARCELS_PER_CALL = 100;
+const PAGE_SIZE = 100;
+
+/**
+ * Profondeur maximale parcourue, soit mille deux cents colis. A cent
+ * colis par jour, cela couvre douze jours — bien plus qu'une livraison
+ * ne dure. La borne evite qu'un compte de plusieurs milliers de colis ne
+ * fasse defiler tout son historique a chaque synchronisation.
+ */
+const MAX_PAGES = 12;
+
+/**
+ * Nombre de recherches individuelles tolerees apres la pagination.
+ *
+ * Elles servent aux rares colis plus anciens que la profondeur
+ * parcourue. En faire des centaines reviendrait a marteler leur API a
+ * chaque passage : au-dela de cette borne, les colis restants gardent
+ * leur dernier statut connu jusqu'au tour suivant.
+ */
+const MAX_LOOKUPS = 25;
 
 type ParcelStatus = { status: string; statusCode: string; situation: string };
 
@@ -267,46 +285,53 @@ function toStatus(parcel: ForceLogParcel): ParcelStatus {
 /**
  * Statuts des colis suivis.
  *
- * Un seul appel ramene les cent derniers, ce qui couvre largement une
- * semaine d'activite. Les numeros qui n'y figurent pas — un colis ancien
- * encore en cours, ou un volume superieur a cent sur la periode — sont
- * demandes un par un : `CODE` rend exactement ce colis, quel que soit son
- * age.
+ * Les colis sont lus par pages de cent, de la plus recente a la plus
+ * ancienne, et l'on s'arrete des que tous les numeros demandes ont ete
+ * trouves. Un carnet de trois cents colis en cours coute donc trois
+ * appels, pas trois cents.
  *
- * Cette recherche individuelle n'existait pas avant le 18 septembre
- * 2026 : l'API ne rendait alors que vingt colis, sans pagination ni
- * recherche, et les statuts plus anciens etaient irrattrapables.
+ * Les quelques numeros absents de ces pages — un colis bien plus ancien,
+ * encore ouvert — sont demandes un par un : `CODE` rend exactement ce
+ * colis, quel que soit son age.
+ *
+ * Rien de tout cela n'etait possible avant le 18 septembre 2026 : leur
+ * API ne rendait que vingt colis, sans pagination ni recherche, et un
+ * statut sorti de cette fenetre etait perdu pour de bon.
  */
 export async function getRecentParcelStatuses(
   apiKey: string,
   trackingNumbers: string[] = []
 ): Promise<Map<string, ParcelStatus>> {
-  const { PARCELS } = await getParcels(apiKey, { limit: MAX_PARCELS_PER_CALL });
-
   const map = new Map<string, ParcelStatus>();
-  for (const parcel of PARCELS ?? []) {
-    if (!parcel.TRACKING_NUMBER) continue;
-    map.set(parcel.TRACKING_NUMBER, toStatus(parcel));
+  const remaining = new Set(trackingNumbers.filter(Boolean));
+
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const { PARCELS } = await getParcels(apiKey, { limit: PAGE_SIZE, page });
+    const batch = PARCELS ?? [];
+
+    for (const parcel of batch) {
+      if (!parcel.TRACKING_NUMBER) continue;
+      map.set(parcel.TRACKING_NUMBER, toStatus(parcel));
+      remaining.delete(parcel.TRACKING_NUMBER);
+    }
+
+    // Plus rien a chercher, ou plus rien a lire : inutile de remonter
+    // l'historique du compte au-dela.
+    if (remaining.size === 0 && trackingNumbers.length > 0) break;
+    if (batch.length < PAGE_SIZE) break;
   }
 
-  const missing = trackingNumbers.filter((code) => code && !map.has(code));
-  if (missing.length === 0) return map;
-
-  // Un colis introuvable ou une erreur ponctuelle ne doit pas emporter
-  // la synchronisation des autres.
-  await Promise.all(
-    missing.map(async (code) => {
-      try {
-        const single = await getParcels(apiKey, { code });
-        const parcel = single.PARCELS?.[0];
-        if (parcel?.TRACKING_NUMBER) {
-          map.set(parcel.TRACKING_NUMBER, toStatus(parcel));
-        }
-      } catch {
-        /* Ce colis restera sur son dernier statut connu. */
+  for (const code of [...remaining].slice(0, MAX_LOOKUPS)) {
+    try {
+      const { PARCELS } = await getParcels(apiKey, { code });
+      const parcel = PARCELS?.[0];
+      if (parcel?.TRACKING_NUMBER) {
+        map.set(parcel.TRACKING_NUMBER, toStatus(parcel));
       }
-    })
-  );
+    } catch {
+      /* Ce colis gardera son dernier statut connu. */
+    }
+  }
 
   return map;
 }

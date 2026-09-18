@@ -195,3 +195,67 @@ describe("deliveryTimestamp", () => {
     );
   });
 });
+
+describe("colis clos", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+    vi.stubEnv("FORCELOG_API_KEY", "test-key");
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("cesse d'interroger un colis livre et facture", async () => {
+    // Rien a apprendre de plus : aucun appel ne doit partir.
+    const { updates, checked } = await collectStatusUpdates([
+      lead({
+        deliveryStatus: "Livre",
+        deliveryStatusCode: "DELIVERED",
+        paymentStatus: "Facture",
+      }),
+    ]);
+    expect(checked).toBe(0);
+    expect(updates.size).toBe(0);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("continue d'interroger un colis livre mais pas encore facture", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      parcelsResponse([
+        {
+          TRACKING_NUMBER: "F-AAA",
+          STATUS: "Livre",
+          STATUS_CODE: "DELIVERED",
+          SITUATION: "Facture",
+        },
+      ])
+    );
+    const { checked } = await collectStatusUpdates([
+      lead({
+        deliveryStatus: "Livre",
+        deliveryStatusCode: "DELIVERED",
+        // "Non Paye" contient "paye" : le piege que la regle doit eviter.
+        paymentStatus: "Non Paye",
+      }),
+    ]);
+    expect(checked).toBe(1);
+  });
+
+  it("continue d'interroger un colis encore en route", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      parcelsResponse([
+        {
+          TRACKING_NUMBER: "F-AAA",
+          STATUS: "En cours de livraison",
+          STATUS_CODE: "DISTRIBUTION",
+          SITUATION: "Non Paye",
+        },
+      ])
+    );
+    const { checked } = await collectStatusUpdates([
+      lead({ deliveryStatusCode: "DISTRIBUTION", paymentStatus: "Non Paye" }),
+    ]);
+    expect(checked).toBe(1);
+  });
+});
