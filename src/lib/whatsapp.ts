@@ -196,88 +196,103 @@ export function messageLabelFor(key: string): string {
   return DELIVERY_STATUSES.find((s) => s.code === code)?.label ?? code;
 }
 
-/** Le texte propose pour un statut de livraison. */
+/**
+ * Le texte propose pour un statut de livraison.
+ *
+ * En arabe : passe l'expedition, le client est lu par le livreur comme
+ * par sa famille, et c'est la langue dans laquelle il repond. Les champs
+ * entre accolades restent en caracteres latins, le remplacement portant
+ * sur le nom du champ et non sur la langue.
+ *
+ * La reference interne n'y figure plus : elle ne dit rien au client. A
+ * sa place, la gratuite de la livraison, qui evite une question et un
+ * malentendu au moment de payer.
+ */
 export function defaultDeliveryTemplate(code: string): string {
   const recap =
-    "Commande : {produit} (x{quantite})\n" +
-    "Prix a payer a la livraison : {prix}\n" +
-    "Adresse : {adresse}\n" +
-    "Reference : {reference}";
-  const suivi = "\n\nCode de suivi : {suivi}";
+    "الطلب : {produit} (×{quantite})\n" +
+    "الثمن عند التسليم : {prix}\n" +
+    "العنوان : {adresse}\n" +
+    "التوصيل : مجاني";
+  const suivi = "\n\nرقم التتبع : {suivi}";
+  const bonjour = "مرحبا {prenom}، ";
 
   switch (code) {
     case "NEW_PARCEL":
     case "WAITING_PICKUP":
     case "TSUIVI":
       return (
-        "Bonjour {prenom}, votre commande est prete et part chez notre " +
-        "transporteur.\n\n" +
+        bonjour +
+        "طلبكم جاهز وتم تسليمه لشركة التوصيل.\n\n" +
         recap +
-        "\n\nVous serez prevenu des que le livreur prend la route."
+        "\n\nسنخبركم بمجرد خروج الطلب للتوصيل."
       );
     case "DISTRIBUTION":
       return (
-        "Bonjour {prenom}, votre colis est en cours de livraison " +
-        "aujourd'hui.\n\n" +
+        bonjour +
+        "طلبكم في طريقه إليكم اليوم.\n\n" +
         recap +
         suivi +
-        "\n\nMerci de rester joignable, le livreur vous appellera."
+        "\n\nالمرجو البقاء متاحين، سيتصل بكم عامل التوصيل."
       );
     case "PROGRAMMED":
       return (
-        "Bonjour {prenom}, votre livraison est programmee.\n\n" +
+        bonjour +
+        "تم برمجة توصيل طلبكم.\n\n" +
         recap +
         suivi +
-        "\n\nLe livreur vous contactera avant de passer."
+        "\n\nسيتصل بكم عامل التوصيل قبل المرور."
       );
     case "POSTPONED":
       return (
-        "Bonjour {prenom}, votre livraison a ete reportee.\n\n" +
+        bonjour +
+        "تم تأجيل توصيل طلبكم.\n\n" +
         recap +
-        "\n\nQuel jour vous conviendrait pour une nouvelle tentative ?"
+        "\n\nأي يوم يناسبكم لمحاولة جديدة؟"
       );
     case "NO_ANSWER":
     case "UNREACHABLE":
     case "UNREACHABLE_TEAM":
       return (
-        "Bonjour {prenom}, notre livreur a essaye de vous joindre sans " +
-        "succes pour vous remettre votre colis.\n\n" +
+        bonjour +
+        "حاول عامل التوصيل الاتصال بكم لتسليم الطلب ولم يتمكن من ذلك.\n\n" +
         recap +
         suivi +
-        "\n\nMerci de nous indiquer quand vous serez disponible."
+        "\n\nالمرجو إخبارنا بالوقت المناسب لكم."
       );
     case "OUT_OF_AREA":
       return (
-        "Bonjour {prenom}, votre adresse se trouve hors de notre zone de " +
-        "livraison habituelle.\n\n" +
+        bonjour +
+        "عنوانكم خارج منطقة التوصيل المعتادة.\n\n" +
         recap +
-        "\n\nPouvez-vous nous indiquer une autre adresse de livraison ?"
+        "\n\nهل يمكنكم إعطاؤنا عنوانا آخر للتوصيل؟"
       );
     case "RELAUNCH":
       return (
-        "Bonjour {prenom}, nous relancons la livraison de votre " +
-        "commande.\n\n" +
+        bonjour +
+        "نعيد محاولة توصيل طلبكم.\n\n" +
         recap +
         suivi
       );
     case "DELIVERED":
       return (
-        "Bonjour {prenom}, votre commande vous a bien ete remise. Merci " +
-        "de votre confiance !\n\n" +
+        bonjour +
+        "تم تسليم طلبكم بنجاح. شكرا على ثقتكم!\n\n" +
         recap +
-        "\n\nN'hesitez pas a nous ecrire si quelque chose ne va pas."
+        "\n\nلا تترددوا في مراسلتنا إذا كان هناك أي إشكال."
       );
     case "RETURNED":
     case "CANCELED":
       return (
-        "Bonjour {prenom}, votre colis nous est revenu sans avoir pu vous " +
-        "etre remis.\n\n" +
+        bonjour +
+        "رجع طلبكم إلينا دون أن يتم تسليمه.\n\n" +
         recap +
-        "\n\nSouhaitez-vous que nous tentions une nouvelle livraison ?"
+        "\n\nهل ترغبون في محاولة توصيل جديدة؟"
       );
     default:
       return (
-        "Bonjour {prenom}, voici des nouvelles de votre commande.\n\n" +
+        bonjour +
+        "إليكم آخر أخبار طلبكم.\n\n" +
         recap +
         suivi
       );

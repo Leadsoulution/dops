@@ -180,9 +180,28 @@ describe("choix du message selon l'etape", () => {
     }
   });
 
-  it("parle bien de livraison en cours pour un colis en distribution", () => {
-    expect(templateFor("livraison:DISTRIBUTION", undefined)).toContain(
-      "en cours de livraison"
+  it("ecrit les messages de livraison en arabe", () => {
+    const texte = templateFor("livraison:DISTRIBUTION", undefined);
+    // "votre commande est en route vers vous aujourd'hui"
+    expect(texte).toContain("طلبكم في طريقه إليكم اليوم");
+    // Les champs restent en caracteres latins, quelle que soit la langue.
+    expect(texte).toContain("{produit}");
+  });
+
+  it("annonce la livraison gratuite au lieu de la reference interne", () => {
+    for (const s of DELIVERY_STATUSES) {
+      const texte = templateFor(DELIVERY_PREFIX + s.code, undefined);
+      // "Livraison : gratuit"
+      expect(texte).toContain("التوصيل : مجاني");
+      // La reference ne dit rien au client : elle n'a pas sa place ici.
+      expect(texte).not.toContain("{reference}");
+    }
+  });
+
+  it("garde les messages de confirmation en francais", () => {
+    // Avant l'expedition, l'agent lit et corrige le texte lui-meme.
+    expect(templateFor("Pas de rep 1", undefined)).toContain(
+      "nous avons essaye de vous joindre"
     );
   });
 
