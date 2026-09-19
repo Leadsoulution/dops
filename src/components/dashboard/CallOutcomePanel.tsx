@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   Check,
   ChevronDown,
   Loader2,
   MessageCircle,
+  ImageUp,
   Phone,
   StickyNote,
 } from "lucide-react";
@@ -27,6 +28,25 @@ import ConfirmDialog from "./ConfirmDialog";
  * statut" : les afficher tous ferait un mur de boutons ou l'on ne
  * trouverait plus les trois qui servent vraiment.
  */
+
+/**
+ * Ce navigateur sait-il partager un fichier a une autre application ?
+ *
+ * Lu par `useSyncExternalStore` et non dans un effet : c'est un etat
+ * exterieur a React, et le serveur doit rendre la meme chose que le
+ * premier rendu du navigateur.
+ */
+function subscribeNothing() {
+  return () => {};
+}
+
+function supportsFileShare() {
+  return (
+    typeof navigator !== "undefined" &&
+    typeof navigator.share === "function" &&
+    typeof navigator.canShare === "function"
+  );
+}
 
 const QUICK_STATUSES: { label: LeadStatus; className: string }[] = [
   { label: "Confirme", className: "bg-emerald-700 hover:bg-emerald-800" },
@@ -52,6 +72,13 @@ export default function CallOutcomePanel({
   const [confirming, setConfirming] = useState<LeadStatus | null>(null);
   const [templates, setTemplates] = useState<Record<string, string>>({});
   const [savingNote, setSavingNote] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+  const canShareFiles = useSyncExternalStore(
+    subscribeNothing,
+    supportsFileShare,
+    () => false
+  );
 
   /**
    * La note en cours de frappe, et celle qui est enregistree.
@@ -71,6 +98,54 @@ export default function CallOutcomePanel({
     setNote({ leadId: lead.id, saved: savedNote, draft: savedNote });
   }
   const dirty = note.draft.trim() !== savedNote.trim();
+
+  /**
+   * Envoie la photo du produit avec le message, par la feuille de
+   * partage du telephone.
+   *
+   * C'est le seul chemin vers une vraie image : un lien wa.me ne
+   * transporte que du texte. En contrepartie il ne sait pas designer le
+   * destinataire — l'agent choisit le client dans WhatsApp. Le bouton
+   * d'appel reste donc a cote, pour les cas ou le texte suffit.
+   */
+  async function shareWithPhoto() {
+    setShareError(null);
+    setSharing(true);
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/product-image`);
+      if (!res.ok) throw new Error("Photo du produit indisponible.");
+      const blob = await res.blob();
+      const file = new File(
+        [blob],
+        `produit.${blob.type === "image/png" ? "png" : "jpg"}`,
+        { type: blob.type }
+      );
+      if (!navigator.canShare({ files: [file] })) {
+        throw new Error("Ce navigateur ne sait pas partager une image.");
+      }
+
+      // Filet de securite : plusieurs versions de WhatsApp laissent
+      // tomber la legende quand une image accompagne le partage. Le
+      // message est donc aussi dans le presse-papier, a coller d'un
+      // appui long si la legende manque.
+      try {
+        await navigator.clipboard.writeText(message);
+      } catch {
+        // Presse-papier refuse : le partage vaut mieux que rien.
+      }
+
+      await navigator.share({ files: [file], text: message });
+    } catch (error) {
+      // Refermer la feuille de partage sans rien choisir n'est pas une
+      // panne : l'annoncer comme telle inquieterait pour rien.
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setShareError(
+        error instanceof Error ? error.message : "Partage impossible."
+      );
+    } finally {
+      setSharing(false);
+    }
+  }
 
   async function saveNote() {
     if (!onNoteChange) return;
@@ -157,6 +232,39 @@ export default function CallOutcomePanel({
         Si votre navigateur n&apos;ouvre pas le composeur, copiez le numero :{" "}
         <span className="font-mono text-gray-500">{lead.phone}</span>
       </p>
+      {/*
+        La vraie photo, jointe au message. WhatsApp ne sait pas prendre
+        une image par un lien wa.me : il faut passer par la feuille de
+        partage du telephone, qui accepte le fichier et met le texte en
+        legende. Le prix a payer est le destinataire, que ce chemin ne
+        sait pas designer.
+      */}
+      {canShareFiles && lead.productImage && (
+        <>
+          <button
+            onClick={shareWithPhoto}
+            disabled={sharing}
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-[#25D366] bg-white py-2.5 text-[13.5px] font-medium text-[#128C7E] hover:bg-[#f0fff6] disabled:opacity-60"
+          >
+            {sharing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ImageUp className="h-4 w-4" />
+            )}
+            Envoyer avec la photo
+          </button>
+          <p className="mt-1 text-center text-[11.5px] text-gray-400">
+            Choisissez WhatsApp, puis {lead.client.split(" ")[0] || "le client"}{" "}
+            dans la liste. Le texte est copie : si la legende manque, collez-la.
+          </p>
+          {shareError && (
+            <p className="mt-1 text-center text-[11.5px] text-red-600">
+              {shareError}
+            </p>
+          )}
+        </>
+      )}
+
 
       {/*
         La consigne du client. Elle vit ici, sous le bouton WhatsApp,

@@ -67,10 +67,10 @@ export const PLACEHOLDERS: {
   /**
    * Le lien de la photo du produit.
    *
-   * WhatsApp ne sait pas joindre une image a un lien wa.me : seul du
-   * texte y passe. En revanche il fabrique un apercu du premier lien
-   * qu'il trouve dans le message, et l'apercu d'une image est cette
-   * image. Le client voit donc bien la photo de ce qu'il a commande.
+   * Absent des modeles proposes : WhatsApp ne fabrique pas d'apercu pour
+   * ces adresses, et le client recevait donc une URL nue au bas du
+   * message. Le champ reste offert a qui le veut quand meme ; la vraie
+   * photo, elle, passe par le bouton de partage de la fiche.
    */
   {
     key: "photo",
@@ -92,8 +92,7 @@ export function defaultTemplate(status: string): string {
     "Prix a payer a la livraison : {prix}\n" +
     "Adresse : {adresse}\n" +
     "Telephone : {telephone}\n" +
-    "Reference : {reference}\n" +
-    "{photo}";
+    "Reference : {reference}";
 
   if (status.startsWith("Pas de rep") || status.startsWith("Injoignable")) {
     return (
@@ -229,8 +228,7 @@ export function defaultDeliveryTemplate(code: string): string {
     "الطلب : {produit} (×{quantite})\n" +
     "الثمن عند التسليم : {prix}\n" +
     "العنوان : {adresse}\n" +
-    "التوصيل : مجاني\n" +
-    "{photo}";
+    "التوصيل : مجاني";
   const suivi = "\n\nرقم التتبع : {suivi}";
   const bonjour = "مرحبا {prenom}، ";
 

@@ -155,6 +155,26 @@ export async function listLeads(): Promise<Lead[]> {
  * exact, puis par nom : une commande de la boutique porte le nom exact
  * du produit, puisque les deux viennent de la meme source.
  */
+export async function leadProductImage(id: string): Promise<string | null> {
+  const supabase = getSupabaseServerClient();
+  const { data } = await supabase
+    .from("leads")
+    .select("product_name,stock_items")
+    .eq("id", id)
+    .maybeSingle();
+  if (!data) return null;
+
+  // Le rapprochement nom/reference est deja ecrit : on le rejoue sur une
+  // seule commande plutot que d'en faire une deuxieme version.
+  const [resolu] = await withProductImages([
+    {
+      productName: data.product_name ?? "",
+      stockItems: data.stock_items ?? undefined,
+    } as Lead,
+  ]);
+  return resolu?.productImage ?? null;
+}
+
 async function withProductImages(leads: Lead[]): Promise<Lead[]> {
   const supabase = getSupabaseServerClient();
   const { data } = await supabase

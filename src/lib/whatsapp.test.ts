@@ -90,12 +90,15 @@ describe("fillTemplate", () => {
     expect(texte).not.toContain("\n\n\n");
   });
 
-  it("reprend la photo dans le recapitulatif propose", () => {
+  it("laisse le lien de la photo hors des textes proposes", () => {
     const rempli = fillTemplate(defaultTemplate("Confirme"), {
       ...ORDER,
       productImage: "https://cdn.forcelog.ma/bague.jpg",
     });
-    expect(rempli).toContain("https://cdn.forcelog.ma/bague.jpg");
+    // WhatsApp n'en fabrique pas d'apercu : le client ne recevrait qu'une
+    // adresse en clair au bas du message. La photo passe par le partage.
+    expect(rempli).not.toContain("https://cdn.forcelog.ma/bague.jpg");
+    expect(rempli).not.toContain("{photo}");
   });
 
   it("rend une chaine vide pour un champ absent de la commande", () => {
