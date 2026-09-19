@@ -40,6 +40,7 @@ const SAMPLE: MessageOrder = {
   amount: "199 MAD",
   trackingNumber: "F-CSA1VZ00B5V",
   deliveryDate: "2026-09-16 14:20",
+  productImage: "https://exemple.ma/photo-produit.jpg",
 };
 
 export default function WhatsappMessagesPanel({

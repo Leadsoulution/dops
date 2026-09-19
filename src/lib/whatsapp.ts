@@ -27,6 +27,8 @@ export type MessageOrder = {
   amount: string;
   trackingNumber?: string;
   deliveryDate?: string;
+  /** Lien public de la photo du produit, tel qu'il est stocke. */
+  productImage?: string;
 };
 
 /**
@@ -62,6 +64,19 @@ export const PLACEHOLDERS: {
     label: "Date de livraison",
     value: (o) => o.deliveryDate ?? "",
   },
+  /**
+   * Le lien de la photo du produit.
+   *
+   * WhatsApp ne sait pas joindre une image a un lien wa.me : seul du
+   * texte y passe. En revanche il fabrique un apercu du premier lien
+   * qu'il trouve dans le message, et l'apercu d'une image est cette
+   * image. Le client voit donc bien la photo de ce qu'il a commande.
+   */
+  {
+    key: "photo",
+    label: "Photo du produit (lien)",
+    value: (o) => o.productImage ?? "",
+  },
 ];
 
 /**
@@ -77,7 +92,8 @@ export function defaultTemplate(status: string): string {
     "Prix a payer a la livraison : {prix}\n" +
     "Adresse : {adresse}\n" +
     "Telephone : {telephone}\n" +
-    "Reference : {reference}";
+    "Reference : {reference}\n" +
+    "{photo}";
 
   if (status.startsWith("Pas de rep") || status.startsWith("Injoignable")) {
     return (
@@ -213,7 +229,8 @@ export function defaultDeliveryTemplate(code: string): string {
     "الطلب : {produit} (×{quantite})\n" +
     "الثمن عند التسليم : {prix}\n" +
     "العنوان : {adresse}\n" +
-    "التوصيل : مجاني";
+    "التوصيل : مجاني\n" +
+    "{photo}";
   const suivi = "\n\nرقم التتبع : {suivi}";
   const bonjour = "مرحبا {prenom}، ";
 
@@ -305,10 +322,19 @@ export function defaultDeliveryTemplate(code: string): string {
  * de l'effacer en silence, l'agent comprend alors qu'il s'est trompe.
  */
 export function fillTemplate(template: string, order: MessageOrder): string {
-  return template.replace(/\{(\w+)\}/g, (whole, key: string) => {
+  const filled = template.replace(/\{(\w+)\}/g, (whole, key: string) => {
     const field = PLACEHOLDERS.find((p) => p.key === key);
     return field ? field.value(order) : whole;
   });
+
+  // Un champ vide laissait sa ligne derriere lui : un produit sans photo,
+  // ou un colis sans code de suivi, ouvrait un trou au milieu du
+  // message. On recoud donc les blancs, sans toucher aux sauts de ligne
+  // voulus entre les paragraphes.
+  return filled
+    .replace(/[ \t]+$/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 /**

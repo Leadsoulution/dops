@@ -71,6 +71,33 @@ describe("fillTemplate", () => {
     expect(fillTemplate("Bonjour {prenon}", ORDER)).toBe("Bonjour {prenon}");
   });
 
+  it("met le lien de la photo du produit a la place de {photo}", () => {
+    const avecPhoto = { ...ORDER, productImage: "https://cdn.forcelog.ma/x.png" };
+    // C'est ce lien que WhatsApp transformera en apercu de l'image.
+    expect(fillTemplate("Voici : {photo}", avecPhoto)).toBe(
+      "Voici : https://cdn.forcelog.ma/x.png"
+    );
+  });
+
+  it("ne laisse pas de ligne vide quand le produit n'a pas de photo", () => {
+    const texte = fillTemplate(
+      "Prix : {prix}\n{photo}\n\nMerci.",
+      ORDER
+    );
+    // Sans recoudre les blancs, le message s'ouvrait sur un trou au
+    // milieu — visible chez le client, et pour rien.
+    expect(texte).toBe("Prix : 200 MAD\n\nMerci.");
+    expect(texte).not.toContain("\n\n\n");
+  });
+
+  it("reprend la photo dans le recapitulatif propose", () => {
+    const rempli = fillTemplate(defaultTemplate("Confirme"), {
+      ...ORDER,
+      productImage: "https://cdn.forcelog.ma/bague.jpg",
+    });
+    expect(rempli).toContain("https://cdn.forcelog.ma/bague.jpg");
+  });
+
   it("rend une chaine vide pour un champ absent de la commande", () => {
     expect(fillTemplate("{suivi}", ORDER)).toBe("");
   });
