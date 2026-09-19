@@ -93,6 +93,12 @@ export type Lead = {
   parcelType?: "simple" | "stock";
   /** References prelevees pour un colis de stock, format "ref:qte,ref:qte". */
   stockItems?: string;
+  /**
+   * Consigne du client sur la livraison, ex. "livrer apres 19H".
+   * Transmise au transporteur dans le champ COMMENT du colis, a sa
+   * creation : ForceLog ne sait pas modifier un colis deja parti.
+   */
+  customerNote?: string;
   /** Identifiant de la commande dans la boutique WooCommerce. */
   wooOrderId?: number;
   /** Auteur de la derniere modification : une personne ou un automate. */

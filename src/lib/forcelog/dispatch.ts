@@ -100,6 +100,7 @@ export async function dispatchToForceLog(
     | "parcelType"
     | "stockItems"
     | "itemCount"
+    | "customerNote"
   >
 ): Promise<Partial<Lead>> {
   const apiKey = process.env.FORCELOG_API_KEY;

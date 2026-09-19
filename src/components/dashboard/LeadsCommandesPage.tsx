@@ -1528,6 +1528,9 @@ export default function LeadsCommandesPage() {
           onStatusChange={async (status) => {
             await persistChanges([modal.lead.id], { status });
           }}
+          onNoteChange={async (customerNote) => {
+            await persistChanges([modal.lead.id], { customerNote });
+          }}
           onDelete={
             isAdmin
               ? () => {

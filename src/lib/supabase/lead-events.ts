@@ -22,6 +22,7 @@ const TRACKED: { key: keyof Lead; label: string }[] = [
   { key: "phone", label: "Telephone" },
   { key: "ville", label: "Ville" },
   { key: "adresse", label: "Adresse" },
+  { key: "customerNote", label: "Note du client" },
   { key: "amount", label: "Montant" },
   { key: "productName", label: "Produit" },
 ];

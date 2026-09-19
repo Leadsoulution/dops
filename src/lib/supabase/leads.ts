@@ -38,6 +38,7 @@ type LeadRow = {
   delivery_date: string | null;
   parcel_type: string | null;
   stock_items: string | null;
+  customer_note: string | null;
   woo_order_id: number | null;
   last_modified_by: string | null;
   last_modified_at: string | null;
@@ -70,6 +71,7 @@ function toLead(row: LeadRow): Lead {
     deliveryDate: row.delivery_date ?? undefined,
     parcelType: (row.parcel_type as Lead["parcelType"]) ?? "simple",
     stockItems: row.stock_items ?? undefined,
+    customerNote: row.customer_note ?? undefined,
     wooOrderId: row.woo_order_id ?? undefined,
     lastModifiedBy: row.last_modified_by ?? undefined,
     lastModifiedAt: row.last_modified_at ?? undefined,
@@ -118,12 +120,14 @@ export function toRow(lead: Partial<Lead>): Partial<LeadRow> {
     row.delivery_date = lead.deliveryDate || null;
   if (lead.parcelType !== undefined) row.parcel_type = lead.parcelType;
   if (lead.stockItems !== undefined) row.stock_items = lead.stockItems ?? null;
+  if (lead.customerNote !== undefined)
+    row.customer_note = lead.customerNote || null;
   if (lead.wooOrderId !== undefined) row.woo_order_id = lead.wooOrderId ?? null;
   return row;
 }
 
 const COLUMNS =
-  "id,reference,product_label,product_name,item_count,client,phone,source,assigned_to,amount,status,shipping,date,ville,tarif,quartier,adresse,tracking_number,tracking_error,delivery_status,delivery_status_code,payment_status,delivery_date,parcel_type,stock_items,woo_order_id,last_modified_by,last_modified_at";
+  "id,reference,product_label,product_name,item_count,client,phone,source,assigned_to,amount,status,shipping,date,ville,tarif,quartier,adresse,tracking_number,tracking_error,delivery_status,delivery_status_code,payment_status,delivery_date,parcel_type,stock_items,customer_note,woo_order_id,last_modified_by,last_modified_at";
 
 export async function listLeads(): Promise<Lead[]> {
   const supabase = getSupabaseServerClient();

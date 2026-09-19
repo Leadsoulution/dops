@@ -49,12 +49,14 @@ export default function OrderDetailsModal({
   onClose,
   onEdit,
   onStatusChange,
+  onNoteChange,
   onDelete,
 }: {
   lead: Lead;
   onClose: () => void;
   onEdit: () => void;
   onStatusChange: (status: LeadStatus) => Promise<void> | void;
+  onNoteChange?: (note: string) => Promise<void> | void;
   /** Absente pour qui n'a pas le droit de supprimer. */
   onDelete?: () => void;
 }) {
@@ -159,7 +161,11 @@ export default function OrderDetailsModal({
             </p>
           </div>
 
-          <CallOutcomePanel lead={lead} onStatusChange={onStatusChange} />
+          <CallOutcomePanel
+            lead={lead}
+            onStatusChange={onStatusChange}
+            onNoteChange={onNoteChange}
+          />
 
           <div>
             <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-gray-500">

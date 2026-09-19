@@ -24,6 +24,8 @@ export type MappableOrder = {
   parcelType?: "simple" | "stock";
   /** References a prelever pour un colis de stock, format "ref:qte,ref:qte". */
   stockItems?: string;
+  /** Consigne du client, reprise telle quelle dans le COMMENT du colis. */
+  customerNote?: string;
 };
 
 /**
@@ -55,6 +57,12 @@ export function mapOrderToParcel(order: MappableOrder): AddParcelParams {
     PRODUCT_NATURE: order.productName.slice(0, 100),
     COD: parseAmount(order.amount),
   };
+
+  // La consigne du client est ce que le livreur lira sur le bordereau :
+  // c'est le seul canal par lequel un "livrer apres 19H" l'atteint.
+  // Vide, le champ est omis plutot qu'envoye a blanc.
+  const note = order.customerNote?.trim();
+  if (note) params.COMMENT = note.slice(0, 255);
 
   // Le champ STOCK est ce qui fait d'un colis un colis de stock : ForceLog
   // preleve alors les references indiquees dans son propre depot. Sans lui,

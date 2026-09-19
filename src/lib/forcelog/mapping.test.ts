@@ -88,4 +88,39 @@ describe("mapOrderToParcel", () => {
     expect(parcel.PHONE.length).toBe(14);
     expect(parcel.PRODUCT_NATURE?.length).toBe(100);
   });
+  it("transmet la note du client dans le COMMENT du colis", () => {
+    const parcel = mapOrderToParcel({
+      reference: "WC-1",
+      client: "Client",
+      phone: "0600000000",
+      carrierCity: "MRK",
+      amount: "200 MAD",
+      productName: "SAC",
+      customerNote: "  livrer apres 19H  ",
+    });
+    // C'est le seul champ que le livreur lira : la note y arrive nettoyee.
+    expect(parcel.COMMENT).toBe("livrer apres 19H");
+  });
+
+  it("n'envoie pas de COMMENT quand il n'y a pas de note", () => {
+    const sans = mapOrderToParcel({
+      reference: "WC-2",
+      client: "Client",
+      phone: "0600000000",
+      amount: "200 MAD",
+      productName: "SAC",
+    });
+    const vide = mapOrderToParcel({
+      reference: "WC-3",
+      client: "Client",
+      phone: "0600000000",
+      amount: "200 MAD",
+      productName: "SAC",
+      customerNote: "   ",
+    });
+    // Un champ absent vaut mieux qu'un champ blanc : ForceLog imprimerait
+    // une ligne de commentaire vide sur le bordereau.
+    expect("COMMENT" in sans).toBe(false);
+    expect("COMMENT" in vide).toBe(false);
+  });
 });

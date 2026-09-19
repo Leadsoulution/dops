@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, ChevronDown, Loader2, MessageCircle, Phone } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  Loader2,
+  MessageCircle,
+  Phone,
+  StickyNote,
+} from "lucide-react";
 import { LEAD_STATUSES, type Lead, type LeadStatus } from "./leads-data";
 import {
   messageKeyFor,
@@ -33,14 +40,47 @@ const QUICK_STATUSES: { label: LeadStatus; className: string }[] = [
 export default function CallOutcomePanel({
   lead,
   onStatusChange,
+  onNoteChange,
 }: {
   lead: Lead;
   onStatusChange: (status: LeadStatus) => Promise<void> | void;
+  /** Enregistre la consigne du client. Absente, la case n'est pas modifiable. */
+  onNoteChange?: (note: string) => Promise<void> | void;
 }) {
   const [allOpen, setAllOpen] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<LeadStatus | null>(null);
   const [templates, setTemplates] = useState<Record<string, string>>({});
+  const [savingNote, setSavingNote] = useState(false);
+
+  /**
+   * La note en cours de frappe, et celle qui est enregistree.
+   *
+   * Les deux voyagent ensemble pour que la saisie se remette au bon
+   * texte quand la fiche change de commande, ou quand la base renvoie
+   * la valeur ecrite — sans passer par un effet, qui ecraserait la
+   * frappe d'un rendu sur l'autre.
+   */
+  const savedNote = lead.customerNote ?? "";
+  const [note, setNote] = useState({
+    leadId: lead.id,
+    saved: savedNote,
+    draft: savedNote,
+  });
+  if (note.leadId !== lead.id || note.saved !== savedNote) {
+    setNote({ leadId: lead.id, saved: savedNote, draft: savedNote });
+  }
+  const dirty = note.draft.trim() !== savedNote.trim();
+
+  async function saveNote() {
+    if (!onNoteChange) return;
+    setSavingNote(true);
+    try {
+      await onNoteChange(note.draft.trim());
+    } finally {
+      setSavingNote(false);
+    }
+  }
 
   // Les modeles de messages, relus a l'ouverture de la fiche : un
   // administrateur peut les avoir changes depuis le dernier chargement.
@@ -117,6 +157,62 @@ export default function CallOutcomePanel({
         Si votre navigateur n&apos;ouvre pas le composeur, copiez le numero :{" "}
         <span className="font-mono text-gray-500">{lead.phone}</span>
       </p>
+
+      {/*
+        La consigne du client. Elle vit ici, sous le bouton WhatsApp,
+        parce que c'est au telephone qu'on l'apprend : "livrer apres
+        19H" se note pendant l'appel, pas dans un second ecran.
+      */}
+      <div className="mt-3">
+        <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-gray-500">
+          <StickyNote className="h-3 w-3" />
+          NOTE DU CLIENT
+        </p>
+        <textarea
+          value={note.draft}
+          onChange={(e) => setNote({ ...note, draft: e.target.value })}
+          rows={2}
+          maxLength={255}
+          placeholder="Ex. livrer apres 19H, appeler avant de passer..."
+          className="w-full resize-y rounded-lg border border-gray-300 px-2.5 py-2 text-[12.5px] text-gray-700 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none"
+        />
+
+        {/*
+          Le transporteur ne sait pas modifier un colis deja cree : une
+          note ajoutee apres l'expedition ne descendra jamais jusqu'au
+          livreur, et le dire ici evite de compter sur elle.
+        */}
+        <p className="mt-1 text-[11.5px] text-gray-400">
+          {lead.trackingNumber ? (
+            <span className="text-amber-600">
+              Colis deja cree : cette note reste dans l&apos;application et ne
+              sera pas transmise au livreur.
+            </span>
+          ) : (
+            "Elle partira chez le transporteur avec le colis."
+          )}
+        </p>
+
+        {dirty && (
+          <div className="mt-1.5 flex gap-2">
+            <button
+              onClick={saveNote}
+              disabled={savingNote}
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-gray-900 py-2 text-[12.5px] font-medium text-white hover:bg-gray-800 disabled:opacity-60"
+            >
+              {savingNote && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Enregistrer la note
+            </button>
+            <button
+              onClick={() => setNote({ ...note, draft: note.saved })}
+              disabled={savingNote}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-[12.5px] font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+            >
+              Annuler
+            </button>
+          </div>
+        )}
+      </div>
 
       <p className="mb-2 mt-3 text-[12.5px] text-gray-600">
         Resultat de l&apos;appel
