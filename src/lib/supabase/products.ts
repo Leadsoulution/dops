@@ -311,25 +311,73 @@ export async function linkWooProducts(
     quantity: number;
     image?: string;
   }>
-): Promise<{ lies: number; ajoutes: number; deja: number }> {
-  if (items.length === 0) return { lies: 0, ajoutes: 0, deja: 0 };
+): Promise<{
+  lies: number;
+  ajoutes: number;
+  deja: number;
+  /** Photos remises a jour parce que la boutique avait change de fichier. */
+  photos: number;
+}> {
+  if (items.length === 0)
+    return { lies: 0, ajoutes: 0, deja: 0, photos: 0 };
 
   const supabase = getSupabaseServerClient();
   const { data, error } = await supabase
     .from("products")
-    .select("id,ref,woo_sku,name");
+    .select("id,ref,woo_sku,name,image");
   if (error) throw new Error(error.message);
 
-  const rows = (data ?? []) as { id: string; ref: string; woo_sku: string | null; name: string }[];
+  const rows = (data ?? []) as {
+    id: string;
+    ref: string;
+    woo_sku: string | null;
+    name: string;
+    image: string | null;
+  }[];
   const byWooSku = new Map(rows.filter((r) => r.woo_sku).map((r) => [r.woo_sku as string, r]));
   const byRef = new Map(rows.map((r) => [r.ref.toLowerCase(), r]));
 
   let lies = 0;
   let ajoutes = 0;
   let deja = 0;
+  let photos = 0;
+
+  /**
+   * Remet la photo a jour quand la boutique a remplace son fichier.
+   *
+   * Sans cela, l'adresse enregistree le jour de l'import restait la
+   * seule connue : la boutique republiant ses images en .webp, quatre
+   * fiches sur sept pointaient vers des adresses mortes, et la photo
+   * n'apparaissait plus nulle part.
+   *
+   * Seule une photo de la meme origine est remplacee. Celle qui vient
+   * du depot du transporteur reste en place : elle n'a pas bouge, et
+   * l'ecraser ferait perdre la photo de l'article reellement expedie.
+   */
+  async function refreshImage(
+    row: { id: string; image: string | null },
+    fresh?: string
+  ) {
+    if (!fresh || row.image === fresh) return;
+    if (row.image) {
+      try {
+        if (new URL(row.image).host !== new URL(fresh).host) return;
+      } catch {
+        // Adresse illisible : la neuve ne peut pas faire pire.
+      }
+    }
+    const { error: imageError } = await supabase
+      .from("products")
+      .update({ image: fresh })
+      .eq("id", row.id);
+    if (imageError) throw new Error(imageError.message);
+    photos += 1;
+  }
 
   for (const item of items) {
-    if (byWooSku.has(item.sku)) {
+    const lie = byWooSku.get(item.sku);
+    if (lie) {
+      await refreshImage(lie, item.image);
       deja += 1;
       continue;
     }
@@ -341,6 +389,7 @@ export async function linkWooProducts(
         .update({ woo_sku: item.sku })
         .eq("id", match.id);
       if (linkError) throw new Error(linkError.message);
+      await refreshImage(match, item.image);
       lies += 1;
       continue;
     }
@@ -360,7 +409,7 @@ export async function linkWooProducts(
     ajoutes += 1;
   }
 
-  return { lies, ajoutes, deja };
+  return { lies, ajoutes, deja, photos };
 }
 
 /**

@@ -48,6 +48,35 @@ function supportsFileShare() {
   );
 }
 
+/**
+ * Reencode une image en JPEG.
+ *
+ * La boutique publie ses photos en .webp, et WhatsApp reserve ce format
+ * a ses autocollants : partagee telle quelle, la photo du produit
+ * arrivait en autocollant ou pas du tout. Le navigateur sait decoder le
+ * webp, donc la conversion se fait ici, sans rien installer.
+ */
+async function toJpeg(blob: Blob): Promise<Blob> {
+  if (blob.type === "image/jpeg") return blob;
+  try {
+    const bitmap = await createImageBitmap(blob);
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext("2d");
+    if (!context) return blob;
+    context.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    return await new Promise((resolve) =>
+      canvas.toBlob((jpeg) => resolve(jpeg ?? blob), "image/jpeg", 0.9)
+    );
+  } catch {
+    // Format que le navigateur ne decode pas : mieux vaut tenter le
+    // partage de l'original que ne rien envoyer.
+    return blob;
+  }
+}
+
 const QUICK_STATUSES: { label: LeadStatus; className: string }[] = [
   { label: "Confirme", className: "bg-emerald-700 hover:bg-emerald-800" },
   { label: "Rappel", className: "bg-blue-600 hover:bg-blue-700" },
@@ -114,12 +143,8 @@ export default function CallOutcomePanel({
     try {
       const res = await fetch(`/api/leads/${lead.id}/product-image`);
       if (!res.ok) throw new Error("Photo du produit indisponible.");
-      const blob = await res.blob();
-      const file = new File(
-        [blob],
-        `produit.${blob.type === "image/png" ? "png" : "jpg"}`,
-        { type: blob.type }
-      );
+      const jpeg = await toJpeg(await res.blob());
+      const file = new File([jpeg], "produit.jpg", { type: jpeg.type });
       if (!navigator.canShare({ files: [file] })) {
         throw new Error("Ce navigateur ne sait pas partager une image.");
       }
