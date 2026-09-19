@@ -76,7 +76,17 @@ function toLead(row: LeadRow): Lead {
   };
 }
 
-function toRow(lead: Partial<Lead>): Partial<LeadRow> {
+/**
+ * Traduction vers les colonnes de la table.
+ *
+ * `undefined` signifie "ne touche pas a ce champ", `null` signifie
+ * "efface-le". La distinction compte : elle seule permet de retirer une
+ * erreur transporteur devenue caduque.
+ *
+ * Exportee pour etre testee : cette regle est trop facile a casser par
+ * inadvertance pour rester implicite.
+ */
+export function toRow(lead: Partial<Lead>): Partial<LeadRow> {
   const row: Partial<LeadRow> = {};
   if (lead.reference !== undefined) row.reference = lead.reference;
   if (lead.productLabel !== undefined) row.product_label = lead.productLabel;

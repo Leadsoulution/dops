@@ -3,7 +3,7 @@ import { createLead, listLeads, updateLead, updateLeads } from "@/lib/supabase/l
 import { isSupabaseServerConfigured } from "@/lib/supabase/server";
 import { getSessionProfile } from "@/lib/supabase/auth";
 import { recordLeadChanges } from "@/lib/supabase/lead-events";
-import { AUTO_DISPATCH_STATUS, dispatchToForceLog } from "@/lib/forcelog/dispatch";
+import { dispatchToForceLog, shouldDispatch } from "@/lib/forcelog/dispatch";
 
 function notConfigured() {
   return NextResponse.json(
@@ -88,11 +88,15 @@ export async function PATCH(request: NextRequest) {
     // ForceLog, sauf si elle y a deja ete envoyee. Un echec transporteur
     // est enregistre dans `trackingError` et n'annule pas le changement
     // de statut.
-    if (changes.status === AUTO_DISPATCH_STATUS) {
+    // Toute commande confirmee sans colis part maintenant, que le statut
+    // vienne d'etre pose ou qu'il soit deja en place : corriger une ville
+    // refusee doit suffire a relancer l'envoi.
+    const aEnvoyer = updated.filter(shouldDispatch);
+    if (aEnvoyer.length > 0) {
       const dispatched = await Promise.all(
-        updated
-          .filter((lead) => !lead.trackingNumber)
-          .map(async (lead) => updateLead(lead.id, await dispatchToForceLog(lead)))
+        aEnvoyer.map(async (lead) =>
+          updateLead(lead.id, await dispatchToForceLog(lead))
+        )
       );
       await Promise.all(
         dispatched.map(async (lead) => {

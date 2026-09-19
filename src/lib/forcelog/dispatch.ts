@@ -11,6 +11,27 @@ import { parcelCatalogue } from "@/lib/supabase/products";
 /** Statut a partir duquel une commande part automatiquement chez ForceLog. */
 export const AUTO_DISPATCH_STATUS = "Confirme";
 
+/**
+ * Cette commande doit-elle partir chez le transporteur ?
+ *
+ * La question porte sur l'etat de la commande apres modification, et non
+ * sur le champ qui vient d'etre touche. C'est la difference qui bloquait
+ * le rattrapage : une commande refusee faute de ville exacte restait
+ * confirmee et sans colis, et corriger la ville ne changeait pas le
+ * statut, donc ne relancait rien. Il fallait repasser par un autre
+ * statut puis revenir a "Confirme" pour que l'envoi reparte.
+ *
+ * Une commande confirmee sans numero de suivi est, par definition, une
+ * commande qui aurait du partir. Toute modification est donc une
+ * occasion de reessayer.
+ */
+export function shouldDispatch(lead: {
+  status: string;
+  trackingNumber?: string;
+}): boolean {
+  return lead.status === AUTO_DISPATCH_STATUS && !lead.trackingNumber;
+}
+
 /** Code ForceLog d'un colis remis au client. */
 const DELIVERED_CODE = "DELIVERED";
 
@@ -115,7 +136,8 @@ export async function dispatchToForceLog(
     const parcel = await addParcel(apiKey, mapOrderToParcel({ ...lead, ...choice, carrierCity: city }));
     return {
       trackingNumber: parcel.TRACKING_NUMBER,
-      trackingError: undefined,
+      // Le colis existe : le refus precedent n'a plus lieu d'etre.
+      trackingError: null,
       // La commande retient ce qui est reellement parti.
       parcelType: choice.parcelType,
       stockItems: choice.stockItems,

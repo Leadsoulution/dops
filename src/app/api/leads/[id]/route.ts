@@ -3,7 +3,7 @@ import { deleteLead, listLeads, updateLead } from "@/lib/supabase/leads";
 import { isSupabaseServerConfigured } from "@/lib/supabase/server";
 import { getSessionProfile } from "@/lib/supabase/auth";
 import { recordLeadChanges } from "@/lib/supabase/lead-events";
-import { AUTO_DISPATCH_STATUS, dispatchToForceLog } from "@/lib/forcelog/dispatch";
+import { dispatchToForceLog, shouldDispatch } from "@/lib/forcelog/dispatch";
 
 function notConfigured() {
   return NextResponse.json(
@@ -35,8 +35,10 @@ export async function PATCH(
     if (avant) await recordLeadChanges(avant, lead, actor);
 
     // Meme regle que pour la mise a jour groupee : une commande confirmee
-    // part chez ForceLog si elle n'y est pas deja.
-    if (changes.status === AUTO_DISPATCH_STATUS && !lead.trackingNumber) {
+    // part chez ForceLog si elle n'y est pas deja — y compris lorsque la
+    // modification ne touche pas au statut, comme la correction d'une
+    // ville refusee au premier essai.
+    if (shouldDispatch(lead)) {
       const avantEnvoi = lead;
       lead = await updateLead(id, await dispatchToForceLog(lead));
       await recordLeadChanges(avantEnvoi, lead, { name: "ForceLog" });

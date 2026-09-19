@@ -68,7 +68,12 @@ export type Lead = {
   quartier?: string;
   adresse?: string;
   trackingNumber?: string;
-  trackingError?: string;
+  /**
+   * Dernier refus du transporteur. `null` efface une erreur precedente :
+   * `undefined` signifie "ne touche pas a ce champ", et laissait donc
+   * une erreur resolue affichee a cote d'un colis bien cree.
+   */
+  trackingError?: string | null;
   /** Libelle du statut de livraison remonte par ForceLog. */
   deliveryStatus?: string;
   /** Code machine du statut de livraison ForceLog (sert au style du badge). */
