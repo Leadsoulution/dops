@@ -29,7 +29,7 @@ import ConfirmDialog from "./ConfirmDialog";
  */
 
 /**
- * Ce navigateur sait-il partager un fichier a une autre application ?
+ * Ce navigateur sait-il mettre une image dans le presse-papier ?
  *
  * Lu par `useSyncExternalStore` et non dans un effet : c'est un etat
  * exterieur a React, et le serveur doit rendre la meme chose que le
@@ -39,24 +39,24 @@ function subscribeNothing() {
   return () => {};
 }
 
-function supportsFileShare() {
+function supportsImageCopy() {
   return (
     typeof navigator !== "undefined" &&
-    typeof navigator.share === "function" &&
-    typeof navigator.canShare === "function"
+    typeof ClipboardItem === "function" &&
+    typeof navigator.clipboard?.write === "function"
   );
 }
 
 /**
- * Reencode une image en JPEG.
+ * Reencode une image en PNG.
  *
- * La boutique publie ses photos en .webp, et WhatsApp reserve ce format
- * a ses autocollants : partagee telle quelle, la photo du produit
- * arrivait en autocollant ou pas du tout. Le navigateur sait decoder le
- * webp, donc la conversion se fait ici, sans rien installer.
+ * Le presse-papier des navigateurs n'accepte qu'un seul format d'image,
+ * et c'est le PNG. La boutique publiant ses photos en .webp, il faut
+ * donc les convertir — ce que le navigateur sait faire seul, puisqu'il
+ * decode le webp pour l'afficher.
  */
-async function toJpeg(blob: Blob): Promise<Blob> {
-  if (blob.type === "image/jpeg") return blob;
+async function toPng(blob: Blob): Promise<Blob> {
+  if (blob.type === "image/png") return blob;
   try {
     const bitmap = await createImageBitmap(blob);
     const canvas = document.createElement("canvas");
@@ -67,11 +67,11 @@ async function toJpeg(blob: Blob): Promise<Blob> {
     context.drawImage(bitmap, 0, 0);
     bitmap.close();
     return await new Promise((resolve) =>
-      canvas.toBlob((jpeg) => resolve(jpeg ?? blob), "image/jpeg", 0.9)
+      canvas.toBlob((png) => resolve(png ?? blob), "image/png")
     );
   } catch {
-    // Format que le navigateur ne decode pas : mieux vaut tenter le
-    // partage de l'original que ne rien envoyer.
+    // Format que le navigateur ne decode pas : tenter l'original vaut
+    // mieux que renoncer.
     return blob;
   }
 }
@@ -102,9 +102,9 @@ export default function CallOutcomePanel({
   const [savingNote, setSavingNote] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
-  const canShareFiles = useSyncExternalStore(
+  const canCopyImage = useSyncExternalStore(
     subscribeNothing,
-    supportsFileShare,
+    supportsImageCopy,
     () => false
   );
 
@@ -136,39 +136,42 @@ export default function CallOutcomePanel({
    * destinataire — l'agent choisit le client dans WhatsApp. Le bouton
    * d'appel reste donc a cote, pour les cas ou le texte suffit.
    */
-  async function shareWithPhoto() {
+  /**
+   * Copie la photo du produit, puis ouvre la conversation du client.
+   *
+   * La feuille de partage joignait bien l'image, mais elle ne sait pas
+   * designer le destinataire : il fallait retrouver le client a la main.
+   * Le lien wa.me, lui, ouvre la bonne conversation avec le message deja
+   * ecrit. La photo passe donc par le presse-papier, d'ou un appui long
+   * la sort dans la conversation.
+   *
+   * La navigation a lieu quoi qu'il arrive : un presse-papier refuse ne
+   * doit pas retenir l'agent devant un bouton qui ne fait rien.
+   */
+  async function sendWithPhoto() {
     setShareError(null);
     setSharing(true);
     try {
-      const res = await fetch(`/api/leads/${lead.id}/product-image`);
-      if (!res.ok) throw new Error("Photo du produit indisponible.");
-      const jpeg = await toJpeg(await res.blob());
-      const file = new File([jpeg], "produit.jpg", { type: jpeg.type });
-      if (!navigator.canShare({ files: [file] })) {
-        throw new Error("Ce navigateur ne sait pas partager une image.");
-      }
-
-      // Filet de securite : plusieurs versions de WhatsApp laissent
-      // tomber la legende quand une image accompagne le partage. Le
-      // message est donc aussi dans le presse-papier, a coller d'un
-      // appui long si la legende manque.
-      try {
-        await navigator.clipboard.writeText(message);
-      } catch {
-        // Presse-papier refuse : le partage vaut mieux que rien.
-      }
-
-      await navigator.share({ files: [file], text: message });
-    } catch (error) {
-      // Refermer la feuille de partage sans rien choisir n'est pas une
-      // panne : l'annoncer comme telle inquieterait pour rien.
-      if (error instanceof DOMException && error.name === "AbortError") return;
-      setShareError(
-        error instanceof Error ? error.message : "Partage impossible."
-      );
+      // L'image est confiee a ClipboardItem sous forme de promesse :
+      // Safari refuse une ecriture qui arrive apres un `await`, le geste
+      // de l'utilisateur etant alors considere comme termine.
+      const png = (async () => {
+        const res = await fetch(`/api/leads/${lead.id}/product-image`);
+        if (!res.ok) throw new Error("Photo du produit indisponible.");
+        return toPng(await res.blob());
+      })();
+      await navigator.clipboard.write([
+        new ClipboardItem({ "image/png": png }),
+      ]);
+    } catch {
+      // Photo introuvable ou presse-papier ferme : le message part
+      // quand meme, sans image.
+      setShareError("Photo non copiee : le message part sans elle.");
     } finally {
       setSharing(false);
     }
+
+    window.location.assign(whatsappLink(lead, message));
   }
 
   async function saveNote() {
@@ -205,7 +208,7 @@ export default function CallOutcomePanel({
   const message = templateFor(messageKey, templates);
   const reachable = Boolean(whatsappNumber(lead.phone));
   /** Ce telephone peut-il joindre la photo au message ? */
-  const withPhoto = canShareFiles && Boolean(lead.productImage);
+  const withPhoto = canCopyImage && Boolean(lead.productImage);
 
   async function apply(status: LeadStatus) {
     setConfirming(null);
@@ -249,7 +252,7 @@ export default function CallOutcomePanel({
       */}
       {reachable && withPhoto ? (
         <button
-          onClick={shareWithPhoto}
+          onClick={sendWithPhoto}
           disabled={sharing}
           title={message}
           className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-[#25D366] py-2.5 text-[13.5px] font-medium text-white hover:bg-[#1eb855] disabled:opacity-60"
@@ -280,8 +283,9 @@ export default function CallOutcomePanel({
 
       {withPhoto ? (
         <p className="mt-1.5 text-center text-[11.5px] text-gray-400">
-          La photo du produit part avec le message. Choisissez WhatsApp, puis{" "}
-          {lead.client.split(" ")[0] || "le client"} dans la liste.
+          La conversation de {lead.client.split(" ")[0] || "ce client"}{" "}
+          s&apos;ouvre avec le message. La photo est copiee : appui long dans
+          la zone de saisie, puis Coller.
         </p>
       ) : (
         <p className="mt-1.5 text-center text-[11.5px] text-gray-400">
