@@ -13,56 +13,79 @@ import {
   Users,
 } from "lucide-react";
 import AgentLiveDetailModal from "./AgentLiveDetailModal";
-import { liveAgentStats, globalStats, type LiveAgentStat } from "./perf-agents-data";
-
-const kpiRows = [
-  [
-    { label: "Agents actifs", value: globalStats.agentsActifs, icon: Users },
-    {
-      label: "Commandes assignees",
-      value: globalStats.commandesAssignees.toLocaleString("fr-FR"),
-      subtitle: "toutes assignations",
-      icon: UserCheck,
-    },
-    {
-      label: "En cours",
-      value: globalStats.enCours.toLocaleString("fr-FR"),
-      icon: Clock,
-    },
-    {
-      label: "Confirmes",
-      value: globalStats.confirmes.toLocaleString("fr-FR"),
-      icon: RefreshCw,
-    },
-  ],
-  [
-    {
-      label: "Rappels",
-      value: globalStats.rappels.toLocaleString("fr-FR"),
-      subtitle: "actuellement au rappel",
-      icon: PhoneCall,
-    },
-    {
-      label: "Sans reponse",
-      value: globalStats.sansReponse.toString(),
-      subtitle: "sans reponse aujourd'hui",
-      icon: PhoneOff,
-    },
-    {
-      label: "Leads contactes",
-      value: globalStats.leadsContactes.toLocaleString("fr-FR"),
-      icon: Activity,
-    },
-    {
-      label: "Taux de conversion",
-      value: globalStats.tauxConversion,
-      icon: Target,
-    },
-  ],
-];
+import PeriodFilter from "./PeriodFilter";
+import { useTeamStats, type Range } from "./useTeamStats";
+import type { AgentStats } from "./confirmation-data";
 
 export default function PerfAgentsPage() {
-  const [selectedAgent, setSelectedAgent] = useState<LiveAgentStat | null>(null);
+  const [range, setRange] = useState<Range>({ label: "Maximum", custom: null });
+  const { stats, error, loading } = useTeamStats(range);
+  const [selectedAgent, setSelectedAgent] = useState<AgentStats | null>(null);
+
+  const agents = stats?.agents ?? [];
+  const team = stats?.team;
+
+  const somme = (pick: (a: AgentStats) => number) =>
+    agents.reduce((total, a) => total + pick(a), 0);
+
+  /**
+   * Les huit indicateurs de tete.
+   *
+   * Les totaux d'equipe viennent du serveur plutot que de la somme des
+   * colonnes : deux agents ayant travaille la meme commande la
+   * compteraient deux fois. Les trois mesures qui n'ont pas d'equivalent
+   * d'equipe — rappels, sans reponse, agents actifs — se somment, elles,
+   * sans risque de doublon.
+   */
+  const kpiRows = [
+    [
+      {
+        label: "Agents actifs",
+        value: `${agents.filter((a) => a.active).length} / ${agents.length}`,
+        icon: Users,
+      },
+      {
+        label: "Commandes traitees",
+        value: (team?.treated ?? 0).toLocaleString("fr-FR"),
+        subtitle: "sur la periode",
+        icon: UserCheck,
+      },
+      {
+        label: "En cours",
+        value: somme((a) => a.pending).toLocaleString("fr-FR"),
+        icon: Clock,
+      },
+      {
+        label: "Confirmes",
+        value: (team?.confirmed ?? 0).toLocaleString("fr-FR"),
+        icon: RefreshCw,
+      },
+    ],
+    [
+      {
+        label: "Rappels",
+        value: somme((a) => a.rappels).toLocaleString("fr-FR"),
+        subtitle: "actuellement au rappel",
+        icon: PhoneCall,
+      },
+      {
+        label: "Sans reponse",
+        value: somme((a) => a.sansReponse).toLocaleString("fr-FR"),
+        subtitle: "le client n'a pas decroche",
+        icon: PhoneOff,
+      },
+      {
+        label: "Leads contactes",
+        value: (team?.contacted ?? 0).toLocaleString("fr-FR"),
+        icon: Activity,
+      },
+      {
+        label: "Taux de conversion",
+        value: `${team?.confirmRate ?? 0}%`,
+        icon: Target,
+      },
+    ],
+  ];
 
   return (
     <div className="scrollbar-hide flex-1 overflow-y-auto bg-gray-50 px-4 py-4 lg:px-6 lg:py-5">
@@ -90,6 +113,16 @@ export default function PerfAgentsPage() {
           Actualiser
         </button>
       </div>
+
+      <div className="mb-4">
+        <PeriodFilter range={range} onChange={setRange} />
+      </div>
+
+      {error && (
+        <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[12.5px] text-red-700">
+          {error}
+        </p>
+      )}
 
       <div className="mb-5 space-y-3">
         {kpiRows.map((row, i) => (
@@ -125,7 +158,7 @@ export default function PerfAgentsPage() {
       <div className="rounded-xl border border-gray-200 bg-white">
         <div className="border-b border-gray-100 px-5 py-4">
           <p className="text-[14px] font-semibold text-gray-900">
-            Detail par agent &middot; totaux live
+            Detail par agent
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -134,7 +167,7 @@ export default function PerfAgentsPage() {
               <tr className="border-b border-gray-100 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                 <th className="px-5 py-3">Agent</th>
                 <th className="px-3 py-3">Statut du compte</th>
-                <th className="px-3 py-3">Assignes</th>
+                <th className="px-3 py-3">Traitees</th>
                 <th className="px-3 py-3">En cours</th>
                 <th className="px-3 py-3">Rappels</th>
                 <th className="px-3 py-3">Confirmes</th>
@@ -144,11 +177,26 @@ export default function PerfAgentsPage() {
               </tr>
             </thead>
             <tbody>
-              {liveAgentStats.map((agent) => {
+              {loading && !stats && (
+                <tr>
+                  <td colSpan={9} className="px-5 py-12 text-center text-[13px] text-gray-400">
+                    Calcul des statistiques...
+                  </td>
+                </tr>
+              )}
+              {!loading && agents.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-5 py-12 text-center text-[13px] text-gray-400">
+                    Aucun agent dans l&apos;equipe. Creez-en depuis la page
+                    Utilisateurs.
+                  </td>
+                </tr>
+              )}
+              {agents.map((agent) => {
                 const initial = agent.name.trim().charAt(0).toUpperCase();
                 return (
                   <tr
-                    key={agent.name}
+                    key={agent.id}
                     onClick={() => setSelectedAgent(agent)}
                     className="cursor-pointer border-b border-gray-50 text-[13px] text-gray-700 last:border-0 hover:bg-gray-50/60"
                   >
@@ -170,27 +218,33 @@ export default function PerfAgentsPage() {
                       </div>
                     </td>
                     <td className="px-3 py-3">
-                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11.5px] font-medium text-emerald-600">
-                        Compte actif
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11.5px] font-medium ${
+                          agent.active
+                            ? "bg-emerald-50 text-emerald-600"
+                            : "bg-gray-100 text-gray-500"
+                        }`}
+                      >
+                        {agent.active ? "Compte actif" : "Compte inactif"}
                       </span>
                     </td>
                     <td className="px-3 py-3 font-mono font-medium text-gray-800">
-                      {agent.assignes.toLocaleString("fr-FR")}
+                      {agent.treated.toLocaleString("fr-FR")}
                     </td>
                     <td className="px-3 py-3 font-mono text-gray-600">
-                      {agent.enCours.toLocaleString("fr-FR")}
+                      {agent.pending.toLocaleString("fr-FR")}
                     </td>
                     <td className="px-3 py-3 font-mono font-medium text-orange-500">
                       {agent.rappels.toLocaleString("fr-FR")}
                     </td>
                     <td className="px-3 py-3 font-mono font-medium text-emerald-600">
-                      {agent.confirmes.toLocaleString("fr-FR")}
+                      {agent.confirmed.toLocaleString("fr-FR")}
                     </td>
                     <td className="px-3 py-3 font-mono text-gray-500">
-                      {agent.contactes.toLocaleString("fr-FR")}
+                      {agent.contacted.toLocaleString("fr-FR")}
                     </td>
                     <td className="px-3 py-3 font-mono text-gray-500">
-                      {agent.conversion.toFixed(1)}%
+                      {agent.confirmRate}%
                     </td>
                     <td className="px-3 py-3 text-right">
                       <ChevronRight className="ml-auto h-4 w-4 text-gray-300" />

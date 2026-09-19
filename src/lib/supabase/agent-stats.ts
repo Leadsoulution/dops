@@ -54,6 +54,14 @@ const CLOSED = new Set([
 
 const STATUS_FIELD = "Statut de confirmation";
 
+/** Commandes qui attendent un rappel a une heure convenue. */
+const RECALL = new Set(["Rappel", "Reportee"]);
+
+/** Le client n'a pas decroche : les deux familles numerotees. */
+function isNoAnswer(status: string): boolean {
+  return status.startsWith("Pas de rep") || status.startsWith("Injoignable");
+}
+
 /** Code ForceLog d'un colis remis au client. */
 const DELIVERED = "DELIVERED";
 
@@ -256,12 +264,20 @@ export async function getAgentStats(
     }
 
     let pending = 0;
+    let rappels = 0;
+    let sansReponse = 0;
     const firstTouchDelays: number[] = [];
     const handlingSpans: number[] = [];
 
     for (const [leadId, leadEvents] of perLead) {
       const lead = leads.get(leadId);
-      if (lead && !CLOSED.has(lead.status)) pending += 1;
+      if (lead && !CLOSED.has(lead.status)) {
+        pending += 1;
+        // Deux facons d'etre en cours qui n'appellent pas le meme geste :
+        // l'une attend une heure, l'autre attend que le client decroche.
+        if (RECALL.has(lead.status)) rappels += 1;
+        else if (isNoAnswer(lead.status)) sansReponse += 1;
+      }
 
       const times = leadEvents.map((e) => new Date(e.created_at).getTime());
       const first = Math.min(...times);
@@ -310,6 +326,8 @@ export async function getAgentStats(
       contacted: contacted.size,
       confirmed: confirmed.size,
       pending,
+      rappels,
+      sansReponse,
       confirmRate: treated > 0 ? Math.round((confirmed.size / treated) * 100) : 0,
       avgFirstTouch: formatDuration(average(firstTouchDelays)),
       avgHandling: formatDuration(average(handlingSpans)),

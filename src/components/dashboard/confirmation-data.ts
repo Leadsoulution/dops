@@ -49,6 +49,10 @@ export type AgentStats = {
   confirmed: number;
   /** Commandes touchees par l'agent et encore ouvertes aujourd'hui. */
   pending: number;
+  /** Parmi elles, celles qui attendent un rappel a une heure convenue. */
+  rappels: number;
+  /** Parmi elles, celles ou le client n'a pas decroche. */
+  sansReponse: number;
   confirmRate: number;
   /** Delai moyen entre l'arrivee d'une commande et le premier geste. */
   avgFirstTouch: string;

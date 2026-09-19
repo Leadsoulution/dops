@@ -10,20 +10,20 @@ import {
   UserCheck,
   X,
 } from "lucide-react";
-import type { LiveAgentStat } from "./perf-agents-data";
+import type { AgentStats } from "./confirmation-data";
 
 export default function AgentLiveDetailModal({
   agent,
   onClose,
 }: {
-  agent: LiveAgentStat;
+  agent: AgentStats;
   onClose: () => void;
 }) {
   const initial = agent.name.trim().charAt(0).toUpperCase();
 
   const funnelItems = [
-    { icon: UserCheck, label: "Ou en sont les leads assignes", value: agent.assignes },
-    { icon: RefreshCw, label: "Ou en sont les leads confirmes", value: agent.confirmes },
+    { icon: UserCheck, label: "Ou en sont les leads traites", value: agent.treated },
+    { icon: RefreshCw, label: "Ou en sont les leads confirmes", value: agent.confirmed },
     { icon: Clock, label: "Ou en sont les leads au rappel", value: agent.rappels },
     { icon: PhoneOff, label: "Ou en sont les leads sans reponse", value: 0 },
   ];
@@ -61,19 +61,19 @@ export default function AgentLiveDetailModal({
             <div className="rounded-lg border border-gray-100 px-3 py-2.5">
               <p className="text-[11px] text-gray-400">Assignes</p>
               <p className="font-mono text-[17px] font-semibold text-gray-900">
-                {agent.assignes.toLocaleString("fr-FR")}
+                {agent.treated.toLocaleString("fr-FR")}
               </p>
             </div>
             <div className="rounded-lg border border-gray-100 px-3 py-2.5">
               <p className="text-[11px] text-gray-400">En cours</p>
               <p className="font-mono text-[17px] font-semibold text-gray-900">
-                {agent.enCours.toLocaleString("fr-FR")}
+                {agent.pending.toLocaleString("fr-FR")}
               </p>
             </div>
             <div className="rounded-lg border border-gray-100 px-3 py-2.5">
               <p className="text-[11px] text-gray-400">Confirmes</p>
               <p className="font-mono text-[17px] font-semibold text-emerald-600">
-                {agent.confirmes.toLocaleString("fr-FR")}
+                {agent.confirmed.toLocaleString("fr-FR")}
               </p>
             </div>
             <div className="rounded-lg border border-gray-100 px-3 py-2.5">
@@ -85,13 +85,13 @@ export default function AgentLiveDetailModal({
             <div className="rounded-lg border border-gray-100 px-3 py-2.5">
               <p className="text-[11px] text-gray-400">Contactes</p>
               <p className="font-mono text-[17px] font-semibold text-gray-900">
-                {agent.contactes.toLocaleString("fr-FR")}
+                {agent.contacted.toLocaleString("fr-FR")}
               </p>
             </div>
             <div className="rounded-lg border border-gray-100 px-3 py-2.5">
               <p className="text-[11px] text-gray-400">Conversion</p>
               <p className="font-mono text-[17px] font-semibold text-gray-900">
-                {agent.conversion.toFixed(1)}%
+                {agent.confirmRate}%
               </p>
             </div>
           </div>
