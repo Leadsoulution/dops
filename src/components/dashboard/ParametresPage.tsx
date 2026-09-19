@@ -35,6 +35,7 @@ import type { ComponentType } from "react";
 import SelectDropdown from "./SelectDropdown";
 import DatabaseSizeCard from "./DatabaseSizeCard";
 import WhatsappMessagesPanel from "./WhatsappMessagesPanel";
+import WhatsappPhotosPanel from "./WhatsappPhotosPanel";
 import NotificationSettings from "./NotificationSettings";
 import { currentProfile } from "@/lib/session";
 import {
@@ -453,6 +454,7 @@ export default function ParametresPage() {
       {activeTab === "messages" && (
         <div className="max-w-3xl space-y-4">
           <WhatsappMessagesPanel isAdmin={isAdmin} />
+          <WhatsappPhotosPanel isAdmin={isAdmin} />
         </div>
       )}
 

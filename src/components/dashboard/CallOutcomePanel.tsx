@@ -6,7 +6,6 @@ import {
   ChevronDown,
   Loader2,
   MessageCircle,
-  ImageUp,
   Phone,
   StickyNote,
 } from "lucide-react";
@@ -205,6 +204,8 @@ export default function CallOutcomePanel({
   const messageKey = messageKeyFor(lead);
   const message = templateFor(messageKey, templates);
   const reachable = Boolean(whatsappNumber(lead.phone));
+  /** Ce telephone peut-il joindre la photo au message ? */
+  const withPhoto = canShareFiles && Boolean(lead.productImage);
 
   async function apply(status: LeadStatus) {
     setConfirming(null);
@@ -236,13 +237,37 @@ export default function CallOutcomePanel({
         <Phone className="h-4 w-4" />
         Appeler {lead.client.split(" ")[0] || "le client"}
       </a>
-      {reachable ? (
+      {/*
+        Un seul bouton, qui prend le meilleur chemin disponible.
+
+        WhatsApp n'en offre pas qui fasse tout : son lien wa.me designe
+        le destinataire mais ne transporte que du texte, sa feuille de
+        partage accepte l'image mais ignore le destinataire. Le telephone
+        qui sait partager un fichier envoie donc la photo ; partout
+        ailleurs — un ordinateur, ou un produit sans photo — le lien
+        reprend la main, avec le contact deja choisi.
+      */}
+      {reachable && withPhoto ? (
+        <button
+          onClick={shareWithPhoto}
+          disabled={sharing}
+          title={message}
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-[#25D366] py-2.5 text-[13.5px] font-medium text-white hover:bg-[#1eb855] disabled:opacity-60"
+        >
+          {sharing ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <MessageCircle className="h-4 w-4" />
+          )}
+          WhatsApp &mdash; {messageLabelFor(messageKey)}
+        </button>
+      ) : reachable ? (
         <a
           href={whatsappLink(lead, message)}
           target="_blank"
           rel="noopener noreferrer"
           title={message}
-          className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-[#25D366] py-2.5 text-[13.5px] font-medium text-white hover:bg-[#1eb855]"
+          className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-[#25D366] py-2.5 text-[13.5px] font-medium text-white hover:bg-[#1eb855] disabled:opacity-60"
         >
           <MessageCircle className="h-4 w-4" />
           WhatsApp &mdash; {messageLabelFor(messageKey)}
@@ -253,10 +278,22 @@ export default function CallOutcomePanel({
         </p>
       )}
 
-      <p className="mt-1.5 text-center text-[11.5px] text-gray-400">
-        Si votre navigateur n&apos;ouvre pas le composeur, copiez le numero :{" "}
-        <span className="font-mono text-gray-500">{lead.phone}</span>
-      </p>
+      {withPhoto ? (
+        <p className="mt-1.5 text-center text-[11.5px] text-gray-400">
+          La photo du produit part avec le message. Choisissez WhatsApp, puis{" "}
+          {lead.client.split(" ")[0] || "le client"} dans la liste.
+        </p>
+      ) : (
+        <p className="mt-1.5 text-center text-[11.5px] text-gray-400">
+          Si votre navigateur n&apos;ouvre pas le composeur, copiez le numero :{" "}
+          <span className="font-mono text-gray-500">{lead.phone}</span>
+        </p>
+      )}
+      {shareError && (
+        <p className="mt-1 text-center text-[11.5px] text-red-600">
+          {shareError}
+        </p>
+      )}
       {/*
         La vraie photo, jointe au message. WhatsApp ne sait pas prendre
         une image par un lien wa.me : il faut passer par la feuille de
@@ -264,32 +301,6 @@ export default function CallOutcomePanel({
         legende. Le prix a payer est le destinataire, que ce chemin ne
         sait pas designer.
       */}
-      {canShareFiles && lead.productImage && (
-        <>
-          <button
-            onClick={shareWithPhoto}
-            disabled={sharing}
-            className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-[#25D366] bg-white py-2.5 text-[13.5px] font-medium text-[#128C7E] hover:bg-[#f0fff6] disabled:opacity-60"
-          >
-            {sharing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <ImageUp className="h-4 w-4" />
-            )}
-            Envoyer avec la photo
-          </button>
-          <p className="mt-1 text-center text-[11.5px] text-gray-400">
-            Choisissez WhatsApp, puis {lead.client.split(" ")[0] || "le client"}{" "}
-            dans la liste. Le texte est copie : si la legende manque, collez-la.
-          </p>
-          {shareError && (
-            <p className="mt-1 text-center text-[11.5px] text-red-600">
-              {shareError}
-            </p>
-          )}
-        </>
-      )}
-
 
       {/*
         La consigne du client. Elle vit ici, sous le bouton WhatsApp,
