@@ -43,12 +43,48 @@ const SAMPLE: MessageOrder = {
   productImage: "https://exemple.ma/photo-produit.jpg",
 };
 
+/**
+ * Brouillon local des messages.
+ *
+ * Il ne remplace pas l'enregistrement : il evite seulement qu'un texte
+ * ecrit disparaisse quand l'enregistrement echoue. Range par navigateur,
+ * il ne concerne que la personne qui a ecrit.
+ */
+const DRAFT_KEY = "whatsapp-messages-brouillon";
+
+function readDraft(): Record<string, string> | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, string>) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeDraft(templates: Record<string, string>) {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(templates));
+  } catch {
+    // Stockage plein ou refuse : le brouillon est un filet, pas un du.
+  }
+}
+
+function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // Rien a faire : le prochain enregistrement le remplacera.
+  }
+}
+
 export default function WhatsappMessagesPanel({
   isAdmin,
 }: {
   isAdmin: boolean;
 }) {
   const [templates, setTemplates] = useState<Record<string, string> | null>(null);
+  /** Modifications non enregistrees, retrouvees au chargement. */
+  const [restored, setRestored] = useState(false);
   const [openStatus, setOpenStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -60,8 +96,21 @@ export default function WhatsappMessagesPanel({
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
-        if (data.error) setError(data.error);
-        else setTemplates(data.templates ?? {});
+        if (data.error) {
+          setError(data.error);
+          return;
+        }
+        const serveur: Record<string, string> = data.templates ?? {};
+
+        // Un texte ecrit puis perdu ne se retrouve nulle part : le
+        // brouillon local le rend quand l'enregistrement n'a pas about
+        // — session expiree, reseau coupe, onglet ferme trop vite.
+        const brouillon = readDraft();
+        const differe =
+          brouillon &&
+          Object.keys(brouillon).some((k) => brouillon[k] !== serveur[k]);
+        setTemplates(differe ? { ...serveur, ...brouillon } : serveur);
+        setRestored(Boolean(differe));
       })
       .catch(() => {
         if (!cancelled) setError("Messages indisponibles.");
@@ -116,7 +165,11 @@ export default function WhatsappMessagesPanel({
   ];
 
   function setText(status: string, value: string) {
-    setTemplates((prev) => ({ ...(prev ?? {}), [status]: value }));
+    setTemplates((prev) => {
+      const next = { ...(prev ?? {}), [status]: value };
+      writeDraft(next);
+      return next;
+    });
     setSaved(false);
   }
 
@@ -124,6 +177,7 @@ export default function WhatsappMessagesPanel({
     setTemplates((prev) => {
       const next = { ...(prev ?? {}) };
       delete next[status];
+      writeDraft(next);
       return next;
     });
     setSaved(false);
@@ -139,14 +193,67 @@ export default function WhatsappMessagesPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ templates }),
       });
-      const data = await res.json();
-      if (!res.ok) setError(data.error ?? "Enregistrement refuse.");
-      else {
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2500);
+
+      // Une reponse qui n'est pas du JSON est une panne d'hebergement,
+      // pas un refus applicatif : la lire comme du JSON masquait tout
+      // derriere un "Impossible de joindre le serveur".
+      let data: { error?: string } = {};
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
       }
+
+      if (!res.ok) {
+        // Le cas le plus frequent, et le plus trompeur : la lecture a
+        // reussi au chargement de la page, l'ecriture arrive longtemps
+        // apres et la session n'est plus valable. Le texte semblait
+        // enregistre, et revenait a l'ancien au rechargement.
+        if (res.status === 401) {
+          setError(
+            "Votre session a expire : rien n'a ete enregistre. Reconnectez-vous dans un autre onglet, puis revenez cliquer sur Enregistrer — votre texte est conserve ici."
+          );
+        } else if (res.status === 403) {
+          setError(
+            "Seul un administrateur peut modifier ces messages. Rien n'a ete enregistre."
+          );
+        } else {
+          setError(
+            `Enregistrement refuse (erreur ${res.status}). ${data.error ?? ""}`.trim()
+          );
+        }
+        return;
+      }
+
+      // Verification : on relit ce que le serveur a reellement garde.
+      // Sans elle, un filtrage silencieux cote serveur laissait croire
+      // a un enregistrement reussi.
+      const relu = await fetch("/api/settings/whatsapp")
+        .then((r) => r.json())
+        .then((d) => (d.templates ?? {}) as Record<string, string>)
+        .catch(() => null);
+
+      const manquants = relu
+        ? Object.keys(templates).filter(
+            (k) => templates[k].trim() && relu[k] !== templates[k]
+          )
+        : [];
+
+      if (manquants.length > 0) {
+        setError(
+          `Le serveur n'a pas garde ${manquants.length} message(s) : ${manquants.join(", ")}.`
+        );
+        return;
+      }
+
+      clearDraft();
+      setRestored(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
     } catch {
-      setError("Impossible de joindre le serveur.");
+      setError(
+        "Impossible de joindre le serveur : rien n'a ete enregistre. Votre texte est conserve ici."
+      );
     } finally {
       setSaving(false);
     }
@@ -176,10 +283,22 @@ export default function WhatsappMessagesPanel({
         ))}
       </div>
 
+      {/*
+        L'echec doit se voir. Auparavant une ligne fine tout en haut
+        annoncait le refus, loin du bouton et du texte : on croyait avoir
+        enregistre, et le rechargement ramenait l'ancien message.
+      */}
       {error && (
-        <p className="mb-3 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">
-          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <p className="mb-3 flex items-start gap-2 rounded-lg border-2 border-red-300 bg-red-50 px-3 py-2.5 text-[12.5px] font-medium text-red-700">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           {error}
+        </p>
+      )}
+
+      {restored && !error && (
+        <p className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-[12.5px] text-amber-800">
+          Des modifications n&apos;avaient pas ete enregistrees : elles sont
+          retablies ci-dessous. Cliquez sur Enregistrer pour les garder.
         </p>
       )}
 
@@ -258,6 +377,13 @@ export default function WhatsappMessagesPanel({
             </div>
           ))}
         </div>
+      )}
+
+      {error && (
+        <p className="mt-4 flex items-start gap-2 rounded-lg border-2 border-red-300 bg-red-50 px-3 py-2.5 text-[12.5px] font-medium text-red-700">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          {error}
+        </p>
       )}
 
       {isAdmin ? (
