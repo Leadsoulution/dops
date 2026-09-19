@@ -1,6 +1,7 @@
 import "server-only";
 import { getSupabaseServerClient } from "./server";
 import { resolveAttribution } from "./attribution";
+import { fetchAll } from "./page";
 import { getIntegrationSettings } from "./integrations";
 
 /**
@@ -118,25 +119,27 @@ export async function getPaymentReport(
 ): Promise<PaymentReport> {
   const supabase = getSupabaseServerClient();
 
-  const [rate, leadsRes, profilesRes, productsRes, eventsRes] = await Promise.all([
+  const [rate, leadRows, profilesRes, productsRes, events] = await Promise.all([
     getPaymentRate(),
-    supabase
-      .from("leads")
-      .select(
-        "id,reference,client,product_name,product_label,ville,amount,tracking_number,delivery_status,delivery_status_code,delivery_date,confirmation_paid_at,confirmation_paid_amount,confirmation_paid_by"
-      )
-      .eq("delivery_status_code", DELIVERED),
+    fetchAll<LeadRow>(() =>
+      supabase
+        .from("leads")
+        .select(
+          "id,reference,client,product_name,product_label,ville,amount,tracking_number,delivery_status,delivery_status_code,delivery_date,confirmation_paid_at,confirmation_paid_amount,confirmation_paid_by"
+        )
+        .eq("delivery_status_code", DELIVERED)
+    ),
     supabase.from("profiles").select("id,name,role"),
     supabase.from("products").select("name,image").not("image", "is", null),
-    supabase
-      .from("lead_events")
-      .select("lead_id,actor_id,actor_name,field,new_value,created_at")
-      .order("created_at", { ascending: true }),
+    fetchAll<EventRow>(() =>
+      supabase
+        .from("lead_events")
+        .select("lead_id,actor_id,actor_name,field,new_value,created_at")
+        .order("created_at", { ascending: true })
+    ),
   ]);
 
-  if (leadsRes.error) throw new Error(leadsRes.error.message);
   if (profilesRes.error) throw new Error(profilesRes.error.message);
-  if (eventsRes.error) throw new Error(eventsRes.error.message);
 
   // La photo du produit, rapprochee par son nom comme ailleurs dans
   // l'application : une ligne de paiement se reconnait mieux a l'image
@@ -161,7 +164,6 @@ export async function getPaymentReport(
   );
   const nameById = new Map(profiles.map((p) => [p.id, p.name]));
 
-  const events = (eventsRes.data ?? []) as EventRow[];
   const attribution = resolveAttribution(events, adminIds, agentIds);
 
   // L'agent credite de la confirmation de chaque commande : c'est ce
@@ -174,7 +176,7 @@ export async function getPaymentReport(
     if (credited) agentByLead.set(event.lead_id, nameById.get(credited) ?? "");
   }
 
-  const leads = (leadsRes.data ?? []) as LeadRow[];
+  const leads = leadRows;
 
   const orders: PayableOrder[] = leads
     .filter((lead) => withinPeriod(lead.delivery_date, from, to))

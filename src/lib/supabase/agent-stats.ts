@@ -1,6 +1,7 @@
 import "server-only";
 import { getSupabaseServerClient } from "./server";
 import { resolveAttribution } from "./attribution";
+import { fetchAll } from "./page";
 import type {
   AgentAction,
   AgentStats,
@@ -168,36 +169,36 @@ export async function getAgentStats(
 ): Promise<TeamStats> {
   const supabase = getSupabaseServerClient();
 
-  const [profilesRes, leadsRes, productsRes] = await Promise.all([
+  const [profilesRes, leadRows, productsRes] = await Promise.all([
     supabase
       .from("profiles")
       .select("id,name,email,role,status,avatar_color")
       .order("name"),
-    supabase
-      .from("leads")
-      .select(
-        "id,reference,phone,status,created_at,tracking_number,delivery_status_code,product_name"
-      ),
+    fetchAll<LeadRow>(() =>
+      supabase
+        .from("leads")
+        .select(
+          "id,reference,phone,status,created_at,tracking_number,delivery_status_code,product_name"
+        )
+    ),
     supabase.from("products").select("name,image").not("image", "is", null),
   ]);
 
   if (profilesRes.error) throw new Error(profilesRes.error.message);
-  if (leadsRes.error) throw new Error(leadsRes.error.message);
 
-  const leads = new Map<string, LeadRow>(
-    ((leadsRes.data ?? []) as LeadRow[]).map((l) => [l.id, l])
-  );
+  const leads = new Map<string, LeadRow>(leadRows.map((l) => [l.id, l]));
 
-  let query = supabase
-    .from("lead_events")
-    .select("lead_id,actor_id,actor_name,field,old_value,new_value,created_at")
-    .order("created_at", { ascending: true });
-  if (from) query = query.gte("created_at", from);
-  if (to) query = query.lte("created_at", to);
-
-  const eventsRes = await query;
-  if (eventsRes.error) throw new Error(eventsRes.error.message);
-  const events = (eventsRes.data ?? []) as EventRow[];
+  // Lecture complete : au-dela de mille evenements, une lecture simple
+  // s'arrete sans le dire et les gestes les plus recents disparaissent.
+  const events = await fetchAll<EventRow>(() => {
+    let query = supabase
+      .from("lead_events")
+      .select("lead_id,actor_id,actor_name,field,old_value,new_value,created_at")
+      .order("created_at", { ascending: true });
+    if (from) query = query.gte("created_at", from);
+    if (to) query = query.lte("created_at", to);
+    return query;
+  });
 
   const profiles = (profilesRes.data ?? []) as {
     id: string;

@@ -1,4 +1,5 @@
 import { getSupabaseServerClient } from "./server";
+import { fetchAll } from "./page";
 import { cityKey, tariffByCityForm } from "./cities";
 import type { Lead, LeadSource, LeadStatus } from "@/components/dashboard/leads-data";
 
@@ -119,15 +120,17 @@ export async function listLeads(): Promise<Lead[]> {
   // `id` departage les `created_at` identiques : sans lui, deux lignes de
   // meme horodatage ressortent dans un ordre arbitraire, et une ligne
   // modifiee (reecrite en fin de table) se retrouve affichee en dernier.
-  const { data, error } = await supabase
-    .from("leads")
-    .select(COLUMNS)
-    .order("created_at", { ascending: false })
-    .order("id", { ascending: true });
+  // Lecture complete : une lecture simple s'arrete a mille lignes sans
+  // le dire, et les commandes au-dela disparaitraient de la liste.
+  const data = await fetchAll<LeadRow>(() =>
+    supabase
+      .from("leads")
+      .select(COLUMNS)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+  );
 
-  if (error) throw new Error(error.message);
-
-  const leads = await withProductImages((data as LeadRow[]).map(toLead));
+  const leads = await withProductImages(data.map(toLead));
   return withCityTariffs(leads);
 }
 

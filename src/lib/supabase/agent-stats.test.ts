@@ -52,14 +52,17 @@ function stubTables(profiles: Profile[], leads: Lead[], events: Event[]) {
     if (table === "profiles") {
       return { select: () => ({ order: () => ({ data: profiles, error: null }) }) };
     }
-    if (table === "leads") {
-      return { select: () => ({ data: leads, error: null }) };
-    }
     // Les photos de produits : la ventilation par produit les demande,
     // et elles n'ont pas d'incidence sur les comptes.
     if (table === "products") {
       return { select: () => ({ not: () => ({ data: [], error: null }) }) };
     }
+
+    if (table === "leads") {
+      return { select: () => sliceable(leads) };
+    }
+
+    // `lead_events` se lit avec des bornes de date puis par tranches.
     let lower: string | undefined;
     let upper: string | undefined;
     const chain = {
@@ -73,17 +76,31 @@ function stubTables(profiles: Profile[], leads: Lead[], events: Event[]) {
         upper = value;
         return chain;
       },
-      then: (resolve: (r: { data: Event[]; error: null }) => void) =>
-        resolve({
-          data: events.filter(
-            (e) =>
-              (!lower || e.created_at >= lower) && (!upper || e.created_at <= upper)
-          ),
+      range: (start: number, end: number) =>
+        Promise.resolve({
+          data: events
+            .filter(
+              (e) =>
+                (!lower || e.created_at >= lower) &&
+                (!upper || e.created_at <= upper)
+            )
+            .slice(start, end + 1),
           error: null,
         }),
     };
     return chain;
   });
+}
+
+/**
+ * Une lecture par tranches, comme Supabase la sert : jamais plus de
+ * mille lignes a la fois.
+ */
+function sliceable<T>(rows: T[]) {
+  return {
+    range: (start: number, end: number) =>
+      Promise.resolve({ data: rows.slice(start, end + 1), error: null }),
+  };
 }
 
 const ALICE: Profile = {
