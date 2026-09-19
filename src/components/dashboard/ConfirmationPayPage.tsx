@@ -15,7 +15,7 @@ import {
   Truck,
   Wallet,
 } from "lucide-react";
-import AreaTrendChart from "./AreaTrendChart";
+import BarChart from "./BarChart";
 import PeriodFilter from "./PeriodFilter";
 import ConfirmDialog from "./ConfirmDialog";
 import { periodBounds, type Range } from "./useTeamStats";
@@ -372,21 +372,23 @@ export default function ConfirmationPayPage() {
               <p className="mb-3 text-[12.5px] font-semibold text-gray-700">
                 Livraisons par jour
               </p>
-              {report && report.daily.length > 1 ? (
-                <AreaTrendChart
-                  labels={report.daily.map((d) => d.date.slice(5))}
-                  series={[
-                    {
-                      name: "Livrees",
-                      data: report.daily.map((d) => d.delivered),
-                      color: "#2563eb",
-                    },
-                  ]}
+              {report && report.daily.length > 0 ? (
+                <BarChart
+                  data={report.daily.map((d) => ({
+                    // Le quantieme suffit sous une barre etroite ; la
+                    // date complete reste dans l'infobulle.
+                    label: d.date.slice(8),
+                    title: d.date,
+                    value: d.delivered,
+                  }))}
                   height={180}
+                  valueLabel={(v) =>
+                    `${v} livraison${v > 1 ? "s" : ""}`
+                  }
                 />
               ) : (
                 <p className="py-10 text-center text-[12.5px] text-gray-400">
-                  Pas encore assez de livraisons pour tracer une courbe.
+                  Aucune livraison sur cette periode.
                 </p>
               )}
             </div>
