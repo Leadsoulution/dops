@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   LayoutDashboard,
@@ -41,6 +41,29 @@ import {
 import { agentPerformance } from "./confirmation-data";
 import { leads } from "./leads-data";
 import AssignModal from "./AssignModal";
+import { periodBounds, type Range } from "./useTeamStats";
+
+/** Un indicateur tel que le serveur le renvoie. */
+type Kpi = {
+  key: string;
+  label: string;
+  value: number;
+  unit?: "MAD";
+  subtitle?: string;
+  trend: string;
+  trendUp: boolean;
+  neutral?: boolean;
+  spark: number[];
+};
+
+/** "4 200 MAD", "145", "-1 989 MAD". */
+function formatKpi(kpi: Kpi): string {
+  const sign = kpi.value < 0 ? "-" : "";
+  const body = Math.abs(kpi.value).toLocaleString("fr-FR", {
+    maximumFractionDigits: 0,
+  });
+  return kpi.unit ? `${sign}${body} ${kpi.unit}` : `${sign}${body}`;
+}
 
 const dateRanges = [
   "Aujourd'hui",
@@ -104,6 +127,33 @@ export default function DashboardPage() {
     setActiveRange("Maximum");
     setCalendarOpen(false);
   }
+
+  // Indicateurs reels, relus a chaque changement de periode.
+  const [kpis, setKpis] = useState<Kpi[] | null>(null);
+  const bornes = periodBounds({
+    label: activeRange,
+    custom: customRange,
+  } as Range);
+  const kpiKey = `${bornes.from ?? ""}|${bornes.to ?? ""}`;
+
+  useEffect(() => {
+    let cancelled = false;
+    const [from, to] = kpiKey.split("|");
+    const params = new URLSearchParams();
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    fetch(`/api/dashboard/kpis?${params}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled && Array.isArray(d.kpis)) setKpis(d.kpis);
+      })
+      .catch(() => {
+        /* Cartes vides plutot qu'un ecran d'erreur. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [kpiKey]);
 
   const customDays = customRange
     ? Math.max(
@@ -283,13 +333,14 @@ export default function DashboardPage() {
       </div>
 
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {kpiCards.map((kpi) => {
+        {(kpis ?? kpiCards.map((k) => ({ ...k, key: k.label }))).map((kpi) => {
           const Icon = kpiIcons[kpi.label] ?? ShoppingCart;
           return (
             <div
-              key={kpi.label}
-              className="overflow-hidden rounded-xl border border-gray-200 bg-white p-3.5"
+              key={kpi.key}
+              className="flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white pt-3.5"
             >
+              <div className="px-3.5">
               <div className="mb-2 flex items-start justify-between gap-1.5">
                 <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                   <p className="truncate text-[10.5px] font-semibold uppercase tracking-wide text-gray-400">
@@ -297,12 +348,14 @@ export default function DashboardPage() {
                   </p>
                   <span
                     className={`flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 font-mono text-[10px] font-medium ${
-                      kpi.trendUp
-                        ? "bg-emerald-50 text-emerald-600"
-                        : "bg-red-50 text-red-600"
+                      (kpi as Kpi).neutral
+                        ? "bg-gray-100 text-gray-500"
+                        : kpi.trendUp
+                          ? "bg-emerald-50 text-emerald-600"
+                          : "bg-red-50 text-red-600"
                     }`}
                   >
-                    {kpi.trendUp ? (
+                    {(kpi as Kpi).neutral ? null : kpi.trendUp ? (
                       <TrendingUp className="h-2.5 w-2.5" />
                     ) : (
                       <TrendingDown className="h-2.5 w-2.5" />
@@ -314,7 +367,7 @@ export default function DashboardPage() {
               </div>
               <div className="mb-1 flex items-baseline gap-1.5">
                 <p className="truncate font-mono text-[18px] font-semibold text-gray-900">
-                  {formatKpiValue(kpi, scale)}
+                  {kpis ? formatKpi(kpi as Kpi) : formatKpiValue(kpi, scale)}
                 </p>
                 {kpi.subtitle && (
                   <span className="shrink-0 text-[11px] text-gray-400">
@@ -322,7 +375,21 @@ export default function DashboardPage() {
                   </span>
                 )}
               </div>
-              <Sparkline data={kpi.spark} positive={kpi.trendUp} width={160} height={30} />
+              </div>
+
+              {/*
+                La courbe occupe toute la largeur de la carte, bord a
+                bord : elle sert de fond au chiffre plutot que de
+                vignette posee a cote.
+              */}
+              <Sparkline
+                data={kpi.spark}
+                positive={kpi.trendUp}
+                neutral={(kpi as Kpi).neutral}
+                width={160}
+                height={30}
+                className="mt-1 block h-[38px] w-full"
+              />
             </div>
           );
         })}
