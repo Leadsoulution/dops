@@ -8,7 +8,7 @@ import { getInventory, matchProduct } from "./inventory";
 type P = {
   id: string; ref: string; name: string; forcelog_ref: string | null;
   image: string | null; quantity: number; stock_initial: number;
-  stock_depot: number; status: string;
+  stock_sent: number; status: string;
 };
 type L = {
   product_name: string | null; stock_items: string | null;
@@ -18,7 +18,7 @@ type L = {
 
 const produit = (o: Partial<P>): P => ({
   id: "p1", ref: "R1", name: "Bague", forcelog_ref: null, image: null,
-  quantity: 0, stock_initial: 0, stock_depot: 0, status: "Actif", ...o,
+  quantity: 0, stock_initial: 0, stock_sent: 0, status: "Actif", ...o,
 });
 const commande = (o: Partial<L>): L => ({
   product_name: "Bague", stock_items: null, item_count: 1,
@@ -40,33 +40,44 @@ function stub(products: P[], leads: L[]) {
 beforeEach(() => from.mockReset());
 
 describe("getInventory", () => {
-  it("additionne le depot, le transporteur et ce qui roule", async () => {
+  it("dit ce que le transporteur devrait detenir, et l'ecart", async () => {
     stub(
-      [produit({ stock_initial: 100, stock_depot: 12, quantity: 30 })],
+      [produit({ stock_initial: 100, stock_sent: 70, quantity: 42 })],
       [
-        // En route : le colis existe et n'est pas arrive.
         commande({ delivery_status_code: "DISTRIBUTION", item_count: 3 }),
-        // Livre : parti pour de bon, il ne reste nulle part.
-        commande({ delivery_status_code: "DELIVERED", item_count: 5 }),
-        // Retour : compte a part, le transporteur le remettra en stock.
+        commande({ delivery_status_code: "DELIVERED", item_count: 25 }),
         commande({ delivery_status_code: "RETURNED", item_count: 2 }),
       ]
     );
 
     const { totals } = await getInventory();
-    expect(totals.initial).toBe(100);
-    expect(totals.depot).toBe(12);
-    expect(totals.carrier).toBe(30);
+    expect(totals.purchased).toBe(100);
+    expect(totals.delivered).toBe(25);
+    // Achete moins livre : ce qui nous appartient encore.
+    expect(totals.real).toBe(75);
+    // Confie moins livre : ce qu'il devrait avoir en rayon.
+    expect(totals.expectedAtCarrier).toBe(45);
+    expect(totals.carrier).toBe(42);
+    // Trois manquants : des retours qui ne sont pas revenus, ou des
+    // colis encore en route.
+    expect(totals.gap).toBe(3);
     expect(totals.inTransit).toBe(3);
-    expect(totals.delivered).toBe(5);
     expect(totals.returned).toBe(2);
-    // 12 + 30 + 3 : le livre et le retour n'y sont pas.
-    expect(totals.remaining).toBe(45);
+  });
+
+  it("ne montre aucun ecart quand le compte du transporteur tombe juste", async () => {
+    stub(
+      [produit({ stock_initial: 50, stock_sent: 50, quantity: 40 })],
+      [commande({ delivery_status_code: "DELIVERED", item_count: 10 })]
+    );
+    const { totals } = await getInventory();
+    expect(totals.expectedAtCarrier).toBe(40);
+    expect(totals.gap).toBe(0);
   });
 
   it("ne sort du stock que ce qui a un numero de suivi", async () => {
     stub(
-      [produit({ stock_depot: 10 })],
+      [produit({})],
       // Confirmee mais pas encore expediee : la marchandise est en rayon,
       // et s'y trouve deja comptee. La sortir la compterait deux fois.
       [commande({ tracking_number: null, item_count: 4 })]
@@ -74,7 +85,6 @@ describe("getInventory", () => {
 
     const { totals } = await getInventory();
     expect(totals.inTransit).toBe(0);
-    expect(totals.remaining).toBe(10);
   });
 
   it("signale les commandes dont le produit est inconnu", async () => {
@@ -90,10 +100,10 @@ describe("getInventory", () => {
   });
 
   it("laisse un produit archive hors de l'inventaire", async () => {
-    stub([produit({ status: "Archive", stock_depot: 99 })], []);
+    stub([produit({ status: "Archive", stock_initial: 99 })], []);
     const { products, totals } = await getInventory();
     expect(products).toHaveLength(0);
-    expect(totals.remaining).toBe(0);
+    expect(totals.purchased).toBe(0);
   });
 
   it("compte une unite quand la commande n'en precise pas", async () => {

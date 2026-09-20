@@ -3,17 +3,19 @@ import { getSupabaseServerClient } from "./server";
 import { fetchAll } from "./page";
 
 /**
- * Inventaire : ou se trouve la marchandise achetee.
+ * Inventaire.
  *
- * Elle est a trois endroits a la fois, et aucun ne suffit seul. Une
- * partie dort dans notre depot, une autre dans celui du transporteur,
- * une derniere roule dans un camion. Ne regarder que le depot du
- * transporteur — la seule quantite que le catalogue connaissait —
- * laissait croire a une rupture alors que la marchandise etait en route.
+ * Deux questions, et la seconde est la plus utile.
  *
- * Ce qui a ete livre ne compte plus nulle part : il a ete paye et il est
- * parti. C'est justement l'ecart entre l'achat de depart et ce qui
- * reste.
+ * Combien reste-t-il ? C'est l'achat de depart moins ce qui a ete remis
+ * aux clients : le stock reel.
+ *
+ * Et surtout : le transporteur detient-il bien ce qu'il devrait ? De
+ * tout ce qui lui a ete confie, il ne doit avoir livre que le livre ;
+ * le reste devrait etre encore chez lui, retours compris. Comparer ce
+ * compte a ce qu'il declare, c'est savoir si les retours sont revenus
+ * en rayon ou se sont perdus en chemin. Personne ne le dit autrement :
+ * le transporteur ne publie que son stock du moment.
  */
 
 /** Codes du transporteur disant qu'un colis ne roule plus. */
@@ -28,29 +30,35 @@ export type ProductStock = {
   name: string;
   image?: string;
   /** Quantite achetee au depart, saisie a la main. */
-  initial: number;
-  /** Ce qui reste dans notre propre depot, saisi a la main. */
-  depot: number;
-  /** Ce que le transporteur dit avoir en stock. */
-  carrier: number;
-  /** Unites parties mais pas encore remises au client. */
-  inTransit: number;
+  purchased: number;
+  /** Total confie au transporteur depuis le debut, saisi a la main. */
+  sent: number;
   /** Unites remises au client : elles ne reviendront pas. */
   delivered: number;
-  /** Unites revenues ou refusees, a remettre en rayon. */
+  /** Unites parties mais pas encore remises. */
+  inTransit: number;
+  /** Unites retournees, refusees ou annulees a la livraison. */
   returned: number;
-  /** depot + transporteur + en route. */
-  remaining: number;
+  /** Achete moins livre : ce que nous possedons encore, ou qu'il soit. */
+  real: number;
+  /** Ce que le transporteur devrait encore detenir : confie moins livre. */
+  expectedAtCarrier: number;
+  /** Ce que le transporteur declare detenir. */
+  carrier: number;
+  /** Attendu moins declare. Positif : il manque de la marchandise. */
+  gap: number;
 };
 
 export type InventoryTotals = {
-  initial: number;
-  depot: number;
-  carrier: number;
-  inTransit: number;
+  purchased: number;
+  sent: number;
   delivered: number;
+  inTransit: number;
   returned: number;
-  remaining: number;
+  real: number;
+  expectedAtCarrier: number;
+  carrier: number;
+  gap: number;
 };
 
 type ProductRow = {
@@ -61,7 +69,7 @@ type ProductRow = {
   image: string | null;
   quantity: number;
   stock_initial: number;
-  stock_depot: number;
+  stock_sent: number;
   status: string;
 };
 
@@ -77,9 +85,9 @@ type LeadRow = {
  * A quel produit du catalogue se rattache cette commande ?
  *
  * D'abord par code article preleve, qui est exact ; a defaut par nom,
- * la commande de la boutique portant le nom exact du produit. Le meme
- * rapprochement sert aux photos : une commande sans produit reconnu ne
- * compte pour aucun, plutot que d'etre attribuee au hasard.
+ * la commande de la boutique portant le nom exact du produit. Une
+ * commande sans produit reconnu ne compte pour aucun, plutot que d'etre
+ * attribuee au hasard.
  */
 export function matchProduct(
   lead: { product_name: string | null; stock_items: string | null },
@@ -108,7 +116,7 @@ export async function getInventory(): Promise<{
       supabase
         .from("products")
         .select(
-          "id,ref,name,forcelog_ref,image,quantity,stock_initial,stock_depot,status"
+          "id,ref,name,forcelog_ref,image,quantity,stock_initial,stock_sent,status"
         )
         .order("name", { ascending: true })
     ),
@@ -152,20 +160,23 @@ export async function getInventory(): Promise<{
   }
 
   const rows: ProductStock[] = actifs.map((p) => {
-    const transit = inTransit.get(p.id) ?? 0;
+    const livre = delivered.get(p.id) ?? 0;
+    const expectedAtCarrier = p.stock_sent - livre;
     return {
       id: p.id,
       ref: p.ref,
       forcelogRef: p.forcelog_ref ?? undefined,
       name: p.name,
       image: p.image ?? undefined,
-      initial: p.stock_initial,
-      depot: p.stock_depot,
-      carrier: p.quantity,
-      inTransit: transit,
-      delivered: delivered.get(p.id) ?? 0,
+      purchased: p.stock_initial,
+      sent: p.stock_sent,
+      delivered: livre,
+      inTransit: inTransit.get(p.id) ?? 0,
       returned: returned.get(p.id) ?? 0,
-      remaining: p.stock_depot + p.quantity + transit,
+      real: p.stock_initial - livre,
+      expectedAtCarrier,
+      carrier: p.quantity,
+      gap: expectedAtCarrier - p.quantity,
     };
   });
 
@@ -175,13 +186,15 @@ export async function getInventory(): Promise<{
   return {
     products: rows,
     totals: {
-      initial: sum((r) => r.initial),
-      depot: sum((r) => r.depot),
-      carrier: sum((r) => r.carrier),
-      inTransit: sum((r) => r.inTransit),
+      purchased: sum((r) => r.purchased),
+      sent: sum((r) => r.sent),
       delivered: sum((r) => r.delivered),
+      inTransit: sum((r) => r.inTransit),
       returned: sum((r) => r.returned),
-      remaining: sum((r) => r.remaining),
+      real: sum((r) => r.real),
+      expectedAtCarrier: sum((r) => r.expectedAtCarrier),
+      carrier: sum((r) => r.carrier),
+      gap: sum((r) => r.gap),
     },
     unmatched,
   };

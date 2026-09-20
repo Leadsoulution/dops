@@ -109,8 +109,8 @@ export type ProductInput = {
   image?: string;
   /** Quantite achetee au depart, tenue dans l'inventaire. */
   stockInitial?: number;
-  /** Ce qui reste dans notre propre depot, hors transporteur. */
-  stockDepot?: number;
+  /** Total confie au transporteur depuis le debut. */
+  stockSent?: number;
 };
 
 function toRow(input: Partial<ProductInput>) {
@@ -137,8 +137,8 @@ function toRow(input: Partial<ProductInput>) {
   // sous zero ne decrit rien, il cache une saisie fautive.
   if (input.stockInitial !== undefined)
     row.stock_initial = Math.max(0, Math.trunc(input.stockInitial));
-  if (input.stockDepot !== undefined)
-    row.stock_depot = Math.max(0, Math.trunc(input.stockDepot));
+  if (input.stockSent !== undefined)
+    row.stock_sent = Math.max(0, Math.trunc(input.stockSent));
   return row;
 }
 

@@ -9,6 +9,7 @@ import {
   Loader2,
   Package,
   RefreshCw,
+  Send,
   Truck,
   Warehouse,
 } from "lucide-react";
@@ -17,11 +18,11 @@ import type { ProductStock, InventoryTotals } from "@/lib/supabase/inventory";
 /**
  * Inventaire.
  *
- * Trois chiffres en tete, parce que la marchandise est a trois endroits
- * a la fois et qu'aucun ne suffit seul : ce qui a ete achete, ce qui
- * reste, et la part que le transporteur detient. Le detail par produit
- * suit, avec les deux seules quantites que personne ne peut deviner a
- * notre place — l'achat de depart et notre propre depot.
+ * Quatre chiffres en tete, et les deux derniers forment une paire :
+ * ce que le transporteur devrait detenir, et ce qu'il declare detenir.
+ * Leur ecart est la seule facon de savoir si les retours sont revenus
+ * en rayon — le transporteur ne publie que son stock du moment, jamais
+ * l'histoire de ce qu'il a recu.
  */
 
 const nf = new Intl.NumberFormat("fr-FR");
@@ -73,13 +74,13 @@ export default function InventairePage() {
   /**
    * Enregistre une quantite saisie, puis relit tout.
    *
-   * La relecture n'est pas du zele : changer l'achat de depart deplace
-   * le total, et changer le depot deplace le restant. Recalculer a
-   * l'ecran ce que le serveur sait calculer finirait par en differer.
+   * La relecture n'est pas du zele : changer l'achat deplace le stock
+   * reel, changer le confie deplace l'ecart. Recalculer a l'ecran ce
+   * que le serveur sait calculer finirait par en differer.
    */
   async function saveField(
     product: ProductStock,
-    field: "stockInitial" | "stockDepot",
+    field: "stockInitial" | "stockSent",
     value: number
   ) {
     setSavingId(product.id);
@@ -113,8 +114,7 @@ export default function InventairePage() {
             Inventaire
           </h1>
           <p className="text-[12.5px] text-gray-500">
-            Ou se trouve la marchandise achetee : chez nous, chez le
-            transporteur, ou en route.
+            Ce qui reste, et ce que le transporteur devrait detenir.
           </p>
         </div>
         <button
@@ -142,131 +142,118 @@ export default function InventairePage() {
 
       {t && (
         <>
-          <div className="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
-            {/* Ce qui a ete achete : le point de depart, saisi plus bas. */}
-            <section className="rounded-xl border-2 border-gray-300 bg-white p-5">
-              <p className="mb-1 flex items-center gap-2 text-[12px] font-semibold tracking-wide text-gray-500">
-                <Package className="h-4 w-4" />
-                STOCK TOTAL
-              </p>
-              <p className="font-mono text-[30px] font-semibold text-gray-900">
-                {nf.format(t.initial)}
-              </p>
-              <p className="text-[12px] text-gray-500">
-                Quantite achetee au depart.
-              </p>
-              <div className="mt-4 border-t border-gray-200 pt-3 text-[12.5px]">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Livre au client</span>
-                  <span className="font-mono text-gray-800">
-                    {nf.format(t.delivered)}
-                  </span>
-                </div>
-                {t.initial > 0 && (
-                  <div className="mt-1 flex justify-between">
-                    <span className="text-gray-500">Ecart avec le restant</span>
-                    <span
-                      className={`font-mono ${
-                        t.initial - t.delivered === t.remaining
-                          ? "text-emerald-600"
-                          : "text-amber-600"
-                      }`}
-                    >
-                      {nf.format(t.initial - t.delivered - t.remaining)}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </section>
+          <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <Card
+              tone="gray"
+              icon={<Package className="h-4 w-4" />}
+              title="STOCK ACHETE"
+              value={t.purchased}
+              note="Quantite achetee au depart, saisie."
+              lines={[["Livre au client", t.delivered]]}
+            />
 
-            {/* Ce qui reste, tous lieux confondus. */}
-            <section className="rounded-xl border-2 border-emerald-400 bg-white p-5">
-              <p className="mb-1 flex items-center gap-2 text-[12px] font-semibold tracking-wide text-emerald-700">
-                <Warehouse className="h-4 w-4" />
-                STOCK TOTAL RESTANT
-              </p>
-              <p className="font-mono text-[30px] font-semibold text-gray-900">
-                {nf.format(t.remaining)}
-              </p>
-              <p className="text-[12px] text-gray-500">
-                Notre depot, le transporteur et ce qui roule.
-              </p>
-              <div className="mt-4 space-y-1 border-t border-emerald-200 pt-3 text-[12.5px]">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Notre depot</span>
-                  <span className="font-mono text-gray-800">
-                    {nf.format(t.depot)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Chez le transporteur</span>
-                  <span className="font-mono text-gray-800">
-                    {nf.format(t.carrier)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">En cours de livraison</span>
-                  <span className="font-mono text-gray-800">
-                    {nf.format(t.inTransit)}
-                  </span>
-                </div>
-              </div>
-            </section>
+            <Card
+              tone="emerald"
+              icon={<Warehouse className="h-4 w-4" />}
+              title="STOCK REEL"
+              value={t.real}
+              note="Achete moins livre : ce qui vous appartient encore."
+              lines={[
+                ["En cours de livraison", t.inTransit],
+                ["Retours", t.returned],
+              ]}
+            />
 
-            {/* La part detenue par le transporteur. */}
-            <section className="rounded-xl border-2 border-blue-400 bg-white p-5">
-              <p className="mb-1 flex items-center gap-2 text-[12px] font-semibold tracking-wide text-blue-700">
-                <Truck className="h-4 w-4" />
-                STOCK CHEZ LE TRANSPORTEUR
-              </p>
-              <p className="font-mono text-[30px] font-semibold text-gray-900">
-                {nf.format(t.carrier)}
-              </p>
-              <p className="text-[12px] text-gray-500">
-                Depot ForceLog, releve a la synchronisation.
-              </p>
-              <div className="mt-4 space-y-1 border-t border-blue-200 pt-3 text-[12.5px]">
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Retours a remettre</span>
-                  <span className="font-mono text-gray-800">
-                    {nf.format(t.returned)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Part du restant</span>
-                  <span className="font-mono text-gray-800">
-                    {t.remaining > 0
-                      ? Math.round((t.carrier / t.remaining) * 100)
-                      : 0}
-                    %
-                  </span>
-                </div>
-              </div>
-            </section>
+            {/* Les deux cadres a comparer. */}
+            <Card
+              tone="blue"
+              icon={<Send className="h-4 w-4" />}
+              title="ENVOYE AU TRANSPORTEUR"
+              value={t.expectedAtCarrier}
+              note="Ce qu'il devrait encore detenir."
+              lines={[
+                ["Confie depuis le debut", t.sent],
+                ["Moins le livre", -t.delivered],
+              ]}
+            />
+
+            <Card
+              tone="violet"
+              icon={<Truck className="h-4 w-4" />}
+              title="RESTANT CHEZ LE TRANSPORTEUR"
+              value={t.carrier}
+              note="Ce qu'il declare dans sa plateforme."
+              lines={[["Ecart avec l'attendu", -t.gap]]}
+            />
           </div>
+
+          {/* Le resultat de la comparaison, dit en toutes lettres. */}
+          {t.sent > 0 && (
+            <p
+              className={`mb-5 rounded-lg border-2 px-3.5 py-3 text-[12.5px] ${
+                t.gap === 0
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+                  : t.gap > 0
+                    ? "border-red-300 bg-red-50 text-red-800"
+                    : "border-amber-300 bg-amber-50 text-amber-800"
+              }`}
+            >
+              {t.gap === 0 ? (
+                <>
+                  <span className="font-semibold">Les comptes tombent juste.</span>{" "}
+                  Le transporteur declare exactement ce qu&apos;il devrait
+                  detenir : tous les retours sont revenus en rayon.
+                </>
+              ) : t.gap > 0 ? (
+                <>
+                  <span className="font-semibold">
+                    Il manque {nf.format(t.gap)} article
+                    {t.gap > 1 ? "s" : ""} chez le transporteur.
+                  </span>{" "}
+                  Vous lui avez confie {nf.format(t.sent)} et il n&apos;en a
+                  livre que {nf.format(t.delivered)} : il devrait donc en
+                  detenir {nf.format(t.expectedAtCarrier)}, mais il en declare{" "}
+                  {nf.format(t.carrier)}. Des retours ne sont pas revenus en
+                  stock — ou des colis roulent encore ({nf.format(t.inTransit)}{" "}
+                  en cours).
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold">
+                    Le transporteur declare {nf.format(-t.gap)} article
+                    {-t.gap > 1 ? "s" : ""} de plus que prevu.
+                  </span>{" "}
+                  Soit un envoi n&apos;a pas ete saisi dans la colonne
+                  &laquo; Confie &raquo;, soit il a recu de la marchandise
+                  autrement.
+                </>
+              )}
+            </p>
+          )}
 
           {data.unmatched > 0 && (
             <p className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-[12.5px] text-amber-800">
               {data.unmatched} commande{data.unmatched > 1 ? "s" : ""} expediee
               {data.unmatched > 1 ? "s" : ""} ne correspond
               {data.unmatched > 1 ? "ent" : ""} a aucun produit du catalogue :
-              ses unites ne sont comptees nulle part. Reliez le produit dans la
-              fiche pour les faire entrer dans l&apos;inventaire.
+              ses unites ne sont comptees nulle part.
             </p>
           )}
 
           <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-            <table className="w-full min-w-[860px] text-[12.5px]">
+            <table className="w-full min-w-[980px] text-[12.5px]">
               <thead className="border-b border-gray-200 text-left text-gray-500">
                 <tr>
                   <th className="px-3 py-3 font-medium">Produit</th>
                   <th className="px-3 py-3 font-medium">Achete</th>
-                  <th className="px-3 py-3 font-medium">Notre depot</th>
-                  <th className="px-3 py-3 font-medium">Transporteur</th>
+                  <th className="px-3 py-3 font-medium">Stock reel</th>
+                  <th className="px-3 py-3 font-medium">Confie</th>
+                  <th className="px-3 py-3 font-medium">Attendu chez lui</th>
+                  <th className="px-3 py-3 font-medium">Declare par lui</th>
+                  <th className="px-3 py-3 font-medium">Ecart</th>
                   <th className="px-3 py-3 font-medium">En route</th>
                   <th className="px-3 py-3 font-medium">Livre</th>
                   <th className="px-3 py-3 font-medium">Retours</th>
-                  <th className="px-3 py-3 text-right font-medium">Restant</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -304,18 +291,39 @@ export default function InventairePage() {
                     </td>
                     <td className="px-3 py-2.5">
                       <QuantityInput
-                        value={p.initial}
+                        value={p.purchased}
                         onCommit={(v) => void saveField(p, "stockInitial", v)}
                       />
                     </td>
+                    <td className="px-3 py-2.5 font-mono font-semibold text-emerald-700">
+                      {nf.format(p.real)}
+                    </td>
                     <td className="px-3 py-2.5">
                       <QuantityInput
-                        value={p.depot}
-                        onCommit={(v) => void saveField(p, "stockDepot", v)}
+                        value={p.sent}
+                        onCommit={(v) => void saveField(p, "stockSent", v)}
                       />
                     </td>
                     <td className="px-3 py-2.5 font-mono text-blue-700">
+                      {nf.format(p.expectedAtCarrier)}
+                    </td>
+                    <td className="px-3 py-2.5 font-mono text-violet-700">
                       {nf.format(p.carrier)}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <span
+                        className={`rounded-md px-1.5 py-0.5 font-mono ${
+                          p.sent === 0
+                            ? "text-gray-300"
+                            : p.gap === 0
+                              ? "bg-emerald-50 text-emerald-700"
+                              : p.gap > 0
+                                ? "bg-red-50 text-red-700"
+                                : "bg-amber-50 text-amber-700"
+                        }`}
+                      >
+                        {p.sent === 0 ? "—" : nf.format(p.gap)}
+                      </span>
                     </td>
                     <td className="px-3 py-2.5 font-mono text-gray-700">
                       {nf.format(p.inTransit)}
@@ -326,9 +334,6 @@ export default function InventairePage() {
                     <td className="px-3 py-2.5 font-mono text-gray-500">
                       {nf.format(p.returned)}
                     </td>
-                    <td className="px-3 py-2.5 text-right font-mono font-semibold text-emerald-700">
-                      {nf.format(p.remaining)}
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -336,14 +341,73 @@ export default function InventairePage() {
           </div>
 
           <p className="mt-3 text-[11.5px] text-gray-400">
-            Les colonnes <span className="text-gray-500">Achete</span> et{" "}
-            <span className="text-gray-500">Notre depot</span> se saisissent :
-            personne d&apos;autre ne les connait. Le transporteur vient de la
-            synchronisation du stock, le reste est deduit des commandes.
+            <span className="text-gray-500">Achete</span> et{" "}
+            <span className="text-gray-500">Confie</span> se saisissent :
+            personne d&apos;autre ne les connait.{" "}
+            <span className="text-gray-500">Declare par lui</span> vient de la
+            synchronisation du stock transporteur. Tout le reste est deduit des
+            commandes.
           </p>
         </>
       )}
     </main>
+  );
+}
+
+const TONES = {
+  gray: { border: "border-gray-300", line: "border-gray-200", text: "text-gray-500" },
+  emerald: {
+    border: "border-emerald-400",
+    line: "border-emerald-200",
+    text: "text-emerald-700",
+  },
+  blue: { border: "border-blue-400", line: "border-blue-200", text: "text-blue-700" },
+  violet: {
+    border: "border-violet-400",
+    line: "border-violet-200",
+    text: "text-violet-700",
+  },
+} as const;
+
+function Card({
+  tone,
+  icon,
+  title,
+  value,
+  note,
+  lines,
+}: {
+  tone: keyof typeof TONES;
+  icon: React.ReactNode;
+  title: string;
+  value: number;
+  note: string;
+  lines: [string, number][];
+}) {
+  const style = TONES[tone];
+  return (
+    <section className={`rounded-xl border-2 bg-white p-5 ${style.border}`}>
+      <p
+        className={`mb-1 flex items-center gap-2 text-[12px] font-semibold tracking-wide ${style.text}`}
+      >
+        {icon}
+        {title}
+      </p>
+      <p className="font-mono text-[28px] font-semibold text-gray-900">
+        {nf.format(value)}
+      </p>
+      <p className="text-[12px] text-gray-500">{note}</p>
+      <div className={`mt-3 space-y-1 border-t pt-2.5 text-[12.5px] ${style.line}`}>
+        {lines.map(([label, n]) => (
+          <div key={label} className="flex justify-between gap-2">
+            <span className="text-gray-500">{label}</span>
+            <span className="shrink-0 font-mono text-gray-800">
+              {nf.format(n)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -363,8 +427,7 @@ function QuantityInput({
   const [draft, setDraft] = useState(String(value));
   const [seen, setSeen] = useState(value);
 
-  // La valeur du serveur a change : la case suit, sauf si elle est en
-  // cours de modification.
+  // La valeur du serveur a change : la case suit.
   if (seen !== value) {
     setSeen(value);
     setDraft(String(value));
