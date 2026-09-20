@@ -98,7 +98,20 @@ export default function CallOutcomePanel({
   const [allOpen, setAllOpen] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<LeadStatus | null>(null);
-  const [templates, setTemplates] = useState<Record<string, string>>({});
+  /**
+   * Les modeles enregistres, et ou en est leur lecture.
+   *
+   * L'etat de lecture compte autant que le contenu : un modele pas
+   * encore arrive est indiscernable d'un modele inexistant, et
+   * `templateFor` rend alors le texte propose par defaut. Le bouton
+   * restant cliquable, le client recevait le texte generique a la place
+   * de celui qui avait ete ecrit pour lui — sans que rien ne le signale.
+   */
+  const [templates, setTemplates] = useState<{
+    map: Record<string, string>;
+    loaded: boolean;
+    failed: boolean;
+  }>({ map: {}, loaded: false, failed: false });
   const [savingNote, setSavingNote] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
@@ -189,12 +202,15 @@ export default function CallOutcomePanel({
   useEffect(() => {
     let cancelled = false;
     fetch("/api/settings/whatsapp")
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error())))
       .then((data) => {
-        if (!cancelled && data?.templates) setTemplates(data.templates);
+        if (cancelled) return;
+        setTemplates({ map: data?.templates ?? {}, loaded: true, failed: false });
       })
       .catch(() => {
-        // Sans reglages enregistres, les textes par defaut s'appliquent.
+        // Session expiree, reseau coupe : on ne sait pas quels textes
+        // ont ete ecrits. Le dire vaut mieux que d'en envoyer un autre.
+        if (!cancelled) setTemplates({ map: {}, loaded: true, failed: true });
       });
     return () => {
       cancelled = true;
@@ -205,7 +221,7 @@ export default function CallOutcomePanel({
   // que la commande n'est pas confirmee, c'est la commande ; une fois
   // partie chez le transporteur, c'est ou se trouve son colis.
   const messageKey = messageKeyFor(lead);
-  const message = templateFor(messageKey, templates);
+  const message = templateFor(messageKey, templates.map);
   const reachable = Boolean(whatsappNumber(lead.phone));
   /** Ce telephone peut-il joindre la photo au message ? */
   const withPhoto = canCopyImage && Boolean(lead.productImage);
@@ -253,7 +269,7 @@ export default function CallOutcomePanel({
       {reachable && withPhoto ? (
         <button
           onClick={sendWithPhoto}
-          disabled={sharing}
+          disabled={sharing || !templates.loaded}
           title={message}
           className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-[#25D366] py-2.5 text-[13.5px] font-medium text-white hover:bg-[#1eb855] disabled:opacity-60"
         >
@@ -264,6 +280,11 @@ export default function CallOutcomePanel({
           )}
           WhatsApp &mdash; {messageLabelFor(messageKey)}
         </button>
+      ) : reachable && !templates.loaded ? (
+        <span className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-[#25D366]/60 py-2.5 text-[13.5px] font-medium text-white">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          WhatsApp &mdash; lecture des messages...
+        </span>
       ) : reachable ? (
         <a
           href={whatsappLink(lead, message)}
@@ -291,6 +312,12 @@ export default function CallOutcomePanel({
         <p className="mt-1.5 text-center text-[11.5px] text-gray-400">
           Si votre navigateur n&apos;ouvre pas le composeur, copiez le numero :{" "}
           <span className="font-mono text-gray-500">{lead.phone}</span>
+        </p>
+      )}
+      {templates.failed && (
+        <p className="mt-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-center text-[11.5px] text-amber-800">
+          Vos messages enregistres n&apos;ont pas pu etre lus : c&apos;est le
+          texte par defaut qui partira. Rechargez la page.
         </p>
       )}
       {shareError && (
