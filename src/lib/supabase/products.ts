@@ -107,6 +107,10 @@ export type ProductInput = {
   reorderThreshold?: number;
   status?: "Actif" | "Archive";
   image?: string;
+  /** Quantite achetee au depart, tenue dans l'inventaire. */
+  stockInitial?: number;
+  /** Ce qui reste dans notre propre depot, hors transporteur. */
+  stockDepot?: number;
 };
 
 function toRow(input: Partial<ProductInput>) {
@@ -129,6 +133,12 @@ function toRow(input: Partial<ProductInput>) {
     row.reorder_threshold = input.reorderThreshold;
   if (input.status !== undefined) row.status = input.status;
   if (input.image !== undefined) row.image = input.image || null;
+  // Les deux quantites de l'inventaire. Negatif refuse : un stock
+  // sous zero ne decrit rien, il cache une saisie fautive.
+  if (input.stockInitial !== undefined)
+    row.stock_initial = Math.max(0, Math.trunc(input.stockInitial));
+  if (input.stockDepot !== undefined)
+    row.stock_depot = Math.max(0, Math.trunc(input.stockDepot));
   return row;
 }
 
