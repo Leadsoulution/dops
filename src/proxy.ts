@@ -38,7 +38,7 @@ function isRejectedSession(error: { status?: number }): boolean {
 }
 
 export async function proxy(request: NextRequest) {
-  const response = NextResponse.next({ request });
+  let response = NextResponse.next({ request });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -50,6 +50,22 @@ export async function proxy(request: NextRequest) {
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll: (list) => {
+        // Un jeton rafraichi doit repartir dans les deux sens.
+        //
+        // Vers le navigateur par la reponse, c'est evident. Mais aussi
+        // vers la route appelee, en reecrivant les cookies de la
+        // requete : la route lit la requete, pas la reponse. Sans cela
+        // elle continue de voir le jeton perime que le navigateur vient
+        // d'envoyer, et refuse une personne pourtant connectee.
+        //
+        // C'est ce qui faisait echouer un enregistrement fait apres une
+        // heure passee sur la meme page : la lecture initiale avait
+        // reussi, l'ecriture partait avec un jeton expire, et le refus
+        // ressemblait a un reglage qui ne se sauvegarde pas.
+        for (const { name, value } of list) {
+          request.cookies.set(name, value);
+        }
+        response = NextResponse.next({ request });
         for (const { name, value, options } of list) {
           response.cookies.set(name, value, options);
         }

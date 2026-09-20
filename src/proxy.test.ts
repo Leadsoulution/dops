@@ -1,8 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const getUser = vi.fn();
+
+/** Les rappels de cookies que le garde confie a Supabase. */
+type CookieHooks = {
+  getAll: () => unknown[];
+  setAll: (list: { name: string; value: string; options?: object }[]) => void;
+};
+let hooks: CookieHooks | null = null;
+
 vi.mock("@supabase/ssr", () => ({
-  createServerClient: () => ({ auth: { getUser } }),
+  createServerClient: (
+    _url: string,
+    _key: string,
+    options: { cookies: CookieHooks }
+  ) => {
+    hooks = options.cookies;
+    return { auth: { getUser } };
+  },
 }));
 
 import { proxy } from "./proxy";
@@ -14,7 +29,7 @@ import { proxy } from "./proxy";
 function request(pathname: string) {
   const url = new URL(`https://orderly.host${pathname}`);
   return {
-    cookies: { getAll: () => [] },
+    cookies: { getAll: () => [], set: vi.fn() },
     nextUrl: { pathname: url.pathname, search: url.search },
     url: url.toString(),
     headers: new Headers(),
@@ -23,11 +38,32 @@ function request(pathname: string) {
 
 beforeEach(() => {
   getUser.mockReset();
+  hooks = null;
   process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "clef";
 });
 
 describe("proxy", () => {
+  it("transmet le jeton rafraichi a la route, pas seulement au navigateur", async () => {
+    const req = request("/api/settings/whatsapp");
+    getUser.mockImplementation(async () => {
+      // Supabase renouvelle le jeton au passage, comme il le fait des
+      // que l'ancien approche de sa fin.
+      hooks?.setAll([{ name: "sb-jeton", value: "neuf", options: {} }]);
+      return { data: { user: { id: "u1" } }, error: null };
+    });
+
+    await proxy(req);
+
+    // La route lit la requete, jamais la reponse. Sans cette ligne, elle
+    // voit encore le jeton perime et refuse une personne connectee :
+    // c'est ce qui faisait echouer un enregistrement tardif.
+    expect(
+      (req as unknown as { cookies: { set: ReturnType<typeof vi.fn> } }).cookies
+        .set
+    ).toHaveBeenCalledWith("sb-jeton", "neuf");
+  });
+
   it("laisse passer une personne connectee", async () => {
     getUser.mockResolvedValue({ data: { user: { id: "u1" } }, error: null });
     const res = await proxy(request("/"));
