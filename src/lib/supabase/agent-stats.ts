@@ -37,8 +37,38 @@ const REACHED = new Set([
   "+3 jours",
 ]);
 
+const STATUS_FIELD = "Statut de confirmation";
+
 /** Statuts qui valent confirmation, comme l'onglet "Confirmes". */
 const CONFIRMED = new Set(["Confirme", "EXPIDER"]);
+
+/**
+ * Cette commande compte-t-elle comme confirmee, et pour quel agent ?
+ *
+ * Deux conditions, et non une seule. L'agent doit avoir pose le statut
+ * — c'est ce qui lui en donne le credit — et la commande doit le porter
+ * encore aujourd'hui.
+ *
+ * La seconde manquait. Une commande confirmee puis ramenee en arriere
+ * restait comptee : WC-652 est passee par "Confirme" pendant deux
+ * minutes avant d'etre annulee, WC-662 avait ete confirmee trop vite
+ * puis rendue a "Injoignable". La partie Confirmation en annonçait donc
+ * 107 quand l'onglet "Confirmes" des commandes en montrait 105 — deux
+ * ecrans, deux chiffres, pour le meme mot.
+ *
+ * Une confirmation defaite n'est pas une confirmation : c'est une
+ * correction. Le chiffre suit desormais ce que l'on peut compter a
+ * l'ecran.
+ */
+function countsAsConfirmed(
+  event: { field: string; new_value: string | null; lead_id: string },
+  leads: Map<string, { status: string }>
+): boolean {
+  if (event.field !== STATUS_FIELD || !event.new_value) return false;
+  if (!CONFIRMED.has(event.new_value)) return false;
+  const lead = leads.get(event.lead_id);
+  return Boolean(lead && CONFIRMED.has(lead.status));
+}
 
 /** Une commande close : plus rien a faire dessus. */
 const CLOSED = new Set([
@@ -51,8 +81,6 @@ const CLOSED = new Set([
   "En double",
   "TESTE",
 ]);
-
-const STATUS_FIELD = "Statut de confirmation";
 
 /** Commandes qui attendent un rappel a une heure convenue. */
 const RECALL = new Set(["Rappel", "Reportee"]);
@@ -260,7 +288,7 @@ export async function getAgentStats(
     for (const event of own) {
       if (event.field !== STATUS_FIELD || !event.new_value) continue;
       if (REACHED.has(event.new_value)) contacted.add(event.lead_id);
-      if (CONFIRMED.has(event.new_value)) confirmed.add(event.lead_id);
+      if (countsAsConfirmed(event, leads)) confirmed.add(event.lead_id);
     }
 
     let pending = 0;
@@ -353,7 +381,7 @@ export async function getAgentStats(
     teamTreated.add(event.lead_id);
     if (event.field === STATUS_FIELD && event.new_value) {
       if (REACHED.has(event.new_value)) teamContacted.add(event.lead_id);
-      if (CONFIRMED.has(event.new_value)) teamConfirmed.add(event.lead_id);
+      if (countsAsConfirmed(event, leads)) teamConfirmed.add(event.lead_id);
     }
     const list = perLeadAll.get(event.lead_id);
     if (list) list.push(event);
@@ -392,7 +420,7 @@ export async function getAgentStats(
     entry.treated.add(event.lead_id);
     if (event.field === STATUS_FIELD && event.new_value) {
       if (REACHED.has(event.new_value)) entry.contacted.add(event.lead_id);
-      if (CONFIRMED.has(event.new_value)) entry.confirmed.add(event.lead_id);
+      if (countsAsConfirmed(event, leads)) entry.confirmed.add(event.lead_id);
     }
     byProduct.set(key, entry);
   }

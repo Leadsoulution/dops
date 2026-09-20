@@ -175,6 +175,32 @@ describe("getAgentStats", () => {
     expect(agents[0].confirmRate).toBe(50);
   });
 
+  it("ne compte plus une confirmation qui a ete defaite", async () => {
+    stubTables(
+      [ALICE],
+      [
+        // Confirmee, et elle l'est restee.
+        { id: "1", reference: "WC-1", phone: "06", status: "Confirme", created_at: at(0) },
+        // Confirmee deux minutes, puis annulee : une correction, pas
+        // une confirmation.
+        { id: "2", reference: "WC-2", phone: "06", status: "Annulee", created_at: at(0) },
+      ],
+      [
+        statusEvent("1", ALICE, "Confirme", 1),
+        statusEvent("2", ALICE, "Confirme", 1),
+        statusEvent("2", ALICE, "Annulee", 2, "Confirme"),
+      ]
+    );
+
+    const { agents, team } = await getAgentStats();
+    // Sans cette regle, la partie Confirmation annonçait deux
+    // confirmations quand l'onglet "Confirmes" des commandes n'en
+    // montrait qu'une.
+    expect(agents[0].confirmed).toBe(1);
+    expect(agents[0].confirmRate).toBe(50);
+    expect(team.confirmed).toBe(1);
+  });
+
   it("ne compte comme contact que les statuts ou le client a repondu", async () => {
     stubTables(
       [ALICE],
