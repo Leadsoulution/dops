@@ -183,6 +183,9 @@ export default function WhatsappMessagesPanel({
     setSaved(false);
   }
 
+  /** Les statuts reellement proposes a l'ecran. */
+  const connus = new Set(groupes.flatMap((g) => g.entrees.map((e) => e.key)));
+
   async function save() {
     if (!templates) return;
     setSaving(true);
@@ -191,7 +194,11 @@ export default function WhatsappMessagesPanel({
       const res = await fetch("/api/settings/whatsapp", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ templates }),
+        body: JSON.stringify({
+          templates: Object.fromEntries(
+            Object.entries(templates).filter(([k]) => connus.has(k))
+          ),
+        }),
       });
 
       // Une reponse qui n'est pas du JSON est une panne d'hebergement,
@@ -233,9 +240,18 @@ export default function WhatsappMessagesPanel({
         .then((d) => (d.templates ?? {}) as Record<string, string>)
         .catch(() => null);
 
+      // La comparaison ne porte que sur les statuts affiches : le
+      // serveur ecarte toute autre cle, a juste titre, et la compter
+      // comme perdue condamnerait le brouillon a ne jamais s'effacer —
+      // le bandeau reapparaitrait a chaque chargement, sur un
+      // enregistrement pourtant reussi.
       const manquants = relu
         ? Object.keys(templates).filter(
-            (k) => templates[k].trim() && relu[k] !== templates[k]
+            (k) =>
+              connus.has(k) &&
+              typeof templates[k] === "string" &&
+              templates[k].trim() &&
+              relu[k] !== templates[k]
           )
         : [];
 
