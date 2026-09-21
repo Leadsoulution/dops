@@ -52,6 +52,15 @@ export default function InventairePage() {
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
+  /**
+   * La liste ne montre que ce qui reste a faire.
+   *
+   * Un retour deja pointe n'appelle plus aucun geste : le laisser
+   * allongeait la liste de lignes closes, et le titre promettait des
+   * retours "a remettre en stock" qui l'etaient deja. Ils restent
+   * consultables, pour pouvoir defaire un pointage errone.
+   */
+  const [showDone, setShowDone] = useState(false);
 
   async function load() {
     try {
@@ -139,6 +148,7 @@ export default function InventairePage() {
 
   const t = data?.totals;
   const aRentrer = (data?.returns ?? []).filter((r) => !r.restockedAt);
+  const dejaRentres = (data?.returns ?? []).filter((r) => r.restockedAt);
 
   return (
     <main className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
@@ -273,7 +283,7 @@ export default function InventairePage() {
           )}
 
           {/* Les retours, un par un : c'est ici que le pointage se fait. */}
-          {data.returns.length > 0 && (
+          {(aRentrer.length > 0 || dejaRentres.length > 0) && (
             <section className="mb-5 rounded-xl border-2 border-orange-300 bg-white p-4">
               <p className="mb-1 flex items-center gap-2 text-[12px] font-semibold tracking-wide text-orange-700">
                 <RotateCcw className="h-4 w-4" />
@@ -281,7 +291,7 @@ export default function InventairePage() {
               </p>
               <p className="mb-3 text-[12px] text-gray-500">
                 {aRentrer.length === 0 ? (
-                  "Tous les retours ont ete pointes."
+                  "Aucun retour en attente : tout a ete remis en stock."
                 ) : (
                   <>
                     {aRentrer.length} colis en attente, soit{" "}
@@ -294,7 +304,7 @@ export default function InventairePage() {
               </p>
 
               <div className="space-y-1.5">
-                {data.returns.map((r) => (
+                {(showDone ? data.returns : aRentrer).map((r) => (
                   <div
                     key={r.id}
                     className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-[12.5px] ${
@@ -352,6 +362,19 @@ export default function InventairePage() {
                   </div>
                 ))}
               </div>
+
+              {dejaRentres.length > 0 && (
+                <button
+                  onClick={() => setShowDone((v) => !v)}
+                  className="mt-2.5 text-[12px] font-medium text-gray-500 hover:text-gray-700"
+                >
+                  {showDone
+                    ? "Masquer les retours deja remis en stock"
+                    : `Voir les ${dejaRentres.length} retour${
+                        dejaRentres.length > 1 ? "s" : ""
+                      } deja remis en stock`}
+                </button>
+              )}
             </section>
           )}
 
