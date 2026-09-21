@@ -5,17 +5,21 @@ import { fetchAll } from "./page";
 /**
  * Inventaire.
  *
- * Deux questions, et la seconde est la plus utile.
- *
  * Combien reste-t-il ? C'est l'achat de depart moins ce qui a ete remis
  * aux clients : le stock reel.
  *
- * Et surtout : le transporteur detient-il bien ce qu'il devrait ? De
- * tout ce qui lui a ete confie, il ne doit avoir livre que le livre ;
- * le reste devrait etre encore chez lui, retours compris. Comparer ce
- * compte a ce qu'il declare, c'est savoir si les retours sont revenus
- * en rayon ou se sont perdus en chemin. Personne ne le dit autrement :
- * le transporteur ne publie que son stock du moment.
+ * Et le transporteur detient-il ce qu'il devrait ? De tout ce qui lui a
+ * ete confie, trois choses en sont sorties : ce qu'il a livre, ce qui
+ * roule encore, et les retours qui ne sont pas revenus en rayon. Le
+ * reste devrait etre chez lui.
+ *
+ * Cette troisieme cause est la seule qu'aucun systeme ne connait. Le
+ * transporteur ne publie que son stock du moment : un colis refuse
+ * disparait de son suivi sans dire si la marchandise a ete reintegree,
+ * gardee de cote ou perdue, et son champ `waiting_quantity` reste a
+ * zero. Chaque retour est donc pointe a la main, et le compte qui en
+ * decoule se verifie contre le stock qu'il declare. Un ecart qui
+ * subsiste apres ce pointage designe une vraie disparition.
  */
 
 /** Codes du transporteur disant qu'un colis ne roule plus. */
@@ -39,6 +43,8 @@ export type ProductStock = {
   inTransit: number;
   /** Unites retournees, refusees ou annulees a la livraison. */
   returned: number;
+  /** Parmi elles, celles qui n'ont pas encore ete remises en rayon. */
+  awaitingRestock: number;
   /** Achete moins livre : ce que nous possedons encore, ou qu'il soit. */
   real: number;
   /** Ce que le transporteur devrait encore detenir : confie moins livre. */
@@ -47,6 +53,22 @@ export type ProductStock = {
   carrier: number;
   /** Attendu moins declare. Positif : il manque de la marchandise. */
   gap: number;
+};
+
+/** Un colis revenu, et l'etat de sa remise en rayon. */
+export type ReturnedParcel = {
+  id: string;
+  reference: string;
+  trackingNumber: string;
+  client: string;
+  productName: string;
+  productId: string | null;
+  units: number;
+  /** Libelle du transporteur : retourne, refuse, annule. */
+  status: string;
+  deliveryDate?: string;
+  /** Date de remise en stock, absente tant que ce n'est pas fait. */
+  restockedAt?: string;
 };
 
 export type InventoryTotals = {
@@ -59,6 +81,8 @@ export type InventoryTotals = {
   expectedAtCarrier: number;
   carrier: number;
   gap: number;
+  /** Unites revenues mais pas encore pointees comme remises en rayon. */
+  awaitingRestock: number;
 };
 
 type ProductRow = {
@@ -74,11 +98,18 @@ type ProductRow = {
 };
 
 type LeadRow = {
+  id: string;
+  reference: string;
+  client: string;
   product_name: string | null;
   stock_items: string | null;
   item_count: number | null;
   tracking_number: string | null;
+  delivery_status: string | null;
   delivery_status_code: string | null;
+  delivery_date: string | null;
+  parcel_type: string | null;
+  restocked_at: string | null;
 };
 
 /**
@@ -106,6 +137,8 @@ export function matchProduct(
 export async function getInventory(): Promise<{
   products: ProductStock[];
   totals: InventoryTotals;
+  /** Les colis revenus, ceux a reintegrer en tete. */
+  returns: ReturnedParcel[];
   /** Commandes expediees dont le produit n'est pas au catalogue. */
   unmatched: number;
 }> {
@@ -124,7 +157,9 @@ export async function getInventory(): Promise<{
       supabase
         .from("leads")
         .select(
-          "product_name,stock_items,item_count,tracking_number,delivery_status_code"
+          "id,reference,client,product_name,stock_items,item_count," +
+            "tracking_number,delivery_status,delivery_status_code," +
+            "delivery_date,parcel_type,restocked_at"
         )
     ),
   ]);
@@ -139,6 +174,8 @@ export async function getInventory(): Promise<{
   const inTransit = new Map<string, number>();
   const delivered = new Map<string, number>();
   const returned = new Map<string, number>();
+  const awaiting = new Map<string, number>();
+  const returns: ReturnedParcel[] = [];
   let unmatched = 0;
 
   for (const lead of leads) {
@@ -147,21 +184,56 @@ export async function getInventory(): Promise<{
     if (!lead.tracking_number) continue;
 
     const productId = matchProduct(lead, byRef, byName);
+    const units = lead.item_count ?? 1;
+    const code = lead.delivery_status_code ?? "";
+
+    if (code !== DELIVERED && FINAL_CODES.has(code)) {
+      returns.push({
+        id: lead.id,
+        reference: lead.reference,
+        trackingNumber: lead.tracking_number,
+        client: lead.client,
+        productName: lead.product_name ?? "",
+        productId,
+        units,
+        status: lead.delivery_status ?? code,
+        deliveryDate: lead.delivery_date ?? undefined,
+        restockedAt: lead.restocked_at ?? undefined,
+      });
+    }
+
     if (!productId) {
       unmatched += 1;
       continue;
     }
 
-    const units = lead.item_count ?? 1;
-    const code = lead.delivery_status_code ?? "";
-    const bucket =
-      code === DELIVERED ? delivered : FINAL_CODES.has(code) ? returned : inTransit;
-    bucket.set(productId, (bucket.get(productId) ?? 0) + units);
+    const add = (m: Map<string, number>, n: number) =>
+      m.set(productId, (m.get(productId) ?? 0) + n);
+
+    if (code === DELIVERED) add(delivered, units);
+    else if (FINAL_CODES.has(code)) {
+      add(returned, units);
+      // Tant que personne ne l'a pointe, le transporteur ne l'a pas
+      // remis dans son depot : sa marchandise manque a l'appel.
+      if (!lead.restocked_at) add(awaiting, units);
+    } else add(inTransit, units);
   }
 
   const rows: ProductStock[] = actifs.map((p) => {
     const livre = delivered.get(p.id) ?? 0;
-    const expectedAtCarrier = p.stock_sent - livre;
+    const route = inTransit.get(p.id) ?? 0;
+    const aRentrer = awaiting.get(p.id) ?? 0;
+
+    /*
+     * Ce que le transporteur devrait avoir en rayon.
+     *
+     * Tout ce qui lui a ete confie, moins ce qui en est sorti sans y
+     * revenir : le livre, ce qui roule encore, et les retours qui n'ont
+     * pas ete reintegres. Retirer seulement le livre — ce que faisait le
+     * calcul precedent — melangeait ces trois causes dans un seul ecart,
+     * qui ne designait donc rien.
+     */
+    const expectedAtCarrier = p.stock_sent - livre - route - aRentrer;
     return {
       id: p.id,
       ref: p.ref,
@@ -171,8 +243,9 @@ export async function getInventory(): Promise<{
       purchased: p.stock_initial,
       sent: p.stock_sent,
       delivered: livre,
-      inTransit: inTransit.get(p.id) ?? 0,
+      inTransit: route,
       returned: returned.get(p.id) ?? 0,
+      awaitingRestock: aRentrer,
       real: p.stock_initial - livre,
       expectedAtCarrier,
       carrier: p.quantity,
@@ -195,7 +268,11 @@ export async function getInventory(): Promise<{
       expectedAtCarrier: sum((r) => r.expectedAtCarrier),
       carrier: sum((r) => r.carrier),
       gap: sum((r) => r.gap),
+      awaitingRestock: sum((r) => r.awaitingRestock),
     },
+    returns: returns.sort((a, b) =>
+      Number(Boolean(a.restockedAt)) - Number(Boolean(b.restockedAt))
+    ),
     unmatched,
   };
 }

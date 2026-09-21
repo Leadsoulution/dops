@@ -8,12 +8,18 @@ import {
   Check,
   Loader2,
   Package,
+  PackageCheck,
   RefreshCw,
+  RotateCcw,
   Send,
   Truck,
   Warehouse,
 } from "lucide-react";
-import type { ProductStock, InventoryTotals } from "@/lib/supabase/inventory";
+import type {
+  ProductStock,
+  InventoryTotals,
+  ReturnedParcel,
+} from "@/lib/supabase/inventory";
 
 /**
  * Inventaire.
@@ -30,6 +36,7 @@ const nf = new Intl.NumberFormat("fr-FR");
 type Data = {
   products: ProductStock[];
   totals: InventoryTotals;
+  returns: ReturnedParcel[];
   unmatched: number;
 };
 
@@ -103,7 +110,35 @@ export default function InventairePage() {
     }
   }
 
+  /**
+   * Pointe un retour comme revenu en rayon, ou annule ce pointage.
+   *
+   * C'est le seul endroit ou l'information existe : le transporteur ne
+   * dit jamais si la marchandise d'un colis refuse a ete reintegree.
+   */
+  async function setRestocked(parcel: ReturnedParcel, done: boolean) {
+    setSavingId(parcel.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/leads/${parcel.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restockedAt: done ? new Date().toISOString() : null,
+        }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Enregistrement refuse.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur inattendue.");
+    } finally {
+      setSavingId(null);
+    }
+  }
+
   const t = data?.totals;
+  const aRentrer = (data?.returns ?? []).filter((r) => !r.restockedAt);
 
   return (
     <main className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
@@ -174,6 +209,8 @@ export default function InventairePage() {
               lines={[
                 ["Confie depuis le debut", t.sent],
                 ["Moins le livre", -t.delivered],
+                ["Moins ce qui roule", -t.inTransit],
+                ["Moins les retours en attente", -t.awaitingRestock],
               ]}
             />
 
@@ -202,7 +239,9 @@ export default function InventairePage() {
                 <>
                   <span className="font-semibold">Les comptes tombent juste.</span>{" "}
                   Le transporteur declare exactement ce qu&apos;il devrait
-                  detenir : tous les retours sont revenus en rayon.
+                  detenir, une fois retires le livre, ce qui roule et les{" "}
+                  {nf.format(t.awaitingRestock)} unite
+                  {t.awaitingRestock > 1 ? "s" : ""} de retour en attente.
                 </>
               ) : t.gap > 0 ? (
                 <>
@@ -210,12 +249,14 @@ export default function InventairePage() {
                     Il manque {nf.format(t.gap)} article
                     {t.gap > 1 ? "s" : ""} chez le transporteur.
                   </span>{" "}
-                  Vous lui avez confie {nf.format(t.sent)} et il n&apos;en a
-                  livre que {nf.format(t.delivered)} : il devrait donc en
-                  detenir {nf.format(t.expectedAtCarrier)}, mais il en declare{" "}
-                  {nf.format(t.carrier)}. Des retours ne sont pas revenus en
-                  stock — ou des colis roulent encore ({nf.format(t.inTransit)}{" "}
-                  en cours).
+                  Confie {nf.format(t.sent)}, moins {nf.format(t.delivered)} livre
+                  {t.delivered > 1 ? "s" : ""}, {nf.format(t.inTransit)} en route
+                  et {nf.format(t.awaitingRestock)} de retour non reintegre
+                  {t.awaitingRestock > 1 ? "s" : ""} : il devrait en detenir{" "}
+                  {nf.format(t.expectedAtCarrier)}, il en declare{" "}
+                  {nf.format(t.carrier)}. Cet ecart-la n&apos;a plus
+                  d&apos;explication connue : marchandise perdue, cassee, ou un
+                  envoi mal saisi.
                 </>
               ) : (
                 <>
@@ -223,12 +264,95 @@ export default function InventairePage() {
                     Le transporteur declare {nf.format(-t.gap)} article
                     {-t.gap > 1 ? "s" : ""} de plus que prevu.
                   </span>{" "}
-                  Soit un envoi n&apos;a pas ete saisi dans la colonne
-                  &laquo; Confie &raquo;, soit il a recu de la marchandise
-                  autrement.
+                  Des retours sont sans doute rentres en rayon sans avoir ete
+                  pointes ci-dessous, ou un envoi manque dans la colonne
+                  Confie.
                 </>
               )}
             </p>
+          )}
+
+          {/* Les retours, un par un : c'est ici que le pointage se fait. */}
+          {data.returns.length > 0 && (
+            <section className="mb-5 rounded-xl border-2 border-orange-300 bg-white p-4">
+              <p className="mb-1 flex items-center gap-2 text-[12px] font-semibold tracking-wide text-orange-700">
+                <RotateCcw className="h-4 w-4" />
+                RETOURS A REMETTRE EN STOCK
+              </p>
+              <p className="mb-3 text-[12px] text-gray-500">
+                {aRentrer.length === 0 ? (
+                  "Tous les retours ont ete pointes."
+                ) : (
+                  <>
+                    {aRentrer.length} colis en attente, soit{" "}
+                    {nf.format(t.awaitingRestock)} article
+                    {t.awaitingRestock > 1 ? "s" : ""}. Verifiez aupres du
+                    transporteur, puis pointez : le compte attendu se corrige
+                    aussitot.
+                  </>
+                )}
+              </p>
+
+              <div className="space-y-1.5">
+                {data.returns.map((r) => (
+                  <div
+                    key={r.id}
+                    className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-[12.5px] ${
+                      r.restockedAt
+                        ? "border-gray-100 bg-gray-50/70"
+                        : "border-orange-200"
+                    }`}
+                  >
+                    <span className="font-mono text-[11.5px] text-gray-500">
+                      {r.trackingNumber}
+                    </span>
+                    <span
+                      className={`rounded-md px-1.5 py-0.5 text-[11.5px] font-medium ${
+                        r.restockedAt
+                          ? "bg-gray-100 text-gray-500"
+                          : "bg-orange-50 text-orange-700"
+                      }`}
+                    >
+                      {r.status}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-gray-700">
+                      {r.client} &mdash;{" "}
+                      <span className="text-gray-500">{r.productName}</span>
+                    </span>
+                    <span className="font-mono text-gray-600">x{r.units}</span>
+
+                    {r.restockedAt ? (
+                      <button
+                        onClick={() => void setRestocked(r, false)}
+                        disabled={savingId === r.id}
+                        title="Annuler ce pointage"
+                        className="flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[11.5px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
+                      >
+                        {savingId === r.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <PackageCheck className="h-3.5 w-3.5" />
+                        )}
+                        Remis en stock
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => void setRestocked(r, true)}
+                        disabled={savingId === r.id}
+                        className="flex shrink-0 items-center gap-1.5 rounded-md border border-orange-300 px-2 py-1 text-[11.5px] font-medium text-orange-700 hover:bg-orange-50 disabled:opacity-60"
+                      >
+                        {savingId === r.id ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Check className="h-3.5 w-3.5" />
+                        )}
+                        Marquer remis
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
           )}
 
           {data.unmatched > 0 && (
@@ -241,7 +365,7 @@ export default function InventairePage() {
           )}
 
           <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
-            <table className="w-full min-w-[980px] text-[12.5px]">
+            <table className="w-full min-w-[1060px] text-[12.5px]">
               <thead className="border-b border-gray-200 text-left text-gray-500">
                 <tr>
                   <th className="px-3 py-3 font-medium">Produit</th>
@@ -254,6 +378,7 @@ export default function InventairePage() {
                   <th className="px-3 py-3 font-medium">En route</th>
                   <th className="px-3 py-3 font-medium">Livre</th>
                   <th className="px-3 py-3 font-medium">Retours</th>
+                  <th className="px-3 py-3 font-medium">A rentrer</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -333,6 +458,9 @@ export default function InventairePage() {
                     </td>
                     <td className="px-3 py-2.5 font-mono text-gray-500">
                       {nf.format(p.returned)}
+                    </td>
+                    <td className="px-3 py-2.5 font-mono text-orange-700">
+                      {p.awaitingRestock > 0 ? nf.format(p.awaitingRestock) : "-"}
                     </td>
                   </tr>
                 ))}

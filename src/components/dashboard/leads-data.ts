@@ -99,6 +99,12 @@ export type Lead = {
    * creation : ForceLog ne sait pas modifier un colis deja parti.
    */
   customerNote?: string;
+  /**
+   * Date de remise en stock de la marchandise d'un colis retourne.
+   * Absente tant que le retour n'a pas ete reintegre : le
+   * transporteur ne le signale nulle part.
+   */
+  restockedAt?: string;
   /** Identifiant de la commande dans la boutique WooCommerce. */
   wooOrderId?: number;
   /** Auteur de la derniere modification : une personne ou un automate. */
