@@ -36,6 +36,7 @@ import SelectDropdown from "./SelectDropdown";
 import DatabaseSizeCard from "./DatabaseSizeCard";
 import WhatsappMessagesPanel from "./WhatsappMessagesPanel";
 import WhatsappPhotosPanel from "./WhatsappPhotosPanel";
+import WebhooksPanel from "./WebhooksPanel";
 import NotificationSettings from "./NotificationSettings";
 import { currentProfile } from "@/lib/session";
 import {
@@ -466,6 +467,7 @@ export default function ParametresPage() {
 
       {activeTab === "integrations" && (
         <div className="max-w-3xl space-y-4">
+          <WebhooksPanel isAdmin={isAdmin} />
           <div className="rounded-xl border border-gray-200 bg-white p-4">
             <p className="mb-1 flex items-center gap-2 text-h3 font-semibold text-gray-900">
               <Key className="h-4 w-4 text-gray-400" />

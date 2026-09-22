@@ -1,6 +1,7 @@
 import "server-only";
 import { getSupabaseServerClient } from "./server";
 import type { Lead } from "@/components/dashboard/leads-data";
+import { emit } from "@/lib/webhooks/send";
 
 /**
  * Journal des modifications.
@@ -64,6 +65,28 @@ export async function recordLeadChanges(
   }));
 
   if (rows.length === 0) return;
+
+  /*
+   * Prevenir l'exterieur de ce qui vient de changer.
+   *
+   * Le journal detecte deja les champs qui bougent : s'y brancher evite
+   * de semer des appels a `emit` dans chaque route, et garantit qu'un
+   * changement venu d'ailleurs — la synchronisation du transporteur,
+   * par exemple — previent aussi bien qu'un clic d'agent.
+   *
+   * Les deux evenements sont distingues : un statut de confirmation qui
+   * passe a "Confirme" et un colis qui part en livraison n'appellent pas
+   * le meme message au client.
+   */
+  const aChange = (label: string) => rows.some((r) => r.field === label);
+  if (aChange("Statut de confirmation")) {
+    void emit("lead.status_changed", after, { status: before.status });
+  }
+  if (aChange("Statut livraison")) {
+    void emit("lead.delivery_status_changed", after, {
+      deliveryStatus: before.deliveryStatus,
+    });
+  }
 
   try {
     const supabase = getSupabaseServerClient();

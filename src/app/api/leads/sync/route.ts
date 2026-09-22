@@ -3,6 +3,7 @@ import { listLeads, updateLead } from "@/lib/supabase/leads";
 import { recordLeadChanges } from "@/lib/supabase/lead-events";
 import { isSupabaseServerConfigured } from "@/lib/supabase/server";
 import { collectStatusUpdates } from "@/lib/forcelog/dispatch";
+import { retryPending } from "@/lib/webhooks/send";
 
 /**
  * Rafraichit les statuts de livraison et de paiement depuis ForceLog.
@@ -34,6 +35,20 @@ export async function POST() {
         return apres;
       })
     );
+
+    /*
+     * Les envois qui n'ont pas abouti repartent ici.
+     *
+     * Cette route passe toutes les deux minutes ; c'est le seul
+     * battement regulier de l'application. Sans cette reprise, une
+     * coupure de n8n de quelques minutes perdrait definitivement les
+     * messages de ces minutes-la — le client n'apprendrait jamais que
+     * son colis est parti.
+     *
+     * Detache : un webhook lent ne doit pas retarder l'affichage des
+     * statuts de livraison.
+     */
+    void retryPending();
 
     return NextResponse.json({ updated, checked });
   } catch (error) {
