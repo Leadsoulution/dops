@@ -1,4 +1,4 @@
-import { addParcel, getRecentParcelStatuses } from "./client";
+import { addParcel, getRecentParcelStatuses, getParcelDetail } from "./client";
 import { mapOrderToParcel } from "./mapping";
 import { ForceLogApiError } from "./types";
 import type { Lead } from "@/components/dashboard/leads-data";
@@ -154,6 +154,60 @@ export async function dispatchToForceLog(
           : "Erreur inattendue lors de la creation du colis.",
     };
   }
+}
+
+/** Avant le ramassage, aucun livreur n'est attribue : inutile de demander. */
+const BEFORE_PICKUP = new Set(["NEW_PARCEL", "WAITING_PICKUP", "ATT_CONF", ""]);
+
+/**
+ * Combien de colis interroger par passage.
+ *
+ * `GetParcel` ne repond que d'un colis a la fois : les demander tous a
+ * chaque synchronisation ferait cent trente appels toutes les deux
+ * minutes, ce qu'aucune API ne tolere. Le livreur ne changeant plus une
+ * fois connu, la valeur est gardee et le rattrapage se fait sur
+ * plusieurs passages.
+ */
+const MAX_AGENT_LOOKUPS = 15;
+
+/**
+ * Va chercher le livreur des colis qui n'en ont pas encore.
+ *
+ * C'est le seul endroit ou l'information existe : la liste des colis ne
+ * porte pas le livreur, seul le detail d'un colis le donne.
+ */
+export async function collectDeliverers(
+  leads: Lead[]
+): Promise<Map<string, Partial<Lead>>> {
+  const updates = new Map<string, Partial<Lead>>();
+  const apiKey = process.env.FORCELOG_API_KEY;
+  if (!apiKey) return updates;
+
+  const aChercher = leads
+    .filter(
+      (l) =>
+        l.trackingNumber &&
+        !l.deliverer &&
+        !BEFORE_PICKUP.has(l.deliveryStatusCode ?? "")
+    )
+    .slice(0, MAX_AGENT_LOOKUPS);
+
+  for (const lead of aChercher) {
+    try {
+      const parcel = await getParcelDetail(apiKey, lead.trackingNumber!);
+      const nom = parcel?.DELIVERY_AGENT?.NAME?.trim();
+      const tel = parcel?.DELIVERY_AGENT?.PHONE?.trim();
+      if (!nom && !tel) continue;
+      updates.set(lead.id, {
+        deliverer: nom || undefined,
+        delivererPhone: tel || undefined,
+      });
+    } catch {
+      // Un colis qui refuse de repondre ne doit pas emporter les autres :
+      // il sera repris au passage suivant.
+    }
+  }
+  return updates;
 }
 
 /**

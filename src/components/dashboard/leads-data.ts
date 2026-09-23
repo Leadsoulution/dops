@@ -81,6 +81,15 @@ export type Lead = {
   /** Statut de paiement remonte par ForceLog (champ SITUATION). */
   paymentStatus?: string;
   /**
+   * Livreur charge du colis, lu sur GetParcel.
+   *
+   * Absent tant que le colis n'a pas quitte l'entrepot : ForceLog
+   * n'attribue personne avant. Peut nommer un hub plutot qu'une
+   * personne aux premieres etapes.
+   */
+  deliverer?: string;
+  delivererPhone?: string;
+  /**
    * Date a laquelle le colis a ete vu livre, format "AAAA-MM-JJ HH:MM".
    * Horodatee par la synchronisation ForceLog au passage en DELIVERED.
    */

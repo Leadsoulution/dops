@@ -178,19 +178,42 @@ export async function addParcel(
   return parcel;
 }
 
-export function getParcel(apiKey: string, code: string): Promise<ForceLogParcel> {
-  return forceLogRequest<ForceLogParcel>(apiKey, {
+/**
+ * Le detail d'un colis, livreur compris.
+ *
+ * La documentation annonce un GET avec le code en parametre d'URL ;
+ * l'API ne repond qu'a un POST portant le code dans son corps, sous la
+ * clef `Code` — cette casse exactement, `CODE` et `code` etant refuses.
+ * Onze formes ont ete essayees avant de trouver celle-ci, et le message
+ * d'erreur ne distinguait aucune d'elles.
+ *
+ * C'est le seul appel qui donne le livreur : la liste des colis ne le
+ * porte pas.
+ */
+export async function getParcelDetail(
+  apiKey: string,
+  code: string
+): Promise<ForceLogParcel | null> {
+  const data = await forceLogRequest<{ PARCEL?: ForceLogParcel }>(apiKey, {
+    method: "POST",
     path: "/Parcels/GetParcel",
-    query: { Code: code },
+    body: { Code: code },
   });
+  return data.PARCEL ?? null;
 }
 
+/**
+ * L'historique des etapes d'un colis. Meme forme d'appel que
+ * `getParcelDetail` : POST, et le code dans le corps.
+ */
 export function getTracking(
   apiKey: string,
   code: string
-): Promise<{ TRACKING: ForceLogTrackingEvent[] }> {
-  return forceLogRequest<{ TRACKING: ForceLogTrackingEvent[] }>(apiKey, {
+): Promise<{ HISTORY: ForceLogTrackingEvent[] }> {
+  return forceLogRequest<{ HISTORY: ForceLogTrackingEvent[] }>(apiKey, {
+    method: "POST",
     path: "/Parcels/GetTracking",
+    body: { Code: code },
     query: { Code: code },
   });
 }

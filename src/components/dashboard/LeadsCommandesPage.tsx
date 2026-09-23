@@ -1052,6 +1052,7 @@ export default function LeadsCommandesPage() {
                 <th className="px-3 py-3">Transporteur</th>
                 <th className="px-3 py-3">Code suivi</th>
                 <th className="px-3 py-3">Statut livraison</th>
+                <th className="px-3 py-3">Livreur</th>
                 <th className="px-3 py-3">Statut paiement</th>
                 <th className="px-3 py-3">Date de livraison</th>
                 <th className="w-10 px-3 py-3" />
@@ -1060,7 +1061,7 @@ export default function LeadsCommandesPage() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={16} className="px-5 py-12 text-center">
+                  <td colSpan={18} className="px-5 py-12 text-center">
                     <div className="flex flex-col items-center gap-2 text-gray-400">
                       <Loader2 className="h-6 w-6 animate-spin" />
                       <p className="text-[13px]">Chargement des commandes...</p>
@@ -1070,7 +1071,7 @@ export default function LeadsCommandesPage() {
               )}
               {!loading && visibleLeads.length === 0 && (
                 <tr>
-                  <td colSpan={16} className="px-5 py-12 text-center">
+                  <td colSpan={18} className="px-5 py-12 text-center">
                     <div className="flex flex-col items-center gap-2 text-gray-400">
                       <Inbox className="h-6 w-6" />
                       <p className="text-[13px]">
@@ -1250,6 +1251,32 @@ export default function LeadsCommandesPage() {
                       >
                         {lead.deliveryStatus}
                       </span>
+                    ) : (
+                      <span className="text-[12px] text-gray-300">&mdash;</span>
+                    )}
+                  </td>
+                  {/*
+                    Le livreur : son nom et son telephone dans la meme
+                    case. Les separer aurait fait deux colonnes etroites
+                    pour une seule information — on appelle un livreur
+                    parce qu'on sait lequel c'est.
+                  */}
+                  <td className="whitespace-nowrap px-3 py-3">
+                    {lead.deliverer || lead.delivererPhone ? (
+                      <div className="leading-tight">
+                        <p className="text-[12.5px] text-gray-700">
+                          {lead.deliverer ?? "Livreur"}
+                        </p>
+                        {lead.delivererPhone && (
+                          <a
+                            href={`tel:${lead.delivererPhone.replace(/\s/g, "")}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="font-mono text-[11.5px] text-blue-600 hover:underline"
+                          >
+                            {lead.delivererPhone}
+                          </a>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-[12px] text-gray-300">&mdash;</span>
                     )}

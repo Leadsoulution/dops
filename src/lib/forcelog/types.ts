@@ -37,6 +37,12 @@ export type AddParcelParams = {
   CARTON?: string;
 };
 
+/** Le livreur charge du colis, tel que ForceLog le nomme. */
+export type ForceLogDeliveryAgent = {
+  NAME?: string;
+  PHONE?: string;
+};
+
 export type ForceLogParcel = {
   TRACKING_NUMBER: string;
   ORDER_NUM?: string;
@@ -55,6 +61,12 @@ export type ForceLogParcel = {
   COMMENT?: string;
   PRODUCT_NATURE?: string;
   CREATION_TIME?: string;
+  /**
+   * Presente seulement sur GetParcel, jamais sur GetParcels : c'est la
+   * raison d'interroger les colis un par un.
+   */
+  DELIVERY_AGENT?: ForceLogDeliveryAgent;
+  SECONDARY_STATUS?: string;
 };
 
 export type ForceLogTrackingEvent = {

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { listLeads, updateLead } from "@/lib/supabase/leads";
 import { recordLeadChanges } from "@/lib/supabase/lead-events";
 import { isSupabaseServerConfigured } from "@/lib/supabase/server";
-import { collectStatusUpdates } from "@/lib/forcelog/dispatch";
+import { collectStatusUpdates, collectDeliverers } from "@/lib/forcelog/dispatch";
 import { retryPending } from "@/lib/webhooks/send";
 
 /**
@@ -48,9 +48,20 @@ export async function POST() {
      * Detache : un webhook lent ne doit pas retarder l'affichage des
      * statuts de livraison.
      */
+    /*
+     * Le livreur, pour les colis qui n'en ont pas encore.
+     *
+     * Demande apres les statuts, et sur quelques colis seulement : le
+     * detail se lit un colis a la fois, et le livreur ne change plus
+     * une fois connu. Le rattrapage s'etale donc sur plusieurs passages
+     * plutot que d'inonder l'API a chacun.
+     */
+    const livreurs = await collectDeliverers(await listLeads());
+    for (const [id, changes] of livreurs) await updateLead(id, changes);
+
     void retryPending();
 
-    return NextResponse.json({ updated, checked });
+    return NextResponse.json({ updated, checked, livreurs: livreurs.size });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Erreur inattendue." },
