@@ -163,12 +163,18 @@ const BEFORE_PICKUP = new Set(["NEW_PARCEL", "WAITING_PICKUP", "ATT_CONF", ""]);
  * Combien de colis interroger par passage.
  *
  * `GetParcel` ne repond que d'un colis a la fois : les demander tous a
- * chaque synchronisation ferait cent trente appels toutes les deux
+ * chaque synchronisation ferait deux cents appels toutes les deux
  * minutes, ce qu'aucune API ne tolere. Le livreur ne changeant plus une
  * fois connu, la valeur est gardee et le rattrapage se fait sur
  * plusieurs passages.
+ *
+ * Quarante plutot que quinze : le rattrapage initial dure alors quatre
+ * minutes au lieu de dix. Le regime de croisiere, lui, ne depend pas de
+ * ce nombre — une fois les anciens colis renseignes, il ne reste a
+ * interroger que ceux qui viennent d'etre ramasses, quelques-uns par
+ * passage.
  */
-const MAX_AGENT_LOOKUPS = 15;
+const MAX_AGENT_LOOKUPS = 40;
 
 /**
  * Va chercher le livreur des colis qui n'en ont pas encore.
