@@ -7,7 +7,9 @@ import {
   ClipboardList,
   Loader2,
   MapPin,
+  MessageCircle,
   Pencil,
+  Phone,
   Trash2,
   Truck,
   User,
@@ -35,6 +37,7 @@ import {
   type LeadStatus,
 } from "./leads-data";
 import { displayAmount } from "@/lib/amount";
+import { whatsappNumber } from "@/lib/whatsapp";
 import CallOutcomePanel from "./CallOutcomePanel";
 
 const tabs = [
@@ -247,6 +250,57 @@ export default function OrderDetailsModal({
                 <p className="text-gray-400">Date de livraison</p>
                 {lead.deliveryDate ? (
                   <p className="font-mono text-gray-700">{lead.deliveryDate}</p>
+                ) : (
+                  <p className="text-gray-300">&mdash;</p>
+                )}
+              </div>
+
+              {/*
+                Le livreur.
+
+                On le cherche pour le joindre, jamais pour lire son nom :
+                les deux boutons passent donc avant le numero, et le
+                numero reste affiche pour qui doit le recopier ailleurs.
+
+                ForceLog n'attribue personne avant le ramassage : la case
+                dit pourquoi elle est vide plutot que d'afficher un tiret
+                qu'on prendrait pour une panne.
+              */}
+              <div className="col-span-2 border-t border-gray-100 pt-2.5">
+                <p className="mb-1 text-gray-400">Livreur</p>
+                {lead.deliverer || lead.delivererPhone ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-gray-800">
+                      {lead.deliverer ?? "Livreur"}
+                    </span>
+                    {lead.delivererPhone && (
+                      <>
+                        <a
+                          href={`https://wa.me/${whatsappNumber(lead.delivererPhone)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 rounded-lg bg-[#25D366] px-2.5 py-1.5 text-[12px] font-medium text-white hover:bg-[#1eb855]"
+                        >
+                          <MessageCircle className="h-3.5 w-3.5" />
+                          WhatsApp
+                        </a>
+                        <a
+                          href={`tel:${lead.delivererPhone.replace(/\s/g, "")}`}
+                          className="flex items-center gap-1.5 rounded-lg border border-gray-300 px-2.5 py-1.5 text-[12px] font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                          <Phone className="h-3.5 w-3.5" />
+                          Appeler
+                        </a>
+                        <span className="font-mono text-[12px] text-gray-500">
+                          {lead.delivererPhone}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                ) : lead.trackingNumber ? (
+                  <p className="text-[12px] text-gray-400">
+                    Pas encore attribue par le transporteur.
+                  </p>
                 ) : (
                   <p className="text-gray-300">&mdash;</p>
                 )}
