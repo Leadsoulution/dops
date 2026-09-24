@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import {
   BadgeCheck,
   Check,
+  ClipboardCheck,
   MapPin,
   Package,
   Phone,
+  PhoneCall,
   Truck,
   User,
   XCircle,
@@ -15,7 +17,9 @@ import {
   viewForStatus,
   stepDates,
   publicHistory,
+  noticeFor,
   type StepKey,
+  type Bilingue,
 } from "@/lib/forcelog/tracking-steps";
 import type { ForceLogTrackingEvent } from "@/lib/forcelog/types";
 
@@ -27,14 +31,14 @@ import type { ForceLogTrackingEvent } from "@/lib/forcelog/types";
  * les verifier avant le passage du livreur — une adresse fausse se
  * corrige encore a ce moment-la, plus apres.
  *
- * Aucun mot du transporteur n'y figure : "Attente De Ramassage" ou
- * "Recu Hub" sont des termes d'entrepot qui laissent croire que rien
- * n'avance. Les statuts sont reformules du point de vue du client.
+ * Tout y est dit deux fois, en francais puis en arabe : nos clients
+ * lisent l'un ou l'autre, rarement les deux.
  */
 
 export const dynamic = "force-dynamic";
 
 const ICONS: Record<StepKey, typeof Package> = {
+  created: ClipboardCheck,
   collected: Package,
   shipping: Truck,
   in_city: MapPin,
@@ -84,34 +88,35 @@ export default async function SuiviPage({
     if (!parcel && !erreur) erreur = "Aucun colis ne porte ce numero.";
   }
 
+  const livreur = parcel?.DELIVERY_AGENT;
   const vue = viewForStatus(parcel?.STATUS_CODE);
   const dates = stepDates(history);
   const etapes = publicHistory(history);
+  const avis = noticeFor(parcel?.STATUS_CODE, livreur?.PHONE);
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-blue-50/60">
-      {/* Bandeau : il pose la couleur et porte le numero, que le client
-          recopie parfois pour nous ecrire. */}
       <header className="bg-gradient-to-br from-blue-700 via-blue-600 to-blue-500 px-4 pb-16 pt-10 text-white sm:pb-20 sm:pt-14">
         <div className="mx-auto w-full max-w-5xl text-center">
           <h1 className="text-[24px] font-semibold tracking-tight sm:text-[30px]">
             Suivi de votre colis
           </h1>
-          <p className="mt-2 inline-block rounded-full bg-white/15 px-3.5 py-1 font-mono text-[13px] tracking-wide backdrop-blur-sm">
+          <p className="mt-1 text-[15px] text-blue-100" dir="rtl">
+            تتبع طلبكم
+          </p>
+          <p className="mt-3 inline-block rounded-full bg-white/15 px-3.5 py-1 font-mono text-[13px] tracking-wide backdrop-blur-sm">
             {code}
           </p>
         </div>
       </header>
 
-      {/* Les cartes remontent sur le bandeau : c'est ce chevauchement qui
-          donne la profondeur, sans ombre appuyee. */}
       <div className="mx-auto -mt-10 w-full max-w-5xl px-4 pb-14 sm:-mt-12">
         {erreur ? (
           <section className="suivi-monte suivi-relief rounded-2xl bg-white p-8 text-center">
             <XCircle className="mx-auto h-10 w-10 text-gray-300" />
             <p className="mt-3 text-[15px] font-medium text-gray-800">{erreur}</p>
-            <p className="mt-1 text-[13px] text-gray-500">
-              Verifiez le numero, ou contactez-nous si le doute persiste.
+            <p className="mt-1 text-[13px] text-gray-500" dir="rtl">
+              لم يتم العثور على أي طلب بهذا الرقم
             </p>
           </section>
         ) : (
@@ -121,20 +126,26 @@ export default async function SuiviPage({
                 <div className="text-center">
                   <XCircle className="mx-auto h-11 w-11 text-red-500" />
                   <p className="mt-3 text-[18px] font-semibold text-gray-900">
-                    {vue.stopped}
+                    {vue.stopped.fr}
                   </p>
-                  <p className="mt-1 text-[13.5px] text-gray-500">
-                    Contactez-nous pour en savoir plus.
+                  <p className="text-[15px] text-gray-600" dir="rtl">
+                    {vue.stopped.ar}
                   </p>
                 </div>
               ) : (
                 <>
-                  <p className="mb-6 text-center text-[17px] font-semibold text-gray-900 sm:text-[20px]">
-                    {vue.headline}
+                  <p className="text-center text-[17px] font-semibold text-gray-900 sm:text-[20px]">
+                    {vue.headline.fr}
+                  </p>
+                  <p
+                    className="mb-6 text-center text-[15px] text-blue-700"
+                    dir="rtl"
+                  >
+                    {vue.headline.ar}
                   </p>
 
                   {/*
-                    La ligne des etapes. En colonne sur telephone : quatre
+                    La ligne des etapes. En colonne sur telephone : cinq
                     pastilles cote a cote y deviennent illisibles, et c'est
                     sur telephone que ce lien s'ouvre.
                   */}
@@ -147,18 +158,21 @@ export default async function SuiviPage({
                         <li
                           key={step.key}
                           className="suivi-monte flex flex-1 items-start gap-3 sm:flex-col sm:items-center sm:gap-0 sm:text-center"
-                          style={{ animationDelay: `${i * 110}ms` }}
+                          style={{ animationDelay: `${i * 100}ms` }}
                         >
                           <div className="flex flex-col items-center sm:w-full sm:flex-row">
-                            <span className="relative hidden h-1 flex-1 overflow-hidden rounded-full bg-blue-100 sm:block">
+                            {/* Les traits bordent la pastille ; les deux
+                                extremites de la ligne restent nues. */}
+                            <span
+                              className={`relative hidden h-1 flex-1 overflow-hidden rounded-full sm:block ${
+                                i === 0 ? "bg-transparent" : "bg-blue-100"
+                              }`}
+                            >
                               {i > 0 && atteinte && (
                                 <span
                                   className="suivi-trait absolute inset-0 rounded-full bg-blue-600"
-                                  style={{ animationDelay: `${i * 110}ms` }}
+                                  style={{ animationDelay: `${i * 100}ms` }}
                                 />
-                              )}
-                              {i === 0 && (
-                                <span className="absolute inset-0 bg-transparent" />
                               )}
                             </span>
 
@@ -172,15 +186,18 @@ export default async function SuiviPage({
                               <Icone className="h-5 w-5" />
                             </span>
 
-                            <span className="relative hidden h-1 flex-1 overflow-hidden rounded-full bg-blue-100 sm:block">
+                            <span
+                              className={`relative hidden h-1 flex-1 overflow-hidden rounded-full sm:block ${
+                                i === STEPS.length - 1
+                                  ? "bg-transparent"
+                                  : "bg-blue-100"
+                              }`}
+                            >
                               {i < vue.currentIndex && (
                                 <span
                                   className="suivi-trait absolute inset-0 rounded-full bg-blue-600"
-                                  style={{ animationDelay: `${i * 110 + 60}ms` }}
+                                  style={{ animationDelay: `${i * 100 + 50}ms` }}
                                 />
-                              )}
-                              {i === STEPS.length - 1 && (
-                                <span className="absolute inset-0 bg-transparent" />
                               )}
                             </span>
 
@@ -196,7 +213,7 @@ export default async function SuiviPage({
 
                           <div className="pb-3 sm:mt-3 sm:pb-0">
                             <p
-                              className={`text-[13.5px] ${
+                              className={`text-[13px] ${
                                 courante
                                   ? "font-semibold text-blue-700"
                                   : atteinte
@@ -204,7 +221,19 @@ export default async function SuiviPage({
                                     : "text-gray-400"
                               }`}
                             >
-                              {step.label}
+                              {step.fr}
+                            </p>
+                            <p
+                              className={`text-[12.5px] ${
+                                courante
+                                  ? "font-medium text-blue-600"
+                                  : atteinte
+                                    ? "text-gray-500"
+                                    : "text-gray-300"
+                              }`}
+                              dir="rtl"
+                            >
+                              {step.ar}
                             </p>
                             {dates[step.key] && (
                               <p className="mt-0.5 font-mono text-[11px] text-gray-400">
@@ -216,41 +245,146 @@ export default async function SuiviPage({
                       );
                     })}
                   </ol>
+
+                  {/*
+                    Ce que le client a a faire, et rien d'autre : rester
+                    joignable, ou rappeler le livreur quand il a deja
+                    essaye. Un troisieme message serait du bruit sur une
+                    page qu'on lit en dix secondes.
+                  */}
+                  {avis && (
+                    <div
+                      className={`mt-6 flex items-start gap-3 rounded-xl border-2 px-4 py-3.5 ${
+                        avis.kind === "rappel"
+                          ? "border-amber-300 bg-amber-50"
+                          : "border-blue-200 bg-blue-50"
+                      }`}
+                    >
+                      <span
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                          avis.kind === "rappel"
+                            ? "bg-amber-500 text-white"
+                            : "bg-blue-600 text-white"
+                        }`}
+                      >
+                        {avis.kind === "rappel" ? (
+                          <PhoneCall className="h-4 w-4" />
+                        ) : (
+                          <Phone className="h-4 w-4" />
+                        )}
+                      </span>
+                      <div className="min-w-0">
+                        <p
+                          className={`text-[13.5px] font-medium ${
+                            avis.kind === "rappel"
+                              ? "text-amber-900"
+                              : "text-blue-900"
+                          }`}
+                        >
+                          {avis.text.fr}
+                        </p>
+                        <p
+                          className={`text-[13.5px] ${
+                            avis.kind === "rappel"
+                              ? "text-amber-800"
+                              : "text-blue-800"
+                          }`}
+                          dir="rtl"
+                        >
+                          {avis.text.ar}
+                        </p>
+                        {avis.kind === "rappel" && livreur?.PHONE && (
+                          <a
+                            href={`tel:${livreur.PHONE.replace(/\s/g, "")}`}
+                            className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-amber-600"
+                          >
+                            <PhoneCall className="h-3.5 w-3.5" />
+                            Appeler le livreur
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </section>
 
-            {/*
-              Les informations de la commande.
-
-              Le client les relit pour verifier son adresse et le montant
-              a preparer : c'est le moment ou une erreur se corrige encore.
-            */}
             <section
               className="suivi-monte suivi-relief mt-5 rounded-2xl bg-white p-5 sm:p-7"
               style={{ animationDelay: "160ms" }}
             >
               <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
-                <Info icon={Package} label="Produit" value={parcel?.PRODUCT_NATURE} />
-                <Info icon={User} label="Nom" value={parcel?.RECEIVER} />
-                <Info icon={Phone} label="Telephone" value={parcel?.PHONE} mono />
-                <Info icon={MapPin} label="Ville" value={parcel?.CITY_NAME} />
+                <Info
+                  icon={Package}
+                  label={{ fr: "Produit", ar: "المنتج" }}
+                  value={parcel?.PRODUCT_NATURE}
+                />
+                <Info
+                  icon={User}
+                  label={{ fr: "Nom", ar: "الاسم" }}
+                  value={parcel?.RECEIVER}
+                />
+                <Info
+                  icon={Phone}
+                  label={{ fr: "Telephone", ar: "الهاتف" }}
+                  value={parcel?.PHONE}
+                  mono
+                />
+                <Info
+                  icon={MapPin}
+                  label={{ fr: "Ville", ar: "المدينة" }}
+                  value={parcel?.CITY_NAME}
+                />
                 <div className="sm:col-span-2">
-                  <Info icon={MapPin} label="Adresse" value={parcel?.ADDRESS} />
+                  <Info
+                    icon={MapPin}
+                    label={{ fr: "Adresse", ar: "العنوان" }}
+                    value={parcel?.ADDRESS}
+                  />
                 </div>
+
+                {/* Le livreur, une fois attribue : c'est la personne qui
+                    sonnera a la porte, et celle qu'on rappelle. */}
+                {(livreur?.NAME || livreur?.PHONE) && (
+                  <div className="sm:col-span-2">
+                    <div className="flex flex-wrap items-center gap-3 rounded-xl border-2 border-blue-200 bg-blue-50/60 px-3.5 py-3">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-white">
+                        <Truck className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11.5px] text-blue-700">
+                          Livreur · <span dir="rtl">عامل التوصيل</span>
+                        </p>
+                        <p className="text-[13.5px] font-medium text-gray-800">
+                          {livreur?.NAME ?? "Livreur"}
+                        </p>
+                      </div>
+                      {livreur?.PHONE && (
+                        <a
+                          href={`tel:${livreur.PHONE.replace(/\s/g, "")}`}
+                          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 font-mono text-[12.5px] font-medium text-white hover:bg-blue-700"
+                        >
+                          <PhoneCall className="h-3.5 w-3.5" />
+                          {livreur.PHONE}
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Le montant, mis en avant : c'est la somme a preparer. */}
               <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 px-4 py-3.5 text-white">
                 <div>
-                  <p className="text-[11.5px] text-blue-100">A payer a la livraison</p>
+                  <p className="text-[11.5px] text-blue-100">
+                    A payer a la livraison · <span dir="rtl">الثمن عند التسليم</span>
+                  </p>
                   <p className="font-mono text-[22px] font-semibold">
                     {parcel?.PRICE ? `${Math.round(Number(parcel.PRICE))} DH` : "—"}
                   </p>
                 </div>
                 <p className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-[12.5px] font-medium backdrop-blur-sm">
                   <BadgeCheck className="h-4 w-4" />
-                  Livraison gratuite
+                  Livraison gratuite · <span dir="rtl">التوصيل مجاني</span>
                 </p>
               </div>
             </section>
@@ -261,7 +395,7 @@ export default async function SuiviPage({
                 style={{ animationDelay: "240ms" }}
               >
                 <p className="mb-4 text-[12px] font-semibold tracking-wide text-blue-700">
-                  HISTORIQUE
+                  HISTORIQUE · <span dir="rtl">سجل التتبع</span>
                 </p>
                 <ul className="space-y-0">
                   {[...etapes].reverse().map((e, i, tout) => (
@@ -282,7 +416,10 @@ export default async function SuiviPage({
                             i === 0 ? "font-semibold text-gray-900" : "text-gray-700"
                           }`}
                         >
-                          {e.label}
+                          {e.label.fr}
+                        </p>
+                        <p className="text-[13px] text-gray-500" dir="rtl">
+                          {e.label.ar}
                         </p>
                         <p className="font-mono text-[11.5px] text-gray-400">
                           {e.time}
@@ -313,7 +450,7 @@ function Info({
   mono,
 }: {
   icon: typeof Package;
-  label: string;
+  label: Bilingue;
   value?: string | null;
   mono?: boolean;
 }) {
@@ -324,7 +461,9 @@ function Info({
         <Icone className="h-3.5 w-3.5" />
       </span>
       <div className="min-w-0">
-        <p className="text-[11.5px] text-gray-400">{label}</p>
+        <p className="text-[11.5px] text-gray-400">
+          {label.fr} · <span dir="rtl">{label.ar}</span>
+        </p>
         <p
           className={`break-words text-[13.5px] text-gray-800 ${
             mono ? "font-mono" : ""
