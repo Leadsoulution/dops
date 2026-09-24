@@ -4,6 +4,7 @@ import {
   Check,
   ClipboardCheck,
   MapPin,
+  MessageCircle,
   Package,
   Phone,
   PhoneCall,
@@ -12,6 +13,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { getParcelDetail, getTracking } from "@/lib/forcelog/client";
+import { whatsappNumber } from "@/lib/whatsapp";
 import {
   STEPS,
   viewForStatus,
@@ -256,15 +258,15 @@ export default async function SuiviPage({
                     <div
                       className={`mt-6 flex items-start gap-3 rounded-xl border-2 px-4 py-3.5 ${
                         avis.kind === "rappel"
-                          ? "border-amber-300 bg-amber-50"
-                          : "border-blue-200 bg-blue-50"
+                          ? "border-red-300 bg-red-50"
+                          : "border-amber-300 bg-amber-50"
                       }`}
                     >
                       <span
                         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
                           avis.kind === "rappel"
-                            ? "bg-amber-500 text-white"
-                            : "bg-blue-600 text-white"
+                            ? "bg-red-500 text-white"
+                            : "bg-amber-500 text-white"
                         }`}
                       >
                         {avis.kind === "rappel" ? (
@@ -277,8 +279,8 @@ export default async function SuiviPage({
                         <p
                           className={`text-[13.5px] font-medium ${
                             avis.kind === "rappel"
-                              ? "text-amber-900"
-                              : "text-blue-900"
+                              ? "text-red-900"
+                              : "text-amber-900"
                           }`}
                         >
                           {avis.text.fr}
@@ -286,21 +288,32 @@ export default async function SuiviPage({
                         <p
                           className={`text-[13.5px] ${
                             avis.kind === "rappel"
-                              ? "text-amber-800"
-                              : "text-blue-800"
+                              ? "text-red-800"
+                              : "text-amber-800"
                           }`}
                           dir="rtl"
                         >
                           {avis.text.ar}
                         </p>
                         {avis.kind === "rappel" && livreur?.PHONE && (
-                          <a
-                            href={`tel:${livreur.PHONE.replace(/\s/g, "")}`}
-                            className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-amber-600"
-                          >
-                            <PhoneCall className="h-3.5 w-3.5" />
-                            Appeler le livreur
-                          </a>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <a
+                              href={`tel:${livreur.PHONE.replace(/\s/g, "")}`}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-red-500 px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-red-600"
+                            >
+                              <PhoneCall className="h-3.5 w-3.5" />
+                              Appeler le livreur
+                            </a>
+                            <a
+                              href={`https://wa.me/${whatsappNumber(livreur.PHONE)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-[#25D366] px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-[#1eb855]"
+                            >
+                              <MessageCircle className="h-3.5 w-3.5" />
+                              WhatsApp
+                            </a>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -360,13 +373,24 @@ export default async function SuiviPage({
                         </p>
                       </div>
                       {livreur?.PHONE && (
-                        <a
-                          href={`tel:${livreur.PHONE.replace(/\s/g, "")}`}
-                          className="flex shrink-0 items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 font-mono text-[12.5px] font-medium text-white hover:bg-blue-700"
-                        >
-                          <PhoneCall className="h-3.5 w-3.5" />
-                          {livreur.PHONE}
-                        </a>
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                          <a
+                            href={`https://wa.me/${whatsappNumber(livreur.PHONE)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 rounded-lg bg-[#25D366] px-3 py-2 text-[12.5px] font-medium text-white hover:bg-[#1eb855]"
+                          >
+                            <MessageCircle className="h-3.5 w-3.5" />
+                            WhatsApp
+                          </a>
+                          <a
+                            href={`tel:${livreur.PHONE.replace(/\s/g, "")}`}
+                            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 font-mono text-[12.5px] font-medium text-white hover:bg-blue-700"
+                          >
+                            <PhoneCall className="h-3.5 w-3.5" />
+                            {livreur.PHONE}
+                          </a>
+                        </div>
                       )}
                     </div>
                   </div>
