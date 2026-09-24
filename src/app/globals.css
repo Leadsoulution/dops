@@ -148,3 +148,91 @@ body::-webkit-scrollbar {
     animation: none;
   }
 }
+
+/* ------------------------------------------------------------------ *
+ * Page publique de suivi de colis.
+ *
+ * Elle ne partage rien avec le tableau de bord : c'est un client qui la
+ * lit, souvent une seule fois, sur un telephone, apres avoir clique sur
+ * un lien WhatsApp. Elle a donc ses propres teintes et ses propres
+ * mouvements, regroupes ici plutot que disperses en classes utilitaires
+ * dans le composant.
+ * ------------------------------------------------------------------ */
+
+@theme inline {
+  --color-suivi-500: #2563eb;
+  --color-suivi-600: #1d4ed8;
+  --color-suivi-700: #1e40af;
+}
+
+/* Entree des blocs, decalee : l'oeil suit la page qui se compose au
+   lieu de tout recevoir d'un coup. */
+@keyframes suivi-monte {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Halo de l'etape en cours : il respire, donc il attire le regard sans
+   clignoter. */
+@keyframes suivi-halo {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(37, 99, 235, 0);
+  }
+}
+
+/* Remplissage du trait entre deux etapes franchies. */
+@keyframes suivi-trait {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.suivi-monte {
+  animation: suivi-monte 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.suivi-halo {
+  animation: suivi-halo 2.2s ease-out infinite;
+}
+
+.suivi-trait {
+  transform-origin: left;
+  animation: suivi-trait 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Le relief : une ombre portee doublee d'un liseré clair en haut, qui
+   imite la lumiere tombant sur une surface bombee. */
+.suivi-relief {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 10px 30px -12px rgba(30, 64, 175, 0.28),
+    0 2px 8px -2px rgba(30, 64, 175, 0.12);
+}
+
+.suivi-pastille {
+  box-shadow:
+    0 -1px 0 rgba(255, 255, 255, 0.35) inset,
+    0 6px 16px -4px rgba(37, 99, 235, 0.55);
+}
+
+/* Qui a demande moins de mouvement n'en recoit aucun. */
+@media (prefers-reduced-motion: reduce) {
+  .suivi-monte,
+  .suivi-halo,
+  .suivi-trait {
+    animation: none;
+  }
+}

@@ -1,5 +1,6 @@
 import { LEAD_STATUSES } from "@/components/dashboard/leads-data";
 import { displayAmount } from "@/lib/amount";
+import { trackingUrl } from "@/lib/forcelog/tracking-steps";
 
 /**
  * Messages WhatsApp preremplis, un par statut.
@@ -76,6 +77,18 @@ export const PLACEHOLDERS: {
     key: "photo",
     label: "Photo du produit (lien)",
     value: (o) => o.productImage ?? "",
+  },
+  /**
+   * La page de suivi du client.
+   *
+   * Vide tant qu'aucun colis n'existe : un lien vers un numero de suivi
+   * inexistant afficherait "aucun colis ne porte ce numero", ce qui
+   * inquiete plus que l'absence de lien.
+   */
+  {
+    key: "lien_suivi",
+    label: "Lien de suivi",
+    value: (o) => (o.trackingNumber ? trackingUrl(o.trackingNumber) : ""),
   },
 ];
 
@@ -229,7 +242,7 @@ export function defaultDeliveryTemplate(code: string): string {
     "الثمن عند التسليم : {prix}\n" +
     "العنوان : {adresse}\n" +
     "التوصيل : مجاني";
-  const suivi = "\n\nرقم التتبع : {suivi}";
+  const suivi = "\n\nرقم التتبع : {suivi}\nرابط التتبع : {lien_suivi}";
   const bonjour = "مرحبا {prenom}، ";
 
   switch (code) {
