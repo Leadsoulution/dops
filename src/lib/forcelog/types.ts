@@ -37,6 +37,21 @@ export type AddParcelParams = {
   CARTON?: string;
 };
 
+/**
+ * Un article contenu dans le colis.
+ *
+ * Present sur GetParcel seulement, et seulement pour les colis de
+ * stock : c'est le transporteur qui heberge alors la photo, puisqu'il
+ * detient la marchandise.
+ */
+export type ForceLogParcelProduct = {
+  NAME?: string;
+  IMAGE?: string;
+  VARIANT_NAME?: string;
+  VARIANT_REF?: string;
+  QUANTITY?: number | string;
+};
+
 /** Le livreur charge du colis, tel que ForceLog le nomme. */
 export type ForceLogDeliveryAgent = {
   NAME?: string;
@@ -67,6 +82,7 @@ export type ForceLogParcel = {
    */
   DELIVERY_AGENT?: ForceLogDeliveryAgent;
   SECONDARY_STATUS?: string;
+  PRODUCTS?: ForceLogParcelProduct[];
 };
 
 export type ForceLogTrackingEvent = {

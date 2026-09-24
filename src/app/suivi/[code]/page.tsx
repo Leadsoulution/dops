@@ -91,6 +91,17 @@ export default async function SuiviPage({
   }
 
   const livreur = parcel?.DELIVERY_AGENT;
+  /*
+   * La photo du produit.
+   *
+   * Elle vient du colis lui-meme : pour un colis de stock, c'est le
+   * transporteur qui detient la marchandise et heberge donc l'image.
+   * La page continue ainsi de ne rien demander a la base.
+   *
+   * Un colis simple n'en porte pas : le bloc disparait alors, plutot
+   * que de montrer un cadre vide.
+   */
+  const article = parcel?.PRODUCTS?.find((p) => p.IMAGE);
   const vue = viewForStatus(parcel?.STATUS_CODE);
   const dates = stepDates(history);
   const etapes = publicHistory(history);
@@ -331,12 +342,48 @@ export default async function SuiviPage({
               className="suivi-monte suivi-relief mt-5 rounded-2xl bg-white p-5 sm:p-7"
               style={{ animationDelay: "160ms" }}
             >
+              {article?.IMAGE && (
+                <div className="mb-5 flex items-center gap-4 rounded-xl border border-blue-100 bg-blue-50/40 p-3">
+                  {/*
+                    `img` et non `next/image` : l'adresse vient du
+                    transporteur et change a chaque produit, l'optimiseur
+                    de Next exigerait de declarer son domaine et
+                    n'apporterait rien sur une vignette.
+                  */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={article.IMAGE}
+                    alt={article.NAME ?? parcel?.PRODUCT_NATURE ?? "Produit"}
+                    className="h-24 w-24 shrink-0 rounded-lg border border-blue-100 bg-white object-cover sm:h-28 sm:w-28"
+                    loading="lazy"
+                  />
+                  <div className="min-w-0">
+                    <p className="text-[11.5px] text-blue-700">
+                      <span dir="rtl">المنتج</span> · Produit
+                    </p>
+                    <p
+                      className="text-[15px] font-medium text-gray-900"
+                      dir="rtl"
+                    >
+                      {article.NAME ?? parcel?.PRODUCT_NATURE}
+                    </p>
+                    {article.QUANTITY && (
+                      <p className="mt-0.5 font-mono text-[12px] text-gray-500">
+                        × {article.QUANTITY}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
-                <Info
-                  icon={Package}
-                  label={{ fr: "Produit", ar: "المنتج" }}
-                  value={parcel?.PRODUCT_NATURE}
-                />
+                {!article?.IMAGE && (
+                  <Info
+                    icon={Package}
+                    label={{ fr: "Produit", ar: "المنتج" }}
+                    value={parcel?.PRODUCT_NATURE}
+                  />
+                )}
                 <Info
                   icon={User}
                   label={{ fr: "Nom", ar: "الاسم" }}
