@@ -4,9 +4,12 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import {
   AlertCircle,
+  Check,
   ClipboardList,
   Loader2,
   MapPin,
+  Copy,
+  ExternalLink,
   MessageCircle,
   Pencil,
   Phone,
@@ -38,6 +41,7 @@ import {
 } from "./leads-data";
 import { displayAmount } from "@/lib/amount";
 import { whatsappNumber } from "@/lib/whatsapp";
+import { trackingUrl } from "@/lib/forcelog/tracking-steps";
 import CallOutcomePanel from "./CallOutcomePanel";
 
 const tabs = [
@@ -64,6 +68,14 @@ export default function OrderDetailsModal({
   onDelete?: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>(tabs[0]);
+  const [lienCopie, setLienCopie] = useState(false);
+
+  function copierLien(url: string) {
+    void navigator.clipboard.writeText(url).then(() => {
+      setLienCopie(true);
+      setTimeout(() => setLienCopie(false), 2000);
+    });
+  }
   // L'etat retient pour quelle commande il a ete charge : le chargement
   // se deduit de cette comparaison, plutot que d'un drapeau pose
   // synchroniquement dans l'effet.
@@ -217,6 +229,42 @@ export default function OrderDetailsModal({
                   <p className="text-gray-300">&mdash;</p>
                 )}
               </div>
+              {lead.trackingNumber && (
+                <div className="col-span-2">
+                  <p className="text-gray-400">Lien de suivi client</p>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                    <a
+                      href={trackingUrl(lead.trackingNumber)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="min-w-0 flex-1 truncate font-mono text-[12px] text-blue-600 hover:underline"
+                    >
+                      {trackingUrl(lead.trackingNumber)}
+                    </a>
+                    <button
+                      onClick={() => copierLien(trackingUrl(lead.trackingNumber!))}
+                      className="flex shrink-0 items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-[11.5px] text-gray-600 hover:bg-gray-50"
+                    >
+                      {lienCopie ? (
+                        <Check className="h-3 w-3 text-emerald-600" />
+                      ) : (
+                        <Copy className="h-3 w-3" />
+                      )}
+                      {lienCopie ? "Copie" : "Copier"}
+                    </button>
+                    <a
+                      href={trackingUrl(lead.trackingNumber)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex shrink-0 items-center gap-1 rounded-md border border-gray-300 px-2 py-1 text-[11.5px] text-gray-600 hover:bg-gray-50"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      Ouvrir
+                    </a>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <p className="mb-1 text-gray-400">Statut livraison</p>
                 {lead.deliveryStatus ? (

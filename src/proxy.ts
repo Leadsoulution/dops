@@ -12,6 +12,11 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 
 // La boutique et le transporteur appellent ces adresses sans session.
+//
+// Le suivi de colis s'y ajoute pour une autre raison : c'est une page
+// faite pour les clients, dont l'adresse leur est envoyee par WhatsApp.
+// Elle ne montre que l'avancement d'un colis, sa ville et sa nature —
+// jamais de telephone, d'adresse ni de montant.
 const PUBLIC_PATHS = [
   "/login",
   "/api/auth/login",
@@ -19,7 +24,22 @@ const PUBLIC_PATHS = [
   "/api/woocommerce/webhook",
 ];
 
+/**
+ * Le suivi de colis, dont le code tient dans le meme segment que le
+ * chemin : "/suivi-F-XXXX".
+ *
+ * Il ne peut pas figurer dans la liste ci-dessus. Le garde s'execute
+ * avant les reecritures de `next.config`, et voit donc l'adresse
+ * d'origine, jamais le "/suivi/F-XXXX" interne — une entree "/suivi"
+ * ne correspondrait a rien et renverrait le client vers la page de
+ * connexion.
+ */
+const SUIVI_PREFIX = "/suivi-";
+
 function isPublic(pathname: string) {
+  if (pathname.startsWith(SUIVI_PREFIX) || pathname.startsWith("/suivi/")) {
+    return true;
+  }
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 

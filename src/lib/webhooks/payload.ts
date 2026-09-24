@@ -1,5 +1,6 @@
 import { whatsappNumber } from "@/lib/whatsapp";
 import { amountValue, roundToTen } from "@/lib/amount";
+import { trackingUrl } from "@/lib/forcelog/tracking-steps";
 import type { Lead } from "@/components/dashboard/leads-data";
 
 /**
@@ -48,6 +49,8 @@ export type WebhookPayload = {
     delivery_status_code: string | null;
     delivery_status_previous: string | null;
     tracking_number: string | null;
+    /** Page de suivi a envoyer au client. Nulle tant qu'il n'y a pas de colis. */
+    tracking_url: string | null;
     delivery_date: string | null;
     customer_note: string | null;
     created_at: string | null;
@@ -82,6 +85,7 @@ export function buildPayload(
       delivery_status_code: lead.deliveryStatusCode ?? null,
       delivery_status_previous: previous?.deliveryStatus ?? null,
       tracking_number: lead.trackingNumber ?? null,
+      tracking_url: lead.trackingNumber ? trackingUrl(lead.trackingNumber) : null,
       delivery_date: lead.deliveryDate ?? null,
       customer_note: lead.customerNote ?? null,
       created_at: lead.date || null,

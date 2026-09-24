@@ -64,6 +64,16 @@ describe("proxy", () => {
     ).toHaveBeenCalledWith("sb-jeton", "neuf");
   });
 
+  it("laisse un client ouvrir le suivi de son colis sans compte", async () => {
+    getUser.mockResolvedValue({ data: { user: null }, error: null });
+    const res = await proxy(request("/suivi-F-ALR26MY1QM91"));
+    // Le garde s'execute avant les reecritures : il voit "/suivi-F-...",
+    // jamais la forme interne "/suivi/F-...". Sans cette regle, le lien
+    // envoye par WhatsApp menait le client a une page de connexion.
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+  });
+
   it("laisse passer une personne connectee", async () => {
     getUser.mockResolvedValue({ data: { user: { id: "u1" } }, error: null });
     const res = await proxy(request("/"));

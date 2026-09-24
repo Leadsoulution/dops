@@ -1,5 +1,18 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  /*
+   * L'adresse de suivi envoyee aux clients est "/suivi-F-XXXX" : un
+   * seul segment, tiret compris. Next.js ne sait pas rendre une partie
+   * de segment dynamique — "[code]" prend le segment entier — donc la
+   * page vit en "/suivi/F-XXXX" et cette reecriture fait le pont.
+   *
+   * L'adresse visible reste celle du lien : le client ne voit jamais la
+   * forme interne.
+   */
+  async rewrites() {
+    return [{ source: "/suivi-:code", destination: "/suivi/:code" }];
+  },
+
   async headers() {
     return [
       {
