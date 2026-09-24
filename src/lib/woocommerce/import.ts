@@ -4,6 +4,7 @@ import { listRecentOrders, type WooOrder } from "./client";
 import type { Lead } from "@/components/dashboard/leads-data";
 import { sendPushToAll } from "@/lib/push";
 import { recordLeadCreated } from "@/lib/supabase/lead-events";
+import { emit } from "@/lib/webhooks/send";
 
 /**
  * Reprise des commandes de la boutique dans l'application.
@@ -110,8 +111,10 @@ export async function importWooOrders(): Promise<WooImportResult> {
       .select("id,reference");
     if (error) throw new Error(error.message);
 
+    const posees = (inserted ?? []) as { id: string; reference: string }[];
+
     await Promise.all(
-      ((inserted ?? []) as { id: string; reference: string }[]).map((row) =>
+      posees.map((row) =>
         recordLeadCreated(
           row.id,
           { name: "WooCommerce" },
@@ -119,6 +122,20 @@ export async function importWooOrders(): Promise<WooImportResult> {
         )
       )
     );
+
+    /*
+     * Previent n8n de chaque commande qui entre.
+     *
+     * Le rapprochement se fait par reference et non par position :
+     * Postgres ne promet pas de rendre les lignes inserees dans l'ordre
+     * ou elles ont ete fournies, et une commande envoyee sous le nom
+     * d'une autre ferait ecrire au mauvais client.
+     */
+    const parReference = new Map(nouvelles.map((l) => [l.reference, l]));
+    for (const row of posees) {
+      const lead = parReference.get(row.reference);
+      if (lead) void emit("lead.created", { ...lead, id: row.id } as Lead);
+    }
 
     // Previent les telephones, y compris application fermee. L'import
     // etant declenche par le webhook de la boutique, l'alerte part meme

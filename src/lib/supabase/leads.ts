@@ -1,5 +1,6 @@
 import { getSupabaseServerClient } from "./server";
 import { fetchAll } from "./page";
+import { emit } from "@/lib/webhooks/send";
 import { cityKey, tariffByCityForm } from "./cities";
 import type { Lead, LeadSource, LeadStatus } from "@/components/dashboard/leads-data";
 
@@ -266,7 +267,13 @@ export async function createLead(lead: Partial<Lead>): Promise<Lead> {
     .single();
 
   if (error) throw new Error(error.message);
-  return toLead(data as LeadRow);
+  const cree = toLead(data as LeadRow);
+
+  // Une commande saisie a la main previent l'exterieur comme une
+  // commande venue de la boutique : c'est la meme nouvelle.
+  void emit("lead.created", cree);
+
+  return cree;
 }
 
 export async function updateLead(
