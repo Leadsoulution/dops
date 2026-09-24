@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { getParcelDetail, getTracking } from "@/lib/forcelog/client";
 import { whatsappNumber } from "@/lib/whatsapp";
+import { catalogueImage } from "@/lib/supabase/products";
 import {
   STEPS,
   viewForStatus,
@@ -101,7 +102,23 @@ export default async function SuiviPage({
    * Un colis simple n'en porte pas : le bloc disparait alors, plutot
    * que de montrer un cadre vide.
    */
-  const article = parcel?.PRODUCTS?.find((p) => p.IMAGE);
+  const article = parcel?.PRODUCTS?.[0];
+
+  /*
+   * La photo montree au client.
+   *
+   * Celle du catalogue passe devant : c'est le panneau "Photos par code
+   * article" qui promet de la gouverner, et le transporteur en heberge
+   * une autre de son cote. Deux sources pour une meme promesse, et
+   * changer la photo dans l'application ne changeait rien ici.
+   *
+   * C'est le seul appel de cette page a la base — une lecture, jamais
+   * une ecriture.
+   */
+  const photo =
+    (await catalogueImage(article?.VARIANT_REF, article?.NAME).catch(() => null)) ??
+    article?.IMAGE ??
+    null;
   const vue = viewForStatus(parcel?.STATUS_CODE);
   const dates = stepDates(history);
   const etapes = publicHistory(history);
@@ -342,7 +359,7 @@ export default async function SuiviPage({
               className="suivi-monte suivi-relief mt-5 rounded-2xl bg-white p-5 sm:p-7"
               style={{ animationDelay: "160ms" }}
             >
-              {article?.IMAGE && (
+              {photo && (
                 <div className="mb-5 flex items-center gap-4 rounded-xl border border-blue-100 bg-blue-50/40 p-3">
                   {/*
                     `img` et non `next/image` : l'adresse vient du
@@ -352,8 +369,8 @@ export default async function SuiviPage({
                   */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={article.IMAGE}
-                    alt={article.NAME ?? parcel?.PRODUCT_NATURE ?? "Produit"}
+                    src={photo}
+                    alt={article?.NAME ?? parcel?.PRODUCT_NATURE ?? "Produit"}
                     className="h-24 w-24 shrink-0 rounded-lg border border-blue-100 bg-white object-cover sm:h-28 sm:w-28"
                     loading="lazy"
                   />
@@ -365,11 +382,11 @@ export default async function SuiviPage({
                       className="text-[15px] font-medium text-gray-900"
                       dir="rtl"
                     >
-                      {article.NAME ?? parcel?.PRODUCT_NATURE}
+                      {article?.NAME ?? parcel?.PRODUCT_NATURE}
                     </p>
-                    {article.QUANTITY && (
+                    {article?.QUANTITY && (
                       <p className="mt-0.5 font-mono text-[12px] text-gray-500">
-                        × {article.QUANTITY}
+                        × {article?.QUANTITY}
                       </p>
                     )}
                   </div>
@@ -377,7 +394,7 @@ export default async function SuiviPage({
               )}
 
               <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2">
-                {!article?.IMAGE && (
+                {!photo && (
                   <Info
                     icon={Package}
                     label={{ fr: "Produit", ar: "المنتج" }}

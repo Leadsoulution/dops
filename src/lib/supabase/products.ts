@@ -165,6 +165,52 @@ export async function parcelCatalogue(): Promise<CatalogueProduct[]> {
   }));
 }
 
+/**
+ * La photo du catalogue pour un article donne.
+ *
+ * Le transporteur heberge lui aussi une image de chaque article, et la
+ * page de suivi l'affichait. Mais c'est le panneau "Photos par code
+ * article" qui promet de gouverner la photo montree au client : deux
+ * sources pour une meme promesse, et changer l'une ne changeait rien.
+ *
+ * La notre l'emporte donc. Celle du transporteur reste en secours pour
+ * les articles que le catalogue ne connait pas encore.
+ *
+ * Recherche par code d'abord, qui est exact, puis par nom.
+ */
+export async function catalogueImage(
+  ref?: string | null,
+  name?: string | null
+): Promise<string | null> {
+  if (!ref && !name) return null;
+
+  const supabase = getSupabaseServerClient();
+  const { data } = await supabase
+    .from("products")
+    .select("forcelog_ref,ref,name,image")
+    .not("image", "is", null);
+
+  const rows = (data ?? []) as {
+    forcelog_ref: string | null;
+    ref: string;
+    name: string;
+    image: string;
+  }[];
+
+  const code = ref?.trim();
+  if (code) {
+    const parCode = rows.find((r) => r.forcelog_ref === code || r.ref === code);
+    if (parCode) return parCode.image;
+  }
+
+  const nom = name?.trim().toLowerCase();
+  if (nom) {
+    const parNom = rows.find((r) => r.name.trim().toLowerCase() === nom);
+    if (parNom) return parNom.image;
+  }
+  return null;
+}
+
 export async function listProducts(): Promise<StockProduct[]> {
   const supabase = getSupabaseServerClient();
   const { data, error } = await supabase
