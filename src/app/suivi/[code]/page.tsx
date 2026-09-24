@@ -100,12 +100,13 @@ export default async function SuiviPage({
     <main className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-blue-50/60">
       <header className="bg-gradient-to-br from-blue-700 via-blue-600 to-blue-500 px-4 pb-16 pt-10 text-white sm:pb-20 sm:pt-14">
         <div className="mx-auto w-full max-w-5xl text-center">
-          <h1 className="text-[24px] font-semibold tracking-tight sm:text-[30px]">
-            Suivi de votre colis
-          </h1>
-          <p className="mt-1 text-[15px] text-blue-100" dir="rtl">
+          <h1
+            className="text-[24px] font-semibold tracking-tight sm:text-[30px]"
+            dir="rtl"
+          >
             تتبع طلبكم
-          </p>
+          </h1>
+          <p className="mt-1 text-[14px] text-blue-100">Suivi de votre colis</p>
           <p className="mt-3 inline-block rounded-full bg-white/15 px-3.5 py-1 font-mono text-[13px] tracking-wide backdrop-blur-sm">
             {code}
           </p>
@@ -116,10 +117,13 @@ export default async function SuiviPage({
         {erreur ? (
           <section className="suivi-monte suivi-relief rounded-2xl bg-white p-8 text-center">
             <XCircle className="mx-auto h-10 w-10 text-gray-300" />
-            <p className="mt-3 text-[15px] font-medium text-gray-800">{erreur}</p>
-            <p className="mt-1 text-[13px] text-gray-500" dir="rtl">
+            <p
+              className="mt-3 text-[16px] font-medium text-gray-800"
+              dir="rtl"
+            >
               لم يتم العثور على أي طلب بهذا الرقم
             </p>
+            <p className="mt-1 text-[13px] text-gray-500">{erreur}</p>
           </section>
         ) : (
           <>
@@ -127,23 +131,24 @@ export default async function SuiviPage({
               {vue.stopped ? (
                 <div className="text-center">
                   <XCircle className="mx-auto h-11 w-11 text-red-500" />
-                  <p className="mt-3 text-[18px] font-semibold text-gray-900">
-                    {vue.stopped.fr}
-                  </p>
-                  <p className="text-[15px] text-gray-600" dir="rtl">
+                  <p
+                    className="mt-3 text-[19px] font-semibold text-gray-900"
+                    dir="rtl"
+                  >
                     {vue.stopped.ar}
                   </p>
+                  <p className="text-[14px] text-gray-500">{vue.stopped.fr}</p>
                 </div>
               ) : (
                 <>
-                  <p className="text-center text-[17px] font-semibold text-gray-900 sm:text-[20px]">
-                    {vue.headline.fr}
-                  </p>
                   <p
-                    className="mb-6 text-center text-[15px] text-blue-700"
+                    className="text-center text-[18px] font-semibold text-gray-900 sm:text-[22px]"
                     dir="rtl"
                   >
                     {vue.headline.ar}
+                  </p>
+                  <p className="mb-6 text-center text-[14px] text-blue-700">
+                    {vue.headline.fr}
                   </p>
 
                   {/*
@@ -215,27 +220,27 @@ export default async function SuiviPage({
 
                           <div className="pb-3 sm:mt-3 sm:pb-0">
                             <p
-                              className={`text-[13px] ${
+                              className={`text-[14px] ${
                                 courante
                                   ? "font-semibold text-blue-700"
                                   : atteinte
                                     ? "font-medium text-gray-700"
                                     : "text-gray-400"
                               }`}
+                              dir="rtl"
                             >
-                              {step.fr}
+                              {step.ar}
                             </p>
                             <p
-                              className={`text-[12.5px] ${
+                              className={`text-[12px] ${
                                 courante
                                   ? "font-medium text-blue-600"
                                   : atteinte
                                     ? "text-gray-500"
                                     : "text-gray-300"
                               }`}
-                              dir="rtl"
                             >
-                              {step.ar}
+                              {step.fr}
                             </p>
                             {dates[step.key] && (
                               <p className="mt-0.5 font-mono text-[11px] text-gray-400">
@@ -277,23 +282,23 @@ export default async function SuiviPage({
                       </span>
                       <div className="min-w-0">
                         <p
-                          className={`text-[13.5px] font-medium ${
+                          className={`text-[14.5px] font-medium ${
                             avis.kind === "rappel"
                               ? "text-red-900"
                               : "text-amber-900"
                           }`}
+                          dir="rtl"
                         >
-                          {avis.text.fr}
+                          {avis.text.ar}
                         </p>
                         <p
-                          className={`text-[13.5px] ${
+                          className={`text-[12.5px] ${
                             avis.kind === "rappel"
                               ? "text-red-800"
                               : "text-amber-800"
                           }`}
-                          dir="rtl"
                         >
-                          {avis.text.ar}
+                          {avis.text.fr}
                         </p>
                         {avis.kind === "rappel" && livreur?.PHONE && (
                           <div className="mt-2 flex flex-wrap gap-2">
@@ -366,7 +371,7 @@ export default async function SuiviPage({
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="text-[11.5px] text-blue-700">
-                          Livreur · <span dir="rtl">عامل التوصيل</span>
+                          <span dir="rtl">عامل التوصيل</span> · Livreur
                         </p>
                         <p className="text-[13.5px] font-medium text-gray-800">
                           {livreur?.NAME ?? "Livreur"}
@@ -399,8 +404,8 @@ export default async function SuiviPage({
 
               <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 px-4 py-3.5 text-white">
                 <div>
-                  <p className="text-[11.5px] text-blue-100">
-                    A payer a la livraison · <span dir="rtl">الثمن عند التسليم</span>
+                  <p className="text-[12px] text-blue-100">
+                    <span dir="rtl">الثمن عند التسليم</span> · A payer a la livraison
                   </p>
                   <p className="font-mono text-[22px] font-semibold">
                     {parcel?.PRICE ? `${Math.round(Number(parcel.PRICE))} DH` : "—"}
@@ -408,7 +413,7 @@ export default async function SuiviPage({
                 </div>
                 <p className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-[12.5px] font-medium backdrop-blur-sm">
                   <BadgeCheck className="h-4 w-4" />
-                  Livraison gratuite · <span dir="rtl">التوصيل مجاني</span>
+                  <span dir="rtl">التوصيل مجاني</span> · Livraison gratuite
                 </p>
               </div>
             </section>
@@ -419,7 +424,7 @@ export default async function SuiviPage({
                 style={{ animationDelay: "240ms" }}
               >
                 <p className="mb-4 text-[12px] font-semibold tracking-wide text-blue-700">
-                  HISTORIQUE · <span dir="rtl">سجل التتبع</span>
+                  <span dir="rtl">سجل التتبع</span> · HISTORIQUE
                 </p>
                 <ul className="space-y-0">
                   {[...etapes].reverse().map((e, i, tout) => (
@@ -436,15 +441,14 @@ export default async function SuiviPage({
                       </div>
                       <div className="pb-4">
                         <p
-                          className={`text-[13.5px] ${
+                          className={`text-[14px] ${
                             i === 0 ? "font-semibold text-gray-900" : "text-gray-700"
                           }`}
+                          dir="rtl"
                         >
-                          {e.label.fr}
-                        </p>
-                        <p className="text-[13px] text-gray-500" dir="rtl">
                           {e.label.ar}
                         </p>
+                        <p className="text-[12.5px] text-gray-500">{e.label.fr}</p>
                         <p className="font-mono text-[11.5px] text-gray-400">
                           {e.time}
                           {e.city ? ` · ${e.city}` : ""}
@@ -486,7 +490,7 @@ function Info({
       </span>
       <div className="min-w-0">
         <p className="text-[11.5px] text-gray-400">
-          {label.fr} · <span dir="rtl">{label.ar}</span>
+          <span dir="rtl">{label.ar}</span> · {label.fr}
         </p>
         <p
           className={`break-words text-[13.5px] text-gray-800 ${
