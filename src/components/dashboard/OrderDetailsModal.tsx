@@ -171,11 +171,11 @@ export default function OrderDetailsModal({
           />
 
           <div>
-            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-gray-500">
+            <p className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-violet-700">
               <MapPin className="h-3 w-3" />
               ADRESSE
             </p>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-gray-100 px-3 py-2.5 text-[12.5px]">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border-2 border-violet-400 px-3 py-2.5 text-[12.5px]">
               <div>
                 <p className="text-gray-400">Quartier</p>
                 <p className="text-gray-700">{lead.quartier ?? "—"}</p>
