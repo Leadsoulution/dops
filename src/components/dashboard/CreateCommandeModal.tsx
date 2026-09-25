@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  Check,
   ShoppingCart,
   Warehouse,
   Boxes,
@@ -55,6 +56,8 @@ type StockItem = {
   barcode: string | null;
   quantity: number;
   image: string | null;
+  /** Prix de vente du catalogue. Nul pour un article non tarife. */
+  price: number | null;
 };
 
 /** Reference auto si l'utilisateur n'en saisit pas, au format des existantes. */
@@ -143,13 +146,34 @@ export default function CreateCommandeModal({
     }
   }
 
+  /**
+   * Change la quantite d'un article, et recalcule le total.
+   *
+   * Le total se recalcule a chaque changement de selection, y compris
+   * quand on retire un article : c'est ce que l'on attend d'un panier.
+   * Un montant saisi a la main tient jusqu'a la selection suivante,
+   * apres quoi il repart du prix catalogue — mieux vaut un chiffre juste
+   * qu'un chiffre ancien qu'on aurait oublie d'avoir modifie.
+   *
+   * Un article sans prix au catalogue compte pour zero : il vaut mieux
+   * un total incomplet, visiblement faux, qu'un total invente.
+   */
   function setStockQuantity(ref: string, quantity: number) {
-    setStockQuantities((prev) => {
-      const next = { ...prev };
-      if (quantity <= 0) delete next[ref];
-      else next[ref] = quantity;
-      return next;
-    });
+    const next = { ...stockQuantities };
+    if (quantity <= 0) delete next[ref];
+    else next[ref] = quantity;
+    setStockQuantities(next);
+
+    const somme = Object.entries(next).reduce((total, [r, q]) => {
+      const article = stockItems.find((i) => i.ref === r);
+      return total + (article?.price ?? 0) * q;
+    }, 0);
+    setTotal(String(Math.round(somme)));
+  }
+
+  /** Cocher pose une unite, decocher retire l'article. */
+  function toggleStock(item: StockItem) {
+    setStockQuantity(item.ref, (stockQuantities[item.ref] ?? 0) > 0 ? 0 : 1);
   }
 
   const selectedStock = Object.entries(stockQuantities);
@@ -532,10 +556,30 @@ export default function CreateCommandeModal({
                   return (
                     <div
                       key={item.ref}
-                      className={`flex items-center gap-3 rounded-lg border px-3 py-2 ${
-                        chosen > 0 ? "border-gray-900" : "border-gray-200"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => toggleStock(item)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          toggleStock(item);
+                        }
+                      }}
+                      className={`flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 ${
+                        chosen > 0
+                          ? "border-gray-900 bg-gray-50"
+                          : "border-gray-200 hover:bg-gray-50"
                       }`}
                     >
+                      <span
+                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                          chosen > 0
+                            ? "border-gray-900 bg-gray-900"
+                            : "border-gray-300"
+                        }`}
+                      >
+                        {chosen > 0 && <Check className="h-3 w-3 text-white" />}
+                      </span>
                       <div className="h-9 w-9 shrink-0 overflow-hidden rounded-md bg-gray-100">
                         {item.image && (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -552,6 +596,7 @@ export default function CreateCommandeModal({
                         </p>
                         <p className="truncate font-mono text-[11.5px] text-gray-500">
                           {item.ref} &middot; {item.quantity} dispo
+                          {item.price ? ` · ${item.price} MAD` : " · prix manquant"}
                         </p>
                       </div>
                       <input
@@ -560,6 +605,7 @@ export default function CreateCommandeModal({
                         max={item.quantity}
                         value={chosen || ""}
                         placeholder="0"
+                        onClick={(e) => e.stopPropagation()}
                         onChange={(e) =>
                           setStockQuantity(
                             item.ref,
