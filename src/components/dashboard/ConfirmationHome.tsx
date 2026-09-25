@@ -14,6 +14,7 @@ import {
 import DonutRing from "./DonutRing";
 import PeriodFilter from "./PeriodFilter";
 import { periodBounds, useTeamStats, type Range } from "./useTeamStats";
+import { currentProfile } from "@/lib/session";
 
 type PayReport = {
   rate: number;
@@ -47,6 +48,32 @@ function whenText(iso: string) {
 export default function ConfirmationHome() {
   const [range, setRange] = useState<Range>({ label: "Maximum", custom: null });
   const { stats, error, loading } = useTeamStats(range);
+
+  /*
+   * Le taux sur statuts finaux n'est montre qu'aux administrateurs.
+   *
+   * C'est une lecture de gestion : il dit ce que l'equipe obtient une
+   * fois les dossiers tranches, et se compare mal au taux du jour qu'un
+   * agent suit pour se situer. Deux chiffres differents pour la meme
+   * chose desorientent qui n'a pas a arbitrer entre les deux.
+   *
+   * Masquage d'affichage seulement : les chiffres transitent toujours,
+   * comme le reste de la page. Ce n'est pas un secret, c'est du calme.
+   */
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    currentProfile()
+      .then((profile) => {
+        if (!cancelled && profile) setIsAdmin(profile.role === "Admin");
+      })
+      .catch(() => {
+        /* Profil inconnu : on s'en tient a la vue simple. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Le suivi des paiements vient d'une autre route : il lit les
   // livraisons et non le journal des agents. Son absence ne doit pas
@@ -236,6 +263,7 @@ export default function ConfirmationHome() {
                     Celui-ci ne regarde que ce qui est fini, et dit donc
                     ce que l'equipe obtient vraiment.
                   */}
+                  {isAdmin && (
                   <div className="flex shrink-0 flex-col items-center gap-1.5">
                     <DonutRing
                       percent={card.final.percent}
@@ -247,6 +275,7 @@ export default function ConfirmationHome() {
                       {card.final.label}
                     </p>
                   </div>
+                  )}
 
                   <div className="grid flex-1 grid-cols-3 gap-2">
                     {card.figures.map((f) => (
@@ -262,6 +291,7 @@ export default function ConfirmationHome() {
                   </div>
                 </div>
 
+                {isAdmin && (
                 <p className="mt-2 text-[11px] text-gray-400">
                   {card.final.detail}
                   {card.final.pending > 0 && (
@@ -274,6 +304,7 @@ export default function ConfirmationHome() {
                     </>
                   )}
                 </p>
+                )}
 
                 {card.rows.length > 0 && (
                   <div className={`mt-4 border-t pt-3 ${a.line}`}>
