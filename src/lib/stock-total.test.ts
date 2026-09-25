@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stockTotal, refsSansPrix } from "./stock-total";
+import { stockTotal, refsSansPrix, PRIX_UNITAIRE_MANUEL } from "./stock-total";
 
 const CATALOGUE = [
   { ref: "1FKGUA", price: 200 },
@@ -53,5 +53,37 @@ describe("refsSansPrix", () => {
 
   it("ne signale rien quand tout est tarife", () => {
     expect(refsSansPrix({ "1FKGUA": 1, "1FKNOG": 2 }, CATALOGUE)).toEqual([]);
+  });
+});
+
+describe("tarif unique des commandes manuelles", () => {
+  it("applique le meme prix a chaque article, catalogue ignore", () => {
+    // Une vente par telephone se fait au meme tarif quel que soit
+    // l'article : 1FKNOG vaut 199 au catalogue, 200 ici comme les autres.
+    const t = stockTotal(
+      { "1FKGUA": 1, "1FKNOG": 1, "1FKT5H": 1 },
+      CATALOGUE,
+      PRIX_UNITAIRE_MANUEL
+    );
+    expect(t).toBe(3 * PRIX_UNITAIRE_MANUEL);
+  });
+
+  it("tarife aussi les articles que le catalogue ignore", () => {
+    // 18BWTD n'a aucun prix de vente enregistre : sans tarif unique il
+    // comptait pour zero, et le total ne bougeait pas quand on le
+    // choisissait.
+    expect(stockTotal({ "18BWTD": 2 }, CATALOGUE, PRIX_UNITAIRE_MANUEL)).toBe(
+      2 * PRIX_UNITAIRE_MANUEL
+    );
+  });
+
+  it("compte les quantites au tarif unique", () => {
+    expect(stockTotal({ "1FKGUA": 3 }, CATALOGUE, PRIX_UNITAIRE_MANUEL)).toBe(600);
+  });
+
+  it("laisse le prix du catalogue quand aucun tarif n'est impose", () => {
+    // Le calcul sert aussi ailleurs : sans tarif, il garde l'ancien
+    // comportement.
+    expect(stockTotal({ "1FKNOG": 1 }, CATALOGUE)).toBe(199);
   });
 });

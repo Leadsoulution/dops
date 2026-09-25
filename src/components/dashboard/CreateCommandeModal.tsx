@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { agents, moroccanCities, type Lead } from "./leads-data";
 import SelectDropdown from "./SelectDropdown";
-import { stockTotal, refsSansPrix } from "@/lib/stock-total";
+import { stockTotal, PRIX_UNITAIRE_MANUEL } from "@/lib/stock-total";
 
 const products = [
   {
@@ -165,7 +165,7 @@ export default function CreateCommandeModal({
     else next[ref] = quantity;
     setStockQuantities(next);
 
-    setTotal(String(stockTotal(next, stockItems)));
+    setTotal(String(stockTotal(next, stockItems, PRIX_UNITAIRE_MANUEL)));
   }
 
   /** Cocher pose une unite, decocher retire l'article. */
@@ -174,9 +174,6 @@ export default function CreateCommandeModal({
   }
 
   const selectedStock = Object.entries(stockQuantities);
-  const sansPrix = refsSansPrix(stockQuantities, stockItems).map(
-    (ref) => stockItems.find((i) => i.ref === ref)?.name ?? ref
-  );
   const visibleStock = productQuery.trim()
     ? stockItems.filter(
         (item) =>
@@ -596,7 +593,7 @@ export default function CreateCommandeModal({
                         </p>
                         <p className="truncate font-mono text-[11.5px] text-gray-500">
                           {item.ref} &middot; {item.quantity} dispo
-                          {item.price ? ` · ${item.price} MAD` : " · prix manquant"}
+                          {` · ${PRIX_UNITAIRE_MANUEL} MAD`}
                         </p>
                       </div>
                       <input
@@ -691,12 +688,13 @@ export default function CreateCommandeModal({
               </div>
             </div>
 
-            {parcelType === "stock" && sansPrix.length > 0 && (
-              <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
-                Sans prix au catalogue, donc comptes pour zero :{" "}
-                <span className="font-medium">{sansPrix.join(", ")}</span>.
-                Renseignez leur prix de vente dans Produits, ou corrigez le
-                total a la main.
+            {parcelType === "stock" && (
+              <p className="mt-2 text-[11.5px] text-gray-400">
+                Tarif des commandes saisies a la main :{" "}
+                <span className="font-mono text-gray-600">
+                  {PRIX_UNITAIRE_MANUEL} MAD
+                </span>{" "}
+                par article. Le total reste modifiable.
               </p>
             )}
           </div>
