@@ -34,6 +34,7 @@ type Data = {
   totals: InventoryTotals;
   returns: ReturnedParcel[];
   unmatched: number;
+  carrierLive: boolean;
 };
 
 async function fetchInventory(): Promise<Data> {
@@ -184,7 +185,11 @@ export default function InventairePage() {
               icon={<Boxes className="h-4 w-4" />}
               title="STOCK FORCELOG"
               value={t.carrier}
-              note="Ce que le transporteur declare."
+              note={
+                data?.carrierLive
+                  ? "Lu chez le transporteur a l'instant."
+                  : "Transporteur injoignable : dernier chiffre connu."
+              }
             />
           </div>
 
@@ -434,7 +439,7 @@ function Card({
   icon: React.ReactNode;
   title: string;
   value: number;
-  note: string;
+  note: React.ReactNode;
 }) {
   const style = TONES[tone];
   return (

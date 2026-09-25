@@ -2,6 +2,7 @@ import "server-only";
 import { getSupabaseServerClient } from "./server";
 import { fetchAll } from "./page";
 import { parseStockItems } from "@/lib/stock-items";
+import { getStock } from "@/lib/forcelog/client";
 
 /**
  * Inventaire du stock confie au transporteur.
@@ -99,6 +100,8 @@ export async function getInventory(): Promise<{
   returns: ReturnedParcel[];
   /** Unites expediees dont la reference n'est pas au catalogue. */
   unmatched: number;
+  /** Faux quand le stock affiche vient de la base et non du transporteur. */
+  carrierLive: boolean;
 }> {
   const supabase = getSupabaseServerClient();
 
@@ -121,6 +124,41 @@ export async function getInventory(): Promise<{
   ]);
 
   const actifs = products.filter((p) => p.status !== "Archive");
+
+  /*
+   * Le stock du transporteur, lu en direct.
+   *
+   * La colonne `quantity` du catalogue ne bouge que lorsqu'on declenche
+   * l'import a la main : elle affichait 200 la ou ForceLog en avait 57.
+   * Comparer notre reel a un chiffre vieux de plusieurs jours ne dit
+   * rien, et l'ecart qui en sortait etait faux de bout en bout.
+   *
+   * En cas de panne de leur API, on retombe sur la valeur enregistree :
+   * un chiffre ancien vaut mieux qu'une page vide, et l'ecran affiche
+   * de toute facon l'heure de la derniere synchronisation.
+   */
+  const stockVivant = new Map<string, number>();
+  const apiKey = process.env.FORCELOG_API_KEY;
+  let carrierLive = false;
+  if (apiKey) {
+    try {
+      const stock = await getStock(apiKey);
+      for (const produit of Object.values(stock)) {
+        for (const v of produit.variants ?? []) {
+          if (v.ref) stockVivant.set(v.ref, v.quantity ?? 0);
+        }
+      }
+      carrierLive = true;
+    } catch {
+      // Transporteur muet : les valeurs enregistrees prennent le relais.
+    }
+  }
+
+  /** Ce que le transporteur detient, au plus frais dont on dispose. */
+  const carrierOf = (p: ProductRow) =>
+    stockVivant.get(p.forcelog_ref ?? "") ??
+    stockVivant.get(p.ref) ??
+    p.quantity;
 
   // Une reference du transporteur mene a un produit du catalogue. Le
   // code interne sert de secours pour les fiches saisies a la main.
@@ -186,6 +224,7 @@ export async function getInventory(): Promise<{
   const rows: ProductStock[] = actifs.map((p) => {
     const livre = delivered.get(p.id) ?? 0;
     const real = p.stock_sent - livre;
+    const carrier = carrierOf(p);
     return {
       id: p.id,
       ref: p.ref,
@@ -195,8 +234,8 @@ export async function getInventory(): Promise<{
       received: p.stock_sent,
       delivered: livre,
       real,
-      carrier: p.quantity,
-      gap: real - p.quantity,
+      carrier,
+      gap: real - carrier,
       inTransit: inTransit.get(p.id) ?? 0,
       returned: returned.get(p.id) ?? 0,
     };
@@ -220,5 +259,6 @@ export async function getInventory(): Promise<{
       (a, b) => Number(Boolean(a.restockedAt)) - Number(Boolean(b.restockedAt))
     ),
     unmatched,
+    carrierLive,
   };
 }
