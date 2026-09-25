@@ -129,6 +129,10 @@ function deliveryOf(
     else if (FAILED.has(code)) returned += 1;
   }
 
+  // Un colis livre ou retourne a fini sa course ; celui qui roule
+  // encore peut faire les deux et n'a rien a dire d'un taux.
+  const settled = delivered + returned;
+
   return {
     shipped,
     delivered,
@@ -136,6 +140,8 @@ function deliveryOf(
     inTransit: shipped - delivered - returned,
     notShipped,
     rate: shipped > 0 ? Math.round((delivered / shipped) * 100) : 0,
+    settled,
+    rateFinal: settled > 0 ? Math.round((delivered / settled) * 100) : 0,
   };
 }
 
@@ -447,6 +453,20 @@ export async function getAgentStats(
     }))
     .sort((a, b) => b.treated - a.treated);
 
+  /*
+   * Les commandes dont le traitement est termine.
+   *
+   * CLOSED les enumere deja : confirmee, annulee, faux numero, non
+   * commandee, expiree, en double, test. Tout le reste attend encore
+   * quelque chose — un rappel, un client qui decroche — et n'a rien a
+   * faire au denominateur d'un taux de reussite.
+   */
+  let teamClosed = 0;
+  for (const id of teamTreated) {
+    const lead = leads.get(id);
+    if (lead && CLOSED.has(lead.status)) teamClosed += 1;
+  }
+
   return {
     agents,
     products,
@@ -454,6 +474,11 @@ export async function getAgentStats(
       treated: teamTreated.size,
       contacted: teamContacted.size,
       confirmed: teamConfirmed.size,
+      closed: teamClosed,
+      confirmRateFinal:
+        teamClosed > 0
+          ? Math.round((teamConfirmed.size / teamClosed) * 100)
+          : 0,
       confirmRate:
         teamTreated.size > 0
           ? Math.round((teamConfirmed.size / teamTreated.size) * 100)

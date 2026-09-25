@@ -32,6 +32,20 @@ export type DeliveryStats = {
   notShipped: number;
   /** Livrees rapportees aux expediees. */
   rate: number;
+  /**
+   * Colis dont le sort est fixe : livres, retournes, refuses, annules.
+   * Ceux qui roulent encore n'y sont pas.
+   */
+  settled: number;
+  /**
+   * Livrees rapportees aux seuls colis arrives au bout.
+   *
+   * Le taux ordinaire compte dans son denominateur des colis partis ce
+   * matin, qui n'ont pas encore eu l'occasion d'echouer : il s'effondre
+   * les jours de forte expedition sans que rien n'aille mal. Celui-ci
+   * ne regarde que les colis dont l'histoire est finie.
+   */
+  rateFinal: number;
 };
 
 export type AgentStats = {
@@ -91,6 +105,21 @@ export type TeamStats = {
     contacted: number;
     confirmed: number;
     confirmRate: number;
+    /**
+     * Commandes dont le traitement est termine : confirmees, annulees,
+     * faux numero, non commandees, expirees, en double, test.
+     */
+    closed: number;
+    /**
+     * Confirmees rapportees aux seules commandes tranchees.
+     *
+     * Le taux ordinaire compte les commandes encore en cours — un
+     * rappel prevu demain, un client qui n'a pas decroche ce matin.
+     * Elles ne sont pas des echecs, seulement des dossiers ouverts, et
+     * les compter comme tels punit les journees ou beaucoup de
+     * commandes arrivent.
+     */
+    confirmRateFinal: number;
     avgHandling: string;
     avgFirstTouch: string;
   };

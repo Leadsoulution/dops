@@ -89,6 +89,13 @@ export default function ConfirmationHome() {
       accent: "emerald" as const,
       percent: stats?.team.confirmRate ?? 0,
       rateLabel: "Taux de confirmation",
+      final: {
+        percent: stats?.team.confirmRateFinal ?? 0,
+        label: "Sur commandes tranchees",
+        detail: `${(stats?.team.confirmed ?? 0).toLocaleString("fr-FR")} confirmees sur ${(stats?.team.closed ?? 0).toLocaleString("fr-FR")} closes`,
+        pending: (stats?.team.treated ?? 0) - (stats?.team.closed ?? 0),
+        pendingLabel: "encore en cours",
+      },
       figures: [
         { value: stats?.team.treated ?? 0, label: "Traitees" },
         { value: stats?.team.confirmed ?? 0, label: "Confirmees" },
@@ -110,6 +117,13 @@ export default function ConfirmationHome() {
       accent: "blue" as const,
       percent: stats?.delivery.rate ?? 0,
       rateLabel: "Taux de livraison",
+      final: {
+        percent: stats?.delivery.rateFinal ?? 0,
+        label: "Sur colis arrives au bout",
+        detail: `${(stats?.delivery.delivered ?? 0).toLocaleString("fr-FR")} livrees sur ${(stats?.delivery.settled ?? 0).toLocaleString("fr-FR")} abouties`,
+        pending: stats?.delivery.inTransit ?? 0,
+        pendingLabel: "encore en route",
+      },
       figures: [
         { value: stats?.delivery.shipped ?? 0, label: "Expediees" },
         { value: stats?.delivery.delivered ?? 0, label: "Livrees" },
@@ -202,15 +216,36 @@ export default function ConfirmationHome() {
                   <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-500" />
                 </div>
 
-                <div className={`flex items-center gap-5 border-t pt-4 ${a.line}`}>
+                <div className={`flex items-center gap-4 border-t pt-4 ${a.line}`}>
                   <div className="flex shrink-0 flex-col items-center gap-1.5">
                     <DonutRing
                       percent={card.percent}
-                      size={76}
+                      size={70}
                       strokeWidth={7}
                       color={card.percent === 0 ? "#d1d5db" : a.ring}
                     />
                     <p className="text-[11px] text-gray-400">{card.rateLabel}</p>
+                  </div>
+
+                  {/*
+                    Le meme taux, sur les seuls dossiers tranches.
+
+                    Le premier compte au denominateur des commandes qui
+                    n'ont pas encore eu l'occasion d'aboutir : il baisse
+                    les jours de forte arrivee sans que rien n'aille mal.
+                    Celui-ci ne regarde que ce qui est fini, et dit donc
+                    ce que l'equipe obtient vraiment.
+                  */}
+                  <div className="flex shrink-0 flex-col items-center gap-1.5">
+                    <DonutRing
+                      percent={card.final.percent}
+                      size={70}
+                      strokeWidth={7}
+                      color={card.final.percent === 0 ? "#d1d5db" : a.ring}
+                    />
+                    <p className="text-center text-[11px] text-gray-400">
+                      {card.final.label}
+                    </p>
                   </div>
 
                   <div className="grid flex-1 grid-cols-3 gap-2">
@@ -226,6 +261,19 @@ export default function ConfirmationHome() {
                     ))}
                   </div>
                 </div>
+
+                <p className="mt-2 text-[11px] text-gray-400">
+                  {card.final.detail}
+                  {card.final.pending > 0 && (
+                    <>
+                      {" · "}
+                      <span className="text-gray-500">
+                        {card.final.pending.toLocaleString("fr-FR")}{" "}
+                        {card.final.pendingLabel}
+                      </span>
+                    </>
+                  )}
+                </p>
 
                 {card.rows.length > 0 && (
                   <div className={`mt-4 border-t pt-3 ${a.line}`}>

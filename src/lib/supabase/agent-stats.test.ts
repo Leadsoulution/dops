@@ -175,6 +175,76 @@ describe("getAgentStats", () => {
     expect(agents[0].confirmRate).toBe(50);
   });
 
+  it("ecarte du taux final les commandes encore en cours", async () => {
+    stubTables(
+      [ALICE],
+      [
+        { id: "1", reference: "WC-1", phone: "06", status: "Confirme", created_at: at(0) },
+        { id: "2", reference: "WC-2", phone: "06", status: "Annulee", created_at: at(0) },
+        // Celles-ci attendent encore : un rappel, un client qui decroche.
+        { id: "3", reference: "WC-3", phone: "06", status: "Rappel", created_at: at(0) },
+        { id: "4", reference: "WC-4", phone: "06", status: "Pas de rep 1", created_at: at(0) },
+      ],
+      [
+        statusEvent("1", ALICE, "Confirme", 1),
+        statusEvent("2", ALICE, "Annulee", 1),
+        statusEvent("3", ALICE, "Rappel", 1),
+        statusEvent("4", ALICE, "Pas de rep 1", 1),
+      ]
+    );
+
+    const { team } = await getAgentStats();
+    expect(team.treated).toBe(4);
+    expect(team.confirmed).toBe(1);
+    // Une commande sur quatre traitees...
+    expect(team.confirmRate).toBe(25);
+    // ...mais une sur deux tranchees. Les deux en cours ne sont pas des
+    // echecs, seulement des dossiers ouverts.
+    expect(team.closed).toBe(2);
+    expect(team.confirmRateFinal).toBe(50);
+  });
+
+  it("ecarte du taux final les colis encore en route", async () => {
+    stubTables(
+      [ALICE],
+      [
+        { id: "1", reference: "WC-1", phone: "06", status: "Confirme", created_at: at(0),
+          tracking_number: "F-1", delivery_status_code: "DELIVERED" },
+        { id: "2", reference: "WC-2", phone: "06", status: "Confirme", created_at: at(0),
+          tracking_number: "F-2", delivery_status_code: "RETURNED" },
+        // Parti ce matin : il n'a pas encore eu l'occasion d'echouer.
+        { id: "3", reference: "WC-3", phone: "06", status: "Confirme", created_at: at(0),
+          tracking_number: "F-3", delivery_status_code: "DISTRIBUTION" },
+        { id: "4", reference: "WC-4", phone: "06", status: "Confirme", created_at: at(0),
+          tracking_number: "F-4", delivery_status_code: "DISTRIBUTION" },
+      ],
+      [
+        statusEvent("1", ALICE, "Confirme", 1),
+        statusEvent("2", ALICE, "Confirme", 1),
+        statusEvent("3", ALICE, "Confirme", 1),
+        statusEvent("4", ALICE, "Confirme", 1),
+      ]
+    );
+
+    const { delivery } = await getAgentStats();
+    expect(delivery.shipped).toBe(4);
+    expect(delivery.delivered).toBe(1);
+    expect(delivery.returned).toBe(1);
+    expect(delivery.inTransit).toBe(2);
+    // Un sur quatre expedies...
+    expect(delivery.rate).toBe(25);
+    // ...mais un sur deux arrives au bout.
+    expect(delivery.settled).toBe(2);
+    expect(delivery.rateFinal).toBe(50);
+  });
+
+  it("rend zero plutot qu'une division impossible", async () => {
+    stubTables([ALICE], [], []);
+    const { team, delivery } = await getAgentStats();
+    expect(team.confirmRateFinal).toBe(0);
+    expect(delivery.rateFinal).toBe(0);
+  });
+
   it("ne compte plus une confirmation qui a ete defaite", async () => {
     stubTables(
       [ALICE],
