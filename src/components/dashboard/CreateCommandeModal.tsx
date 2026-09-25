@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { agents, moroccanCities, type Lead } from "./leads-data";
 import SelectDropdown from "./SelectDropdown";
+import { stockTotal, refsSansPrix } from "@/lib/stock-total";
 
 const products = [
   {
@@ -164,11 +165,7 @@ export default function CreateCommandeModal({
     else next[ref] = quantity;
     setStockQuantities(next);
 
-    const somme = Object.entries(next).reduce((total, [r, q]) => {
-      const article = stockItems.find((i) => i.ref === r);
-      return total + (article?.price ?? 0) * q;
-    }, 0);
-    setTotal(String(Math.round(somme)));
+    setTotal(String(stockTotal(next, stockItems)));
   }
 
   /** Cocher pose une unite, decocher retire l'article. */
@@ -177,6 +174,9 @@ export default function CreateCommandeModal({
   }
 
   const selectedStock = Object.entries(stockQuantities);
+  const sansPrix = refsSansPrix(stockQuantities, stockItems).map(
+    (ref) => stockItems.find((i) => i.ref === ref)?.name ?? ref
+  );
   const visibleStock = productQuery.trim()
     ? stockItems.filter(
         (item) =>
@@ -690,6 +690,15 @@ export default function CreateCommandeModal({
                 </div>
               </div>
             </div>
+
+            {parcelType === "stock" && sansPrix.length > 0 && (
+              <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+                Sans prix au catalogue, donc comptes pour zero :{" "}
+                <span className="font-medium">{sansPrix.join(", ")}</span>.
+                Renseignez leur prix de vente dans Produits, ou corrigez le
+                total a la main.
+              </p>
+            )}
           </div>
 
           <div>
