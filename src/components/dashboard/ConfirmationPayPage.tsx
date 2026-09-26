@@ -73,6 +73,7 @@ type Report = {
   payments: PaymentBatch[];
   daily: { date: string; delivered: number; amount: number }[];
   canEdit: boolean;
+  canPay: boolean;
   error?: string;
 };
 
@@ -185,6 +186,9 @@ export default function ConfirmationPayPage() {
   );
   const rate = report?.rate ?? 11;
   const canEdit = report?.canEdit ?? false;
+  // Pointer est ouvert a tous, defaire ne l'est pas : l'ecran reprend
+  // la regle du serveur plutot que de la deviner.
+  const canPay = report?.canPay ?? false;
 
   const delivered = report?.orders.length ?? 0;
   const paidCount = report?.orders.filter((o) => o.paid).length ?? 0;
@@ -471,7 +475,7 @@ export default function ConfirmationPayPage() {
                 ))}
               </div>
 
-              {canEdit && selected.size > 0 && (
+              {canPay && selected.size > 0 && (
                 <div className="flex items-center gap-2">
                   <span className="text-[12px] text-gray-500">
                     {selected.size} selectionnee{selected.size > 1 ? "s" : ""}
@@ -484,13 +488,15 @@ export default function ConfirmationPayPage() {
                     <Check className="h-3.5 w-3.5" />
                     Marquer payees
                   </button>
-                  <button
-                    onClick={() => setConfirming("unpay")}
-                    disabled={pending}
-                    className="rounded-lg border border-gray-300 px-3 py-1.5 text-[12.5px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-                  >
-                    Annuler le paiement
-                  </button>
+                  {canEdit && (
+                    <button
+                      onClick={() => setConfirming("unpay")}
+                      disabled={pending}
+                      className="rounded-lg border border-gray-300 px-3 py-1.5 text-[12.5px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                    >
+                      Annuler le paiement
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -506,7 +512,7 @@ export default function ConfirmationPayPage() {
                   <table className="w-full min-w-[900px] text-left">
                     <thead className="border-b border-gray-100 text-[11px] font-semibold tracking-wide text-gray-500">
                       <tr>
-                        {canEdit && (
+                        {canPay && (
                           <th className="w-10 px-4 py-3">
                             <input
                               type="checkbox"
@@ -534,7 +540,7 @@ export default function ConfirmationPayPage() {
                     <tbody className="divide-y divide-gray-50">
                       {orders.map((o) => (
                         <tr key={o.id} className="hover:bg-gray-50/60">
-                          {canEdit && (
+                          {canPay && (
                             <td className="px-4 py-3">
                               <input
                                 type="checkbox"
@@ -582,7 +588,7 @@ export default function ConfirmationPayPage() {
                     <div key={o.id} className="px-4 py-3">
                       <div className="mb-2 flex items-start justify-between gap-2">
                         <div className="flex min-w-0 items-center gap-2">
-                          {canEdit && (
+                          {canPay && (
                             <input
                               type="checkbox"
                               checked={selected.has(o.id)}
