@@ -110,7 +110,18 @@ export default function DateRangeCalendar({
   const nextMonth = viewMonth === 11 ? 0 : viewMonth + 1;
   const nextYear = viewMonth === 11 ? viewYear + 1 : viewYear;
 
-  function renderMonth(year: number, month: number, showPrev: boolean, showNext: boolean) {
+  /**
+   * La fleche "mois suivant" du mois de gauche ne sert que sur
+   * telephone : sur grand ecran le mois de droite est deja affiche, et
+   * c'est lui qui la porte. `"phone"` la fait disparaitre a partir de
+   * `lg`, en gardant sa place pour que le titre du mois reste centre.
+   */
+  function renderMonth(
+    year: number,
+    month: number,
+    showPrev: boolean,
+    showNext: boolean | "phone"
+  ) {
     const cells = getMonthMatrix(year, month);
     return (
       <div className="flex-1">
@@ -131,7 +142,9 @@ export default function DateRangeCalendar({
           {showNext ? (
             <button
               onClick={() => shiftMonth(1)}
-              className="rounded p-0.5 text-gray-400 hover:bg-gray-100"
+              className={`rounded p-0.5 text-gray-400 hover:bg-gray-100 ${
+                showNext === "phone" ? "lg:invisible" : ""
+              }`}
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -182,39 +195,56 @@ export default function DateRangeCalendar({
     : "Selectionnez une periode";
 
   return (
-    <div className="absolute right-0 top-full z-30 mt-2 w-[calc(100vw-2rem)] max-w-[520px] rounded-xl border border-gray-200 bg-white p-4 shadow-xl">
-      <div className="flex gap-6">
-        {renderMonth(viewYear, viewMonth, true, false)}
-        {renderMonth(nextYear, nextMonth, false, true)}
-      </div>
-      <div className="mt-3 flex flex-col gap-3 border-t border-gray-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-[12.5px] text-gray-600">{summary}</p>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onCancel}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-[12px] font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Annuler
-          </button>
-          <button
-            onClick={() => {
-              setRangeStart(null);
-              setRangeEnd(null);
-              onClear?.();
-            }}
-            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-[12px] font-medium text-gray-700 hover:bg-gray-50"
-          >
-            Effacer
-          </button>
-          <button
-            disabled={!rangeStart}
-            onClick={() => rangeStart && onApply(rangeStart, rangeEnd ?? rangeStart)}
-            className="rounded-md bg-gray-900 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-gray-800 disabled:opacity-40"
-          >
-            Appliquer
-          </button>
+    <>
+      {/*
+        Sur telephone, la rangee de pastilles defile horizontalement, et
+        ce defilement rogne tout ce qui deborde d'elle : le calendrier
+        s'ouvrait bel et bien, mais hors du cadre visible. Une position
+        fixe echappe a ce decoupage — elle se cale sur l'ecran, non plus
+        sur la rangee. Le voile derriere dit qu'on a quitte la page, et
+        referme le calendrier d'un geste.
+      */}
+      <div
+        onClick={onCancel}
+        className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+      />
+      <div className="fixed inset-x-3 top-1/2 z-50 max-h-[85vh] -translate-y-1/2 overflow-y-auto rounded-xl border border-gray-200 bg-white p-4 shadow-xl lg:absolute lg:inset-x-auto lg:right-0 lg:top-full lg:z-30 lg:mt-2 lg:max-h-none lg:w-[520px] lg:translate-y-0 lg:overflow-visible">
+        <div className="flex gap-6">
+          {renderMonth(viewYear, viewMonth, true, "phone")}
+          {/* Deux mois cote a cote ne tiennent pas sur un telephone. */}
+          <div className="hidden flex-1 lg:block">
+            {renderMonth(nextYear, nextMonth, false, true)}
+          </div>
+        </div>
+        <div className="mt-3 flex flex-col gap-3 border-t border-gray-100 pt-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[12.5px] text-gray-600">{summary}</p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onCancel}
+              className="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-[12px] font-medium text-gray-700 hover:bg-gray-50 sm:flex-none"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={() => {
+                setRangeStart(null);
+                setRangeEnd(null);
+                onClear?.();
+              }}
+              className="flex-1 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-[12px] font-medium text-gray-700 hover:bg-gray-50 sm:flex-none"
+            >
+              Effacer
+            </button>
+            <button
+              disabled={!rangeStart}
+              onClick={() => rangeStart && onApply(rangeStart, rangeEnd ?? rangeStart)}
+              className="flex-1 rounded-md bg-gray-900 px-3 py-1.5 text-[12px] font-medium text-white hover:bg-gray-800 disabled:opacity-40 sm:flex-none"
+            >
+              Appliquer
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
