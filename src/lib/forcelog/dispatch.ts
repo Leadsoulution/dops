@@ -55,11 +55,24 @@ function isSettled(lead: Lead): boolean {
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "");
 
-  // "Non Paye" contient "paye" : chercher le mot seul classerait un
-  // impaye comme regle, et la commande sortirait de la surveillance
-  // juste avant le moment qui nous interesse.
+  /*
+   * Deux pieges, et ils se ressemblent.
+   *
+   * "Non Paye" contient "paye" : chercher le mot seul classerait un
+   * impaye comme regle, et la commande sortirait de la surveillance
+   * juste avant le moment qui nous interesse.
+   *
+   * "En cours de facturation" contient "factur", et c'est l'etape juste
+   * avant "Facture" — celle qu'on attend. La ranger parmi les affaires
+   * closes gelait le statut : 94 colis sont restes affiches "en cours"
+   * alors que le transporteur les avait factures.
+   *
+   * Seules deux situations terminent vraiment une commande : facturee,
+   * et payee. On les reconnait au debut du mot, pas quelque part dedans.
+   */
   if (situation.startsWith("non")) return false;
-  return situation.includes("factur") || situation.includes("paye");
+  if (situation.startsWith("en cours")) return false;
+  return situation.startsWith("factur") || situation.startsWith("paye");
 }
 
 /**

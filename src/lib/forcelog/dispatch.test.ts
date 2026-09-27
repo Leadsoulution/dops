@@ -118,6 +118,61 @@ describe("collectStatusUpdates", () => {
     expect(updates.size).toBe(0);
   });
 
+  it("garde sous surveillance un colis en cours de facturation", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      parcelsResponse([
+        {
+          TRACKING_NUMBER: "F-AAA",
+          STATUS: "Livre",
+          STATUS_CODE: "DELIVERED",
+          SITUATION: "Facture",
+        },
+      ])
+    );
+
+    const { updates } = await collectStatusUpdates([
+      lead({
+        deliveryStatus: "Livre",
+        deliveryStatusCode: "DELIVERED",
+        // "En cours de facturation" contient "factur" : range parmi les
+        // affaires closes, le colis n'etait plus interroge et son statut
+        // restait fige a l'etape d'avant. Quatre-vingt-quatorze colis
+        // etaient dans ce cas.
+        paymentStatus: "En cours de facturation",
+        deliveryDate: "2026-09-10 11:30",
+      }),
+    ]);
+
+    expect(updates.size).toBe(1);
+    expect(updates.get("lead-1")?.paymentStatus).toBe("Facture");
+  });
+
+  it("garde sous surveillance un colis livre mais impaye", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      parcelsResponse([
+        {
+          TRACKING_NUMBER: "F-AAA",
+          STATUS: "Livre",
+          STATUS_CODE: "DELIVERED",
+          SITUATION: "En cours de facturation",
+        },
+      ])
+    );
+
+    const { updates } = await collectStatusUpdates([
+      lead({
+        deliveryStatus: "Livre",
+        deliveryStatusCode: "DELIVERED",
+        // "Non Paye" contient "paye" : meme piege, dans l'autre sens.
+        paymentStatus: "Non Paye",
+        deliveryDate: "2026-09-10 11:30",
+      }),
+    ]);
+
+    expect(updates.size).toBe(1);
+    expect(updates.get("lead-1")?.paymentStatus).toBe("En cours de facturation");
+  });
+
   // ForceLog ne renvoie aucune date de livraison, meme sur un colis livre :
   // l'application horodate donc elle-meme le passage a "Livre".
   it("stamps the delivery date the first time a parcel is seen delivered", async () => {

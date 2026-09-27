@@ -15,6 +15,7 @@ import {
 import Sparkline from "./Sparkline";
 import AreaTrendChart from "./AreaTrendChart";
 import AddExpenseModal from "./AddExpenseModal";
+import CarrierFloatCard from "./CarrierFloatCard";
 import {
   financeKpis,
   expenseKpis,
@@ -78,6 +79,15 @@ export default function FinancePage() {
           <Plus className="h-3.5 w-3.5" />
           Ajouter depense
         </button>
+      </div>
+
+      {/*
+        Le seul chiffre reel de cette page pour l'instant : il est donc
+        pose au-dessus, la ou on le verra, et non noye parmi les cartes
+        d'exemple qui l'entourent encore.
+      */}
+      <div className="mb-4">
+        <CarrierFloatCard />
       </div>
 
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
