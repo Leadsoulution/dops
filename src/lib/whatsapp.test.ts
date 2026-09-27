@@ -241,3 +241,58 @@ describe("choix du message selon l'etape", () => {
     ).toBe("Mon texte");
   });
 });
+
+describe("livreur dans les messages de livraison", () => {
+  const EN_ROUTE = {
+    ...ORDER,
+    trackingNumber: "F-ABC",
+    deliverer: "EL HADDI NOUREDDINE",
+    delivererPhone: "0679138278",
+  };
+
+  it("donne le numero du livreur quand il est attribue", () => {
+    const texte = fillTemplate(
+      templateFor(DELIVERY_PREFIX + "DISTRIBUTION", undefined),
+      EN_ROUTE
+    );
+    expect(texte).toContain("0679138278");
+  });
+
+  it("efface la ligne du livreur sans emporter le reste du bloc", () => {
+    // Meme statut, meme modele : seule la ligne du livreur manque. Le
+    // code de suivi et le lien, eux, doivent rester.
+    const texte = fillTemplate(
+      templateFor(DELIVERY_PREFIX + "DISTRIBUTION", undefined),
+      { ...EN_ROUTE, deliverer: undefined, delivererPhone: undefined }
+    );
+    expect(texte).toContain("F-ABC");
+    expect(texte).toContain("/suivi-F-ABC");
+    expect(texte).not.toContain("0679138278");
+    expect(texte).not.toContain("{tel_livreur}");
+    // Ni l'intitule ni les deux points ne subsistent.
+    for (const ligne of texte.split(String.fromCharCode(10))) {
+      expect(ligne.trim().endsWith(":")).toBe(false);
+    }
+  });
+
+  it("garde une ligne dont un seul champ est rempli", () => {
+    // "Commande : {produit} (x{quantite})" survit a une quantite absente,
+    // puisque le produit, lui, est la.
+    const texte = fillTemplate("Commande : {produit} (x{quantite})", {
+      ...ORDER,
+      itemCount: undefined,
+    });
+    expect(texte).toContain("Coffret bijoux");
+  });
+
+  it("ne touche jamais une ligne sans champ", () => {
+    const texte = fillTemplate("Merci de votre confiance.", ORDER);
+    expect(texte).toBe("Merci de votre confiance.");
+  });
+
+  it("laisse un champ inconnu tranquille", () => {
+    // Un mot-cle mal ecrit doit rester visible pour etre corrige, pas
+    // faire disparaitre sa ligne en silence.
+    expect(fillTemplate("Code : {inexistant}", ORDER)).toBe("Code : {inexistant}");
+  });
+});

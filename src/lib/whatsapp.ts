@@ -28,6 +28,9 @@ export type MessageOrder = {
   amount: string;
   trackingNumber?: string;
   deliveryDate?: string;
+  /** Livreur charge du colis, connu seulement apres le ramassage. */
+  deliverer?: string;
+  delivererPhone?: string;
   /** Lien public de la photo du produit, tel qu'il est stocke. */
   productImage?: string;
 };
@@ -89,6 +92,17 @@ export const PLACEHOLDERS: {
     key: "lien_suivi",
     label: "Lien de suivi",
     value: (o) => (o.trackingNumber ? trackingUrl(o.trackingNumber) : ""),
+  },
+  /**
+   * Le livreur. Vide avant le ramassage : le transporteur n'attribue
+   * personne a ce stade, et la ligne qui le porte disparait alors du
+   * message plutot que d'annoncer un nom absent.
+   */
+  { key: "livreur", label: "Nom du livreur", value: (o) => o.deliverer ?? "" },
+  {
+    key: "tel_livreur",
+    label: "Telephone du livreur",
+    value: (o) => o.delivererPhone ?? "",
   },
 ];
 
@@ -242,7 +256,7 @@ export function defaultDeliveryTemplate(code: string): string {
     "الثمن عند التسليم : {prix}\n" +
     "العنوان : {adresse}\n" +
     "التوصيل : مجاني";
-  const suivi = "\n\nرقم التتبع : {suivi}\nرابط التتبع : {lien_suivi}";
+  const suivi = "\n\nرقم التتبع : {suivi}\nرابط التتبع : {lien_suivi}\nرقم عامل التوصيل : {tel_livreur}";
   const bonjour = "مرحبا {prenom}، ";
 
   switch (code) {
@@ -338,11 +352,33 @@ export function fillTemplate(template: string, order: MessageOrder): string {
     return field ? field.value(order) : whole;
   });
 
-  // Un champ vide laissait sa ligne derriere lui : un produit sans photo,
-  // ou un colis sans code de suivi, ouvrait un trou au milieu du
-  // message. On recoud donc les blancs, sans toucher aux sauts de ligne
-  // voulus entre les paragraphes.
-  return filled
+  /*
+   * Une ligne dont tous les champs sont vides s'efface entierement.
+   *
+   * "Telephone du livreur : " sans numero ne renseigne pas, il inquiete.
+   * Retirer la valeur ne suffisait pas : l'intitule et les deux points
+   * restaient. La ligne part donc avec, mais seulement si aucun de ses
+   * champs n'a de valeur — "Commande : {produit} (x{quantite})" survit a
+   * une quantite absente, puisque le produit, lui, est la.
+   *
+   * Une ligne sans aucun champ n'est jamais touchee : c'est du texte
+   * ecrit a la main, il a ete voulu.
+   */
+  const lignes = template.split("\n");
+  const remplies = filled.split("\n");
+  const gardees = remplies.filter((ligne, i) => {
+    const champs = [...(lignes[i] ?? "").matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
+    const connus = champs.filter((k) => PLACEHOLDERS.some((p) => p.key === k));
+    if (connus.length === 0) return true;
+    return connus.some((k) => {
+      const field = PLACEHOLDERS.find((p) => p.key === k);
+      return Boolean(field?.value(order).trim());
+    });
+  });
+
+  // Restent les blancs entre paragraphes : on recoud sans y toucher.
+  return gardees
+    .join("\n")
     .replace(/[ \t]+$/gm, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
