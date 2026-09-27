@@ -426,7 +426,10 @@ export default function LeadsCommandesPage() {
       (!query ||
         lead.reference.toLowerCase().includes(query) ||
         lead.client.toLowerCase().includes(query) ||
-        lead.phone.includes(query))
+        lead.phone.includes(query) ||
+        // Le code de suivi est ce que le client cite au telephone : il
+        // lit celui de son SMS, pas notre reference interne.
+        (lead.trackingNumber ?? "").toLowerCase().includes(query))
   );
 
   // Changer d'onglet, de filtre, de periode ou de recherche redonne une
@@ -807,7 +810,7 @@ export default function LeadsCommandesPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Rechercher par reference, client ou telephone."
+            placeholder="Rechercher par reference, code de suivi, client ou telephone."
             className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-[13px] text-gray-700 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none"
           />
         </div>
