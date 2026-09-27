@@ -17,6 +17,7 @@ import {
   whatsappLink,
   whatsappNumber,
 } from "@/lib/whatsapp";
+import { openOutside } from "@/lib/open-outside";
 import ConfirmDialog from "./ConfirmDialog";
 
 /**
@@ -159,7 +160,10 @@ export default function CallOutcomePanel({
    * la sort dans la conversation.
    *
    * La navigation a lieu quoi qu'il arrive : un presse-papier refuse ne
-   * doit pas retenir l'agent devant un bouton qui ne fait rien.
+   * doit pas retenir l'agent devant un bouton qui ne fait rien. Elle
+   * sort de l'app plutot que de remplacer sa fenetre : installee sur
+   * l'ecran d'accueil, Orderly n'a pas de bouton retour, et l'agent
+   * restait coince sur la page de WhatsApp.
    */
   async function sendWithPhoto() {
     setShareError(null);
@@ -184,7 +188,7 @@ export default function CallOutcomePanel({
       setSharing(false);
     }
 
-    window.location.assign(whatsappLink(lead, message));
+    openOutside(whatsappLink(lead, message));
   }
 
   async function saveNote() {
