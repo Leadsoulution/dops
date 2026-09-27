@@ -435,7 +435,12 @@ export default function LeadsCommandesPage() {
   // Changer d'onglet, de filtre, de periode ou de recherche redonne une
   // liste differente : rester a la page 7 d'un resultat qui n'en compte
   // plus que deux n'aurait pas de sens.
-  const listKey = `${activeTab}|${activeRange}|${searchQuery}|${JSON.stringify(filters)}`;
+  const listKey =
+    `${activeTab}|${activeRange}|${searchQuery}|${JSON.stringify(filters)}` +
+    // La plage personnalisee compte autant que les autres : sans elle,
+    // resserrer les dates laissait l'ecran sur une page qui n'existait
+    // plus, donc vide.
+    `|${customRange ? `${+customRange.start}-${+customRange.end}` : ""}`;
   // Ajustement pendant le rendu plutot que dans un effet : React
   // recommence aussitot avec la bonne page, sans afficher un instant la
   // mauvaise.
@@ -821,7 +826,10 @@ export default function LeadsCommandesPage() {
               <button
                 onClick={() => {
                   if (range === "Personnalisee") {
-                    setActiveRange(range);
+                    // Ouvrir le calendrier n'est pas encore choisir : la
+                    // pastille s'allumait des le premier clic, noire et
+                    // sans date, sur une liste que rien ne filtrait. Elle
+                    // n'attend plus que le bouton Appliquer.
                     setCalendarOpen((v) => !v);
                   } else {
                     setActiveRange(range);
@@ -835,7 +843,7 @@ export default function LeadsCommandesPage() {
                 }`}
               >
                 {range === "Maximum" && <Calendar className="h-3.5 w-3.5" />}
-                {range === "Personnalisee" && customRange
+                {range === "Personnalisee" && customRangeLabel
                   ? customRangeLabel
                   : range}
               </button>
