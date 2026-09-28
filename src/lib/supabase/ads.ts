@@ -109,7 +109,14 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export async function getAdsOverview(
   from?: string,
-  to?: string
+  to?: string,
+  /**
+   * Une seule plateforme, ou les deux quand rien n'est demande. Chaque
+   * regie a son propre gestionnaire, ses propres couts et ses propres
+   * usages : les melanger donnerait un CPC moyen qui ne correspond a
+   * aucun des deux.
+   */
+  platform?: "meta" | "tiktok"
 ): Promise<AdsOverview> {
   const supabase = getSupabaseServerClient();
 
@@ -120,14 +127,17 @@ export async function getAdsOverview(
         .select("campaign_id,day,spend_mad,impressions,clicks,conversions,synced_at");
       if (from) q = q.gte("day", from.slice(0, 10));
       if (to) q = q.lte("day", to.slice(0, 10));
+      if (platform) q = q.eq("platform", platform);
       return q;
     }),
-    fetchAll<CampaignMeta>(() =>
-      supabase
+    fetchAll<CampaignMeta>(() => {
+      let q = supabase
         .from("ad_campaigns")
         .select("id,platform,external_id,name,status")
-        .eq("level", "campaign")
-    ),
+        .eq("level", "campaign");
+      if (platform) q = q.eq("platform", platform);
+      return q;
+    }),
     fetchAll<LeadRow>(() => {
       let q = supabase
         .from("leads")

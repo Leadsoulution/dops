@@ -44,6 +44,7 @@ export const APP_SECTIONS: AppSection[] = [
   { key: "products", label: "Produits", href: "/products", group: "COMMERCE" },
   { key: "inventaire", label: "Inventaire", href: "/inventaire", group: "COMMERCE" },
   { key: "integrations", label: "Integrations", href: "/integrations", group: "COMMERCE" },
+  { key: "advertising", label: "Advertising", href: "/advertising", group: "COMMERCE" },
   { key: "fournisseurs", label: "Fournisseurs", href: "/fournisseurs", group: "OPERATIONS" },
   { key: "villes", label: "Villes de livraison", href: "/villes", group: "DONNEES MAITRES" },
   { key: "finance", label: "Finance", href: "/finance", group: "GESTION" },
