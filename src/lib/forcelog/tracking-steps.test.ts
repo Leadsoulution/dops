@@ -76,6 +76,23 @@ describe("stepDates", () => {
 });
 
 describe("trackingUrl", () => {
+  it("suit le domaine de suivi quand il est configure", () => {
+    const avant = process.env.NEXT_PUBLIC_TRACKING_URL;
+    process.env.NEXT_PUBLIC_TRACKING_URL = "https://suivi.orderly.host";
+    try {
+      // Un autre domaine est ce qui fait sortir le lien de
+      // l'application installee : le chemin, lui, ne bouge pas.
+      expect(trackingUrl("F-1")).toBe("https://suivi.orderly.host/suivi-F-1");
+    } finally {
+      if (avant === undefined) delete process.env.NEXT_PUBLIC_TRACKING_URL;
+      else process.env.NEXT_PUBLIC_TRACKING_URL = avant;
+    }
+  });
+
+  it("garde l'adresse de l'application tant que rien n'est configure", () => {
+    expect(trackingUrl("F-1")).toBe("https://orderly.host/suivi-F-1");
+  });
+
   it("compose l'adresse envoyee au client", () => {
     expect(trackingUrl("F-ALR26MY1QM91", "https://orderly.host")).toBe(
       "https://orderly.host/suivi-F-ALR26MY1QM91"

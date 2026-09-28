@@ -234,9 +234,21 @@ function labelOf(key: StepKey): Bilingue {
  * Une seule definition : elle sert au lien affiche dans la fiche, a
  * celui envoye par webhook, au mot-cle des messages, et a la page
  * elle-meme. Quatre versions auraient fini par diverger.
+ *
+ * `NEXT_PUBLIC_TRACKING_URL` permet de la servir depuis un autre nom de
+ * domaine, par exemple "https://suivi.orderly.host". C'est le seul
+ * moyen de faire sortir ce lien de l'application installee : un
+ * navigateur garde chez lui toute adresse du domaine de l'application,
+ * et n'offre aucune facon de le lui demander. Un domaine different
+ * n'est plus le sien, il rend donc la main. Non renseignee, l'adresse
+ * reste celle de l'application, et rien ne change.
  */
 export function trackingUrl(code: string, base?: string): string {
-  const racine = (base ?? process.env.NEXT_PUBLIC_APP_URL ?? "https://orderly.host")
-    .replace(/\/+$/, "");
+  const racine = (
+    base ??
+    process.env.NEXT_PUBLIC_TRACKING_URL ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    "https://orderly.host"
+  ).replace(/\/+$/, "");
   return `${racine}/suivi-${encodeURIComponent(code)}`;
 }
