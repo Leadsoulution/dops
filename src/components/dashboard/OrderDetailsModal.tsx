@@ -40,7 +40,8 @@ import {
   type LeadStatus,
 } from "./leads-data";
 import { displayAmount } from "@/lib/amount";
-import { whatsappNumber } from "@/lib/whatsapp";
+import { whatsappAppChat, whatsappNumber } from "@/lib/whatsapp";
+import { openWhatsapp } from "@/lib/open-outside";
 import { trackingUrl } from "@/lib/forcelog/tracking-steps";
 import CallOutcomePanel from "./CallOutcomePanel";
 
@@ -325,6 +326,13 @@ export default function OrderDetailsModal({
                       <>
                         <a
                           href={`https://wa.me/${whatsappNumber(lead.delivererPhone)}`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            openWhatsapp(
+                              whatsappAppChat(lead.delivererPhone!),
+                              `https://wa.me/${whatsappNumber(lead.delivererPhone!)}`
+                            );
+                          }}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center gap-1.5 rounded-lg bg-[#25D366] px-2.5 py-1.5 text-[12px] font-medium text-white hover:bg-[#1eb855]"

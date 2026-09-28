@@ -8,6 +8,8 @@ import {
   defaultTemplate,
   fillTemplate,
   templateFor,
+  whatsappAppChat,
+  whatsappAppLink,
   whatsappLink,
   whatsappNumber,
   type MessageOrder,
@@ -294,5 +296,26 @@ describe("livreur dans les messages de livraison", () => {
     // Un mot-cle mal ecrit doit rester visible pour etre corrige, pas
     // faire disparaitre sa ligne en silence.
     expect(fillTemplate("Code : {inexistant}", ORDER)).toBe("Code : {inexistant}");
+  });
+});
+
+describe("whatsappAppLink", () => {
+  it("s'adresse au programme installe, pas a la page wa.me", () => {
+    const lien = whatsappAppLink(ORDER, "Bonjour {prenom}");
+    expect(lien.startsWith("whatsapp://send?phone=")).toBe(true);
+    expect(lien).not.toContain("wa.me");
+  });
+
+  it("porte le meme numero et le meme texte que le lien web", () => {
+    const app = new URL(whatsappAppLink(ORDER, "Bonjour {prenom}"));
+    const web = new URL(whatsappLink(ORDER, "Bonjour {prenom}"));
+    expect(app.searchParams.get("phone")).toBe(web.pathname.slice(1));
+    expect(app.searchParams.get("text")).toBe(web.searchParams.get("text"));
+  });
+
+  it("ouvre une conversation nue quand il n'y a rien a ecrire", () => {
+    expect(whatsappAppChat("0612345678")).toBe(
+      "whatsapp://send?phone=212612345678"
+    );
   });
 });

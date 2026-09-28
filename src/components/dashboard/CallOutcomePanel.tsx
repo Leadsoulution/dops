@@ -14,10 +14,11 @@ import {
   messageKeyFor,
   messageLabelFor,
   templateFor,
+  whatsappAppLink,
   whatsappLink,
   whatsappNumber,
 } from "@/lib/whatsapp";
-import { openOutside } from "@/lib/open-outside";
+import { openWhatsapp } from "@/lib/open-outside";
 import ConfirmDialog from "./ConfirmDialog";
 
 /**
@@ -188,7 +189,7 @@ export default function CallOutcomePanel({
       setSharing(false);
     }
 
-    openOutside(whatsappLink(lead, message));
+    openWhatsapp(whatsappAppLink(lead, message), whatsappLink(lead, message));
   }
 
   async function saveNote() {
@@ -292,6 +293,16 @@ export default function CallOutcomePanel({
       ) : reachable ? (
         <a
           href={whatsappLink(lead, message)}
+          onClick={(e) => {
+            // L'adresse wa.me reste sur le lien : elle sert au clic du
+            // milieu, au "copier l'adresse", et au cas ou le script ne
+            // tournerait pas. Le clic ordinaire, lui, vise l'application.
+            e.preventDefault();
+            openWhatsapp(
+              whatsappAppLink(lead, message),
+              whatsappLink(lead, message)
+            );
+          }}
           target="_blank"
           rel="noopener noreferrer"
           title={message}

@@ -403,6 +403,34 @@ export function whatsappNumber(phone: string, countryCode = "212"): string {
 }
 
 /**
+ * Conversation ouverte dans le programme WhatsApp installe.
+ *
+ * `wa.me` est une page web avant d'etre une conversation : ouverte
+ * ailleurs que dans le navigateur d'un telephone — depuis une fenetre
+ * d'application, ou sur un ordinateur — elle affiche d'abord son propre
+ * ecran "Continuer vers la discussion", qu'il faut franchir. Le schema
+ * `whatsapp://` s'adresse au programme lui-meme : l'application sur
+ * telephone, WhatsApp Desktop sur ordinateur, et la conversation
+ * s'ouvre du premier coup.
+ *
+ * Il ne mene nulle part si WhatsApp n'est pas installe, et ne le dit
+ * pas : c'est a l'appelant de prevoir le repli sur `whatsappLink`.
+ */
+export function whatsappAppChat(phone: string, text?: string): string {
+  const number = whatsappNumber(phone);
+  const suffixe = text ? `&text=${encodeURIComponent(text)}` : "";
+  return `whatsapp://send?phone=${number}${suffixe}`;
+}
+
+/** Comme `whatsappLink`, mais pour le programme installe. */
+export function whatsappAppLink(
+  order: MessageOrder,
+  template: string
+): string {
+  return whatsappAppChat(order.phone, fillTemplate(template, order));
+}
+
+/**
  * Lien d'ouverture de la conversation, message deja ecrit. `wa.me`
  * fonctionne aussi bien avec l'application installee qu'avec WhatsApp Web.
  */
