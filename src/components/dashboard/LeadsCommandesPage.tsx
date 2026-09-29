@@ -50,6 +50,7 @@ import {
   matchesTab,
   dateRanges,
   parseLeadDate,
+  splitLeadDate,
   sourceBadgeStyles,
   assigneeName,
   statusBadgeStyles,
@@ -167,6 +168,26 @@ function ClientDot({ flag }: { flag?: keyof typeof DOTS }) {
       aria-label={dot.title}
       className={`h-2 w-2 shrink-0 rounded-full ${dot.color}`}
     />
+  );
+}
+
+/**
+ * La date d'une commande, sur deux lignes.
+ *
+ * Le jour d'abord, l'heure en dessous et en retrait. Sur une colonne
+ * ou l'on cherche un jour, l'heure collee derriere une virgule
+ * allongeait la ligne et se lisait avant ce qu'on cherchait.
+ *
+ * Le format enregistre ne change pas : c'est lui que relisent les
+ * filtres de periode, et le couper en base aurait casse le tri.
+ */
+function LeadDate({ date }: { date: string }) {
+  const { day, time } = splitLeadDate(date);
+  return (
+    <>
+      <span className="block">{day}</span>
+      {time && <span className="block pl-4 text-[11.5px] text-gray-400">{time}</span>}
+    </>
   );
 }
 
@@ -1146,7 +1167,7 @@ export default function LeadsCommandesPage() {
                     />
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 font-mono text-gray-500">
-                    {lead.date}
+                    <LeadDate date={lead.date} />
                   </td>
                   <td className="px-3 py-3 font-medium text-gray-800">
                     {lead.reference}

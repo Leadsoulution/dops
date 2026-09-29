@@ -389,6 +389,29 @@ export function parseLeadDate(value: string | undefined): Date | null {
   return Number.isNaN(fallback.getTime()) ? null : fallback;
 }
 
+/**
+ * La date d'une commande, coupee en deux pour l'affichage.
+ *
+ * Elle est enregistree d'un seul tenant — "29 sept. 2026, 19:27" — et
+ * `parseLeadDate` la relit sous cette forme : le format stocke ne
+ * bouge pas, seul l'ecran la presente sur deux lignes. Le jour se lit
+ * alors d'un coup d'oeil, sans que l'heure vienne s'y meler.
+ *
+ * Une date sans heure rend une heure vide plutot qu'une invention : la
+ * seconde ligne disparait, et rien ne laisse croire a minuit pile.
+ */
+export function splitLeadDate(value: string | undefined): {
+  day: string;
+  time: string;
+} {
+  const brut = (value ?? "").trim();
+  if (!brut) return { day: "", time: "" };
+
+  const coupe = brut.match(/^(.*?),\s*(\d{1,2}:\d{2}(?::\d{2})?)$/);
+  if (!coupe) return { day: brut, time: "" };
+  return { day: coupe[1].trim(), time: coupe[2] };
+}
+
 export const dateRanges = [
   "Aujourd'hui",
   "Hier",

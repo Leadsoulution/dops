@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parseLeadDate, LEAD_STATUSES, tabs, matchesTab,
   assigneeName,
+  splitLeadDate,
 } from "./leads-data";
 
 /**
@@ -70,5 +71,40 @@ describe("assigneeName", () => {
   it("ne rend rien quand la commande n'a jamais ete touchee", () => {
     expect(assigneeName(undefined)).toBeUndefined();
     expect(assigneeName("")).toBeUndefined();
+  });
+});
+
+describe("splitLeadDate", () => {
+  it("separe le jour de l'heure", () => {
+    expect(splitLeadDate("29 sept. 2026, 19:27")).toEqual({
+      day: "29 sept. 2026",
+      time: "19:27",
+    });
+  });
+
+  it("garde le jour seul quand il n'y a pas d'heure", () => {
+    // Pas d'heure inventee : une seconde ligne a "00:00" laisserait
+    // croire a une commande passee a minuit pile.
+    expect(splitLeadDate("29 sept. 2026")).toEqual({
+      day: "29 sept. 2026",
+      time: "",
+    });
+  });
+
+  it("accepte les secondes et une heure a un chiffre", () => {
+    expect(splitLeadDate("1 mars 2026, 9:05").time).toBe("9:05");
+    expect(splitLeadDate("1 mars 2026, 09:05:31").time).toBe("09:05:31");
+  });
+
+  it("ne coupe pas sur une virgule qui n'annonce pas une heure", () => {
+    expect(splitLeadDate("lundi, 29 sept. 2026")).toEqual({
+      day: "lundi, 29 sept. 2026",
+      time: "",
+    });
+  });
+
+  it("supporte une date absente", () => {
+    expect(splitLeadDate(undefined)).toEqual({ day: "", time: "" });
+    expect(splitLeadDate("  ")).toEqual({ day: "", time: "" });
   });
 });
