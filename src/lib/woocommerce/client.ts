@@ -55,6 +55,12 @@ export type WooOrder = {
     city?: string;
   };
   line_items: WooLineItem[];
+  /**
+   * Champs libres de la commande. WooCommerce y range l'origine du
+   * trafic depuis la version 8.5 : c'est ce que sa colonne "Origin"
+   * affiche, et la seule trace de la plateforme qui a amene le client.
+   */
+  meta_data?: { key: string; value: unknown }[];
 };
 
 export type WooCredentials = {

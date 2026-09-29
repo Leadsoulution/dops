@@ -58,6 +58,17 @@ export type Lead = {
   client: string;
   phone: string;
   source: LeadSource;
+  /**
+   * Origine du trafic, telle que WooCommerce l'a enregistree : "fb",
+   * "ig", "tiktok". Brute et non traduite — c'est l'affichage qui la
+   * reconnait, et la garder telle quelle permet de rattraper une
+   * plateforme oubliee sans resynchroniser la boutique.
+   */
+  utmSource?: string;
+  utmMedium?: string;
+  /** Identifiant de campagne du gestionnaire de publicites. */
+  utmCampaign?: string;
+  utmContent?: string;
   assignedTo: string;
   amount: string;
   status: LeadStatus;

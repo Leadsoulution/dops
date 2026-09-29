@@ -190,6 +190,8 @@ function toLead(
         .join(",")
     : undefined;
 
+  const attribution = orderAttribution(order);
+
   const first = items[0];
   const client = [order.billing?.first_name, order.billing?.last_name]
     .filter(Boolean)
@@ -214,6 +216,40 @@ function toLead(
     parcelType: stockable ? "stock" : "simple",
     stockItems,
     wooOrderId: order.id,
+    ...attribution,
+  };
+}
+
+/**
+ * L'origine du trafic, telle que WooCommerce l'a enregistree.
+ *
+ * Depuis la version 8.5 il note d'ou vient chaque commande dans ses
+ * champs libres, et c'est ce que sa colonne "Origin" montre. La valeur
+ * est brute — "fb", "ig" — et arrive ici sans etre traduite : c'est
+ * l'affichage qui la reconnaitra, et garder l'original permet de
+ * rattraper une plateforme oubliee sans resynchroniser la boutique.
+ *
+ * `utm_campaign` porte l'identifiant de campagne du gestionnaire de
+ * publicites. Il n'est pas utilise aujourd'hui, mais c'est lui qui
+ * permettra un jour de relier une commande a la campagne qui l'a
+ * payee, et il ne coute rien a conserver.
+ */
+const ATTRIBUTION_PREFIX = "_wc_order_attribution_";
+
+function orderAttribution(order: WooOrder) {
+  const meta = new Map(
+    (order.meta_data ?? []).map((m) => [m.key, m.value])
+  );
+  const lire = (nom: string) => {
+    const brut = meta.get(`${ATTRIBUTION_PREFIX}${nom}`);
+    const valeur = typeof brut === "string" ? brut.trim() : "";
+    return valeur || undefined;
+  };
+  return {
+    utmSource: lire("utm_source"),
+    utmMedium: lire("utm_medium"),
+    utmCampaign: lire("utm_campaign"),
+    utmContent: lire("utm_content"),
   };
 }
 
@@ -237,5 +273,9 @@ function toRow(lead: Partial<Lead>) {
     parcel_type: lead.parcelType,
     stock_items: lead.stockItems ?? null,
     woo_order_id: lead.wooOrderId,
+    utm_source: lead.utmSource ?? null,
+    utm_medium: lead.utmMedium ?? null,
+    utm_campaign: lead.utmCampaign ?? null,
+    utm_content: lead.utmContent ?? null,
   };
 }

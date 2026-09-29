@@ -60,6 +60,7 @@ import {
 } from "./leads-data";
 import { displayAmount } from "@/lib/amount";
 import { clientFlags } from "@/lib/client-history";
+import { PlatformLogo, SourceLogo } from "./PlatformLogo";
 import { currentProfile } from "@/lib/session";
 import RowActionsMenu from "./RowActionsMenu";
 import CreateCommandeModal from "./CreateCommandeModal";
@@ -1093,6 +1094,7 @@ export default function LeadsCommandesPage() {
                 <th className="px-3 py-3">Produits</th>
                 <th className="px-3 py-3">Client</th>
                 <th className="px-3 py-3">Ville / Tarif</th>
+                <th className="px-3 py-3">Platform</th>
                 <th className="px-3 py-3">Source</th>
                 <th className="whitespace-nowrap px-3 py-3">Assigne</th>
                 <th className="px-3 py-3">Montant</th>
@@ -1207,12 +1209,25 @@ export default function LeadsCommandesPage() {
                       {lead.tarif ?? "Sans tarif"}
                     </p>
                   </td>
+                  {/*
+                    La plateforme qui a amene le client, lue sur
+                    l'attribution que WooCommerce enregistre. Vide tant
+                    qu'elle est inconnue : un logo par defaut ferait
+                    passer l'ignorance pour un renseignement.
+                  */}
                   <td className="px-3 py-3">
-                    <span
-                      className={`rounded-md px-2 py-1 text-[12px] font-medium ${sourceBadgeStyles[lead.source]}`}
-                    >
-                      {lead.source}
-                    </span>
+                    <PlatformLogo utmSource={lead.utmSource} />
+                  </td>
+                  <td className="px-3 py-3">
+                    {lead.source === "WooCommerce" ? (
+                      <SourceLogo source={lead.source} />
+                    ) : (
+                      <span
+                        className={`rounded-md px-2 py-1 text-[12px] font-medium ${sourceBadgeStyles[lead.source]}`}
+                      >
+                        {lead.source}
+                      </span>
+                    )}
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 text-gray-600">
                     {/*

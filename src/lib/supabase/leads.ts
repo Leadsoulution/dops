@@ -16,6 +16,10 @@ import type { Lead, LeadSource, LeadStatus } from "@/components/dashboard/leads-
 type LeadRow = {
   id: string;
   reference: string;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  utm_content: string | null;
   product_label: string | null;
   product_name: string | null;
   item_count: number | null;
@@ -58,6 +62,10 @@ function toLead(row: LeadRow): Lead {
     client: row.client,
     phone: row.phone,
     source: (row.source ?? "nouveau") as LeadSource,
+    utmSource: row.utm_source ?? undefined,
+    utmMedium: row.utm_medium ?? undefined,
+    utmCampaign: row.utm_campaign ?? undefined,
+    utmContent: row.utm_content ?? undefined,
     assignedTo: row.assigned_to ?? "",
     amount: row.amount ?? "",
     status: row.status as LeadStatus,
@@ -139,7 +147,7 @@ export function toRow(lead: Partial<Lead>): Partial<LeadRow> {
 }
 
 const COLUMNS =
-  "id,reference,product_label,product_name,item_count,client,phone,source,assigned_to,amount,status,shipping,date,ville,tarif,quartier,adresse,tracking_number,tracking_error,delivery_status,delivery_status_code,payment_status,deliverer,deliverer_phone,delivery_date,parcel_type,stock_items,customer_note,restocked_at,woo_order_id,last_modified_by,last_modified_at";
+  "id,reference,product_label,product_name,item_count,client,phone,source,assigned_to,amount,status,shipping,date,ville,tarif,quartier,adresse,tracking_number,tracking_error,delivery_status,delivery_status_code,payment_status,deliverer,deliverer_phone,delivery_date,parcel_type,stock_items,customer_note,restocked_at,woo_order_id,utm_source,utm_medium,utm_campaign,utm_content,last_modified_by,last_modified_at";
 
 export async function listLeads(): Promise<Lead[]> {
   const supabase = getSupabaseServerClient();
