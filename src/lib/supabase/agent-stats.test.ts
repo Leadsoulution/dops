@@ -429,6 +429,65 @@ describe("getAgentStats", () => {
 });
 
 describe("livraison", () => {
+  it("compte toutes les confirmees, pas seulement celles d'un agent", async () => {
+    // Le total de l'equipe annoncait 91 livraisons quand le
+    // transporteur en avait remis 149 : les commandes confirmees par un
+    // administrateur, sur des commandes qu'aucun agent n'avait
+    // touchees, sortaient du calcul. Qu'un colis arrive ne depend pas
+    // de qui a tape "Confirme".
+    stubTables(
+      [ALICE],
+      [
+        { id: "1", reference: "A", phone: "06", status: "Confirme", created_at: at(0),
+          tracking_number: "F-1", delivery_status_code: "DELIVERED" },
+        // Confirmee sans qu'aucun agent n'y touche.
+        { id: "2", reference: "B", phone: "06", status: "Confirme", created_at: at(0),
+          tracking_number: "F-2", delivery_status_code: "DELIVERED" },
+      ],
+      [statusEvent("1", ALICE, "Confirme", 1)]
+    );
+    const { delivery, agents } = await getAgentStats();
+    expect(delivery.shipped).toBe(2);
+    expect(delivery.delivered).toBe(2);
+    expect(delivery.rate).toBe(100);
+    // Le credit de l'agent, lui, ne porte que sur la sienne.
+    expect(agents[0].delivery.delivered).toBe(1);
+  });
+
+  it("garde la periode demandee sur la date de la commande", async () => {
+    stubTables(
+      [ALICE],
+      [
+        { id: "1", reference: "A", phone: "06", status: "Confirme", created_at: at(0),
+          tracking_number: "F-1", delivery_status_code: "DELIVERED" },
+        // Bien plus ancienne : hors periode, elle ne doit pas compter.
+        { id: "2", reference: "B", phone: "06", status: "Confirme",
+          created_at: new Date(BASE - 400 * HOUR).toISOString(),
+          tracking_number: "F-2", delivery_status_code: "DELIVERED" },
+      ],
+      [statusEvent("1", ALICE, "Confirme", 1)]
+    );
+    const { delivery } = await getAgentStats(at(-1), at(2));
+    expect(delivery.delivered).toBe(1);
+  });
+
+  it("montre un produit confirme sans agent dans les lignes de livraison", async () => {
+    stubTables(
+      [ALICE],
+      [
+        { id: "1", reference: "A", phone: "06", status: "Confirme", created_at: at(0),
+          tracking_number: "F-1", delivery_status_code: "DELIVERED",
+          product_name: "Collier" },
+      ],
+      []
+    );
+    const { products, delivery } = await getAgentStats();
+    const collier = products.find((p) => p.product === "Collier");
+    // Les lignes doivent sommer au total affiche au-dessus d'elles.
+    expect(collier?.delivery.delivered).toBe(1);
+    expect(delivery.delivered).toBe(1);
+  });
+
   it("ne compte que les commandes que l'agent a confirmees", () => {
     // Celle qu'Alice a seulement rappelee est livree, mais ce n'est pas
     // elle qui l'a confirmee : elle n'entre pas dans son taux.

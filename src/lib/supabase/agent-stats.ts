@@ -105,6 +105,14 @@ const FAILED = new Set(["RETURNED", "REFUSE", "CANCELED", "OUT_OF_AREA"]);
  * On part des commandes confirmees et d'elles seules : une commande
  * jamais confirmee n'avait pas a etre livree, la compter ferait passer
  * un travail de confirmation pour un echec de livraison.
+ *
+ * Toutes les confirmees, en revanche, sans regarder qui a pose le
+ * statut. Le chiffre etait auparavant restreint aux confirmations
+ * creditees a un agent : il annoncait 91 livraisons quand le
+ * transporteur en avait remis 149, parce que 112 commandes confirmees
+ * par un administrateur, sur des commandes qu'aucun agent n'avait
+ * touchees, sortaient du calcul. Qu'un colis arrive ou non ne depend
+ * pas de qui a tape "Confirme".
  */
 function deliveryOf(
   confirmedIds: Iterable<string>,
@@ -379,6 +387,31 @@ export async function getAgentStats(
   const teamContacted = new Set<string>();
   const teamConfirmed = new Set<string>();
   const teamFirstTouch: number[] = [];
+
+  /*
+   * Les commandes confirmees de la periode, lues sur les commandes
+   * elles-memes et non sur le journal.
+   *
+   * Les commandes sont chargees en entier — c'est le journal qui porte
+   * la periode — donc la borne se pose ici, sur la date de creation,
+   * comme le font les onglets de la page Commandes. Sans elle, choisir
+   * "7 derniers jours" laisserait le taux de livraison couvrir tout
+   * l'historique.
+   */
+  const debut = from ? new Date(from).getTime() : null;
+  const fin = to ? new Date(to).getTime() : null;
+  const dansLaPeriode = (iso: string) => {
+    const t = new Date(iso).getTime();
+    if (!Number.isFinite(t)) return false;
+    return (debut === null || t >= debut) && (fin === null || t <= fin);
+  };
+
+  const allConfirmed = new Set<string>();
+  for (const lead of leads.values()) {
+    if (CONFIRMED.has(lead.status) && dansLaPeriode(lead.created_at)) {
+      allConfirmed.add(lead.id);
+    }
+  }
   const teamHandling: number[] = [];
 
   const perLeadAll = new Map<string, EventRow[]>();
@@ -431,6 +464,21 @@ export async function getAgentStats(
     byProduct.set(key, entry);
   }
 
+  /*
+   * Les confirmees par produit, cote commandes : la ligne de livraison
+   * d'un produit doit compter les memes colis que le total au-dessus
+   * d'elle. Un produit confirme uniquement par un administrateur
+   * n'apparaissait pas du tout, et les lignes ne sommaient pas au
+   * chiffre annonce.
+   */
+  const confirmedByProduct = new Map<string, Set<string>>();
+  for (const id of allConfirmed) {
+    const key = productOf(id);
+    const set = confirmedByProduct.get(key) ?? new Set<string>();
+    set.add(id);
+    confirmedByProduct.set(key, set);
+  }
+
   const imageByProduct = new Map(
     ((productsRes.data ?? []) as { name: string; image: string }[]).map((p) => [
       p.name.trim().toLowerCase(),
@@ -438,20 +486,28 @@ export async function getAgentStats(
     ])
   );
 
-  const products: ProductStats[] = [...byProduct.entries()]
-    .map(([product, entry]) => ({
-      product,
-      image: imageByProduct.get(product.toLowerCase()),
-      treated: entry.treated.size,
-      contacted: entry.contacted.size,
-      confirmed: entry.confirmed.size,
-      confirmRate:
-        entry.treated.size > 0
-          ? Math.round((entry.confirmed.size / entry.treated.size) * 100)
-          : 0,
-      delivery: deliveryOf(entry.confirmed, leads),
-    }))
-    .sort((a, b) => b.treated - a.treated);
+  const VIDE = { treated: new Set<string>(), contacted: new Set<string>(), confirmed: new Set<string>() };
+  const tousProduits = new Set([...byProduct.keys(), ...confirmedByProduct.keys()]);
+
+  const products: ProductStats[] = [...tousProduits]
+    .map((product) => {
+      const entry = byProduct.get(product) ?? VIDE;
+      return {
+        product,
+        image: imageByProduct.get(product.toLowerCase()),
+        // Traitees, contactees, confirmees : le travail de l'equipe.
+        treated: entry.treated.size,
+        contacted: entry.contacted.size,
+        confirmed: entry.confirmed.size,
+        confirmRate:
+          entry.treated.size > 0
+            ? Math.round((entry.confirmed.size / entry.treated.size) * 100)
+            : 0,
+        // La livraison : toutes les confirmees du produit.
+        delivery: deliveryOf(confirmedByProduct.get(product) ?? [], leads),
+      };
+    })
+    .sort((a, b) => b.treated - a.treated || b.delivery.shipped - a.delivery.shipped);
 
   /*
    * Les commandes dont le traitement est termine.
@@ -486,6 +542,6 @@ export async function getAgentStats(
       avgHandling: formatDuration(average(teamHandling)),
       avgFirstTouch: formatDuration(average(teamFirstTouch)),
     },
-    delivery: deliveryOf(teamConfirmed, leads),
+    delivery: deliveryOf(allConfirmed, leads),
   };
 }
