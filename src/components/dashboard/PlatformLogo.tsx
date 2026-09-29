@@ -12,6 +12,10 @@ import { AD_PLATFORMS, adPlatformOf } from "@/lib/ad-platform";
  * Chaque logo porte son nom en infobulle. Une marque ne se reconnait
  * pas toujours a son seul contour, et un lecteur d'ecran ne voit rien
  * d'un chemin SVG.
+ *
+ * Ils sont dessines a 22 px, la ou le texte du tableau en fait 12,5 :
+ * un logo n'a pas de mot pour se rattraper, il se lit entierement a sa
+ * forme ou pas du tout.
  */
 
 const PATHS: Record<AdPlatformKey, string> = {
@@ -41,7 +45,7 @@ function Glyph({
   path,
   color,
   title,
-  size = 15,
+  size = 22,
 }: {
   path: string;
   color: string;
@@ -94,7 +98,7 @@ export function platformLabel(utmSource?: string): string | null {
  */
 export function SourceLogo({ source }: { source: string }) {
   if (source !== "WooCommerce") return null;
-  return <Glyph path={WOO_PATH} color="#7F54B3" title="WooCommerce" size={20} />;
+  return <Glyph path={WOO_PATH} color="#7F54B3" title="WooCommerce" size={24} />;
 }
 
 export { AD_PLATFORMS };
