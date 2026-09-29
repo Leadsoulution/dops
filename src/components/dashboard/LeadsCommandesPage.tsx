@@ -59,6 +59,7 @@ import {
   type LeadStatus,
 } from "./leads-data";
 import { displayAmount } from "@/lib/amount";
+import { clientFlags } from "@/lib/client-history";
 import { currentProfile } from "@/lib/session";
 import RowActionsMenu from "./RowActionsMenu";
 import CreateCommandeModal from "./CreateCommandeModal";
@@ -138,6 +139,35 @@ type ModalState =
   | { type: "status"; leadIds: string[] }
   | { type: "assign"; leadIds: string[] }
   | null;
+
+/**
+ * L'anteriorite du client, en un point de couleur.
+ *
+ * Avant le nom, parce que c'est ce qu'on veut savoir avant de lire le
+ * nom. Rien ne s'affiche pour une premiere commande : une place vide
+ * dit "client inconnu", ce qui n'est pas la meme chose que "rien a
+ * signaler".
+ *
+ * L'infobulle porte le sens : une couleur seule ne se lit pas, et un
+ * agent daltonien ne verrait qu'un point gris.
+ */
+const DOTS = {
+  failed: { color: "bg-red-500", title: "Deja une commande non livree" },
+  pending: { color: "bg-amber-400", title: "Deja une commande a confirmer" },
+  delivered: { color: "bg-emerald-500", title: "Deja une commande livree" },
+} as const;
+
+function ClientDot({ flag }: { flag?: keyof typeof DOTS }) {
+  if (!flag) return null;
+  const dot = DOTS[flag];
+  return (
+    <span
+      title={dot.title}
+      aria-label={dot.title}
+      className={`h-2 w-2 shrink-0 rounded-full ${dot.color}`}
+    />
+  );
+}
 
 export default function LeadsCommandesPage() {
   const router = useRouter();
@@ -418,6 +448,13 @@ export default function LeadsCommandesPage() {
     // seul moyen de les remettre a zero en meme temps que l'etat du parent.
     setFiltersResetKey((k) => k + 1);
   }
+
+  /*
+   * L'anteriorite de chaque client, calculee sur la liste entiere et
+   * non sur la page affichee : une commande de mars renseigne celle
+   * d'aujourd'hui, et elle n'est pas forcement a l'ecran.
+   */
+  const flags = clientFlags(leadsState);
 
   const query = searchQuery.trim().toLowerCase();
   const visibleLeads = filteredLeads.filter(
@@ -1147,6 +1184,7 @@ export default function LeadsCommandesPage() {
                   </td>
                   <td className="px-3 py-3">
                     <div className="flex items-center gap-1.5">
+                      <ClientDot flag={flags.get(lead.id)} />
                       <p className="font-medium text-gray-800">{lead.client}</p>
                       {lead.itemCount && lead.itemCount > 1 && (
                         <span className="flex items-center gap-0.5 rounded-full bg-gray-100 px-1.5 py-0.5 text-[10.5px] font-medium text-gray-500">
@@ -1416,7 +1454,8 @@ export default function LeadsCommandesPage() {
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-semibold text-gray-900">
+                  <p className="flex items-center gap-1.5 truncate text-[14px] font-semibold text-gray-900">
+                    <ClientDot flag={flags.get(lead.id)} />
                     {lead.client}
                   </p>
                   <p className="font-mono text-[12.5px] text-gray-400">{lead.phone}</p>
