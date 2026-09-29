@@ -111,7 +111,7 @@ export default function ConfirmationHome() {
     {
       href: "/confirmation/agents",
       title: "Confirmation",
-      description: "Commandes traitees par l'equipe et confirmees au telephone",
+      description: "Toutes les commandes recues, et celles confirmees au telephone",
       icon: CheckCircle2,
       accent: "emerald" as const,
       percent: stats?.team.confirmRate ?? 0,
@@ -119,16 +119,16 @@ export default function ConfirmationHome() {
       final: {
         percent: stats?.team.confirmRateFinal ?? 0,
         label: "Sur commandes tranchees",
-        detail: `${(stats?.team.confirmed ?? 0).toLocaleString("fr-FR")} confirmees sur ${(stats?.team.closed ?? 0).toLocaleString("fr-FR")} closes`,
+        detail: `${(stats?.team.confirmed ?? 0).toLocaleString("fr-FR")} confirmees sur ${(stats?.team.closed ?? 0).toLocaleString("fr-FR")} tranchees - faux numeros, non commandees et doublons exclus`,
         pending: (stats?.team.treated ?? 0) - (stats?.team.closed ?? 0),
         pendingLabel: "encore en cours",
       },
       figures: [
-        { value: stats?.team.treated ?? 0, label: "Traitees" },
+        { value: stats?.team.treated ?? 0, label: "Commandes" },
         { value: stats?.team.confirmed ?? 0, label: "Confirmees" },
         { value: stats?.team.contacted ?? 0, label: "Contactes" },
       ],
-      columns: ["Traitees", "Confirm.", "Contact."],
+      columns: ["Commandes", "Confirm.", "Contact."],
       rows: (stats?.products ?? []).map((p) => ({
         product: p.product,
         image: p.image,

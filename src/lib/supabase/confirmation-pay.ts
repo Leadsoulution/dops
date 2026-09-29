@@ -39,6 +39,15 @@ export type PayableOrder = {
   ville?: string;
   /** Agent a payer, ou vide si la commande n'a pu etre rattachee. */
   agent: string;
+  /**
+   * Qui a confirme, pour l'affichage seul.
+   *
+   * L'agent quand il y en a un, sinon l'auteur reel du geste — souvent
+   * un administrateur. Volontairement separe de `agent` : faire
+   * apparaitre un administrateur dans la colonne ne doit pas le faire
+   * entrer dans les sommes dues.
+   */
+  confirmedBy: string;
   paid: boolean;
   /** Somme reellement versee, figee au paiement. */
   paidAmount?: number;
@@ -166,14 +175,34 @@ export async function getPaymentReport(
 
   const attribution = resolveAttribution(events, adminIds, agentIds);
 
-  // L'agent credite de la confirmation de chaque commande : c'est ce
-  // geste-la qui se paie, pas la derniere main passee sur la ligne.
+  /*
+   * Qui a confirme chaque commande : c'est ce geste-la qui se paie, pas
+   * la derniere main passee sur la ligne.
+   *
+   * Deux niveaux, et le second manquait. L'agent credite d'abord —
+   * c'est lui qu'on paie. A defaut, l'auteur reel du geste : plus de
+   * cent commandes livrees affichaient "Non attribuee" parce qu'un
+   * administrateur les avait confirmees sans qu'aucun agent n'y
+   * touche. La colonne ne disait alors pas "personne", elle disait
+   * "je ne sais pas", ce qui n'aide ni a payer ni a verifier.
+   *
+   * Un nom d'administrateur n'ouvre droit a rien : il ne va que dans
+   * `confirmedBy`, jamais dans `agent`, et les sommes dues se calculent
+   * sur `agent` seul. Voir qui a confirme est precisement ce qui
+   * permet de ne pas payer par erreur.
+   */
   const agentByLead = new Map<string, string>();
+  const authorByLead = new Map<string, string>();
   for (const event of events) {
     if (event.field !== STATUS_FIELD) continue;
     if (!event.new_value || !CONFIRMED.has(event.new_value)) continue;
     const credited = attribution.get(event);
     if (credited) agentByLead.set(event.lead_id, nameById.get(credited) ?? "");
+    const auteur =
+      (event.actor_id ? nameById.get(event.actor_id) : null) ??
+      event.actor_name ??
+      "";
+    if (auteur) authorByLead.set(event.lead_id, auteur);
   }
 
   const leads = leadRows;
@@ -195,6 +224,8 @@ export async function getPaymentReport(
       amount: lead.amount ?? "",
       ville: lead.ville ?? undefined,
       agent: agentByLead.get(lead.id) ?? "",
+      confirmedBy:
+        agentByLead.get(lead.id) ?? authorByLead.get(lead.id) ?? "",
       paid: Boolean(lead.confirmation_paid_at),
       paidAmount:
         lead.confirmation_paid_amount === null

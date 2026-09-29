@@ -42,6 +42,8 @@ type PayableOrder = {
   amount: string;
   ville?: string;
   agent: string;
+  /** Qui a confirme : l'agent, ou l'administrateur a defaut. */
+  confirmedBy: string;
   paid: boolean;
   paidAmount?: number;
   paidAt?: string;
@@ -568,8 +570,14 @@ export default function ConfirmationPayPage() {
                               {o.deliveryStatus}
                             </span>
                           </td>
+                          {/*
+                            Qui a confirme, agent ou administrateur. La
+                            colonne restait vide sur les commandes qu'un
+                            administrateur avait confirmees seul : elle
+                            ne disait pas "personne", elle ne disait rien.
+                          */}
                           <td className="whitespace-nowrap px-3 py-3 text-[12.5px] text-gray-600">
-                            {o.agent || (
+                            {o.confirmedBy || (
                               <span className="text-gray-300">Non attribuee</span>
                             )}
                           </td>
@@ -613,7 +621,7 @@ export default function ConfirmationPayPage() {
                       <p className="mt-1 flex flex-wrap items-center gap-x-2 text-[11.5px] text-gray-400">
                         <span className="font-mono">{o.deliveryDate || "—"}</span>
                         <span>&middot;</span>
-                        <span>{o.agent || "Non attribuee"}</span>
+                        <span>{o.confirmedBy || "Non attribuee"}</span>
                       </p>
                     </div>
                   ))}

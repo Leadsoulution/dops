@@ -311,6 +311,46 @@ describe("getAgentStats", () => {
     expect(agents[0].pending).toBe(1);
   });
 
+  it("compte les confirmations d'un administrateur dans le total", async () => {
+    // L'ecran annoncait 249 confirmees quand l'onglet Commandes en
+    // montrait 361 : celles qu'un administrateur avait confirmees,
+    // sur des lignes qu'aucun agent n'avait touchees, manquaient.
+    stubTables(
+      [ALICE],
+      [
+        { id: "1", reference: "A", phone: "06", status: "Confirme", created_at: at(0) },
+        { id: "2", reference: "B", phone: "06", status: "Confirme", created_at: at(0) },
+      ],
+      [statusEvent("1", ALICE, "Confirme", 1)]
+    );
+    const { team, agents } = await getAgentStats();
+    expect(team.confirmed).toBe(2);
+    expect(team.treated).toBe(2);
+    expect(team.confirmRate).toBe(100);
+    // Le credit de l'agent ne porte que sur la sienne.
+    expect(agents[0].confirmed).toBe(1);
+  });
+
+  it("laisse faux numero, non commandee et doublon hors du taux", async () => {
+    // Il n'y avait rien a confirmer sur ces lignes-la : les compter au
+    // denominateur punissait l'equipe pour la qualite du trafic.
+    stubTables(
+      [ALICE],
+      [
+        { id: "1", reference: "A", phone: "06", status: "Confirme", created_at: at(0) },
+        { id: "2", reference: "B", phone: "06", status: "Faux numero", created_at: at(0) },
+        { id: "3", reference: "C", phone: "06", status: "Non commandee", created_at: at(0) },
+        { id: "4", reference: "D", phone: "06", status: "En double", created_at: at(0) },
+      ],
+      []
+    );
+    const { team } = await getAgentStats();
+    expect(team.treated).toBe(1);
+    expect(team.closed).toBe(1);
+    expect(team.confirmRate).toBe(100);
+    expect(team.confirmRateFinal).toBe(100);
+  });
+
   it("ignore les automates, qui n'ont pas de compte", async () => {
     stubTables(
       [ALICE],
@@ -329,8 +369,12 @@ describe("getAgentStats", () => {
     );
 
     const { agents, team } = await getAgentStats();
+    // Aucun credit pour l'agent : il n'a rien fait.
     expect(agents[0].treated).toBe(0);
-    expect(team.treated).toBe(0);
+    // La commande existe pourtant, et les compteurs de l'equipe
+    // couvrent la boutique : elle y figure, sans appartenir a personne.
+    expect(team.treated).toBe(1);
+    expect(team.confirmed).toBe(0);
   });
 
   it("mesure la prise en charge et la duree de traitement", async () => {

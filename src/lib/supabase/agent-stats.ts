@@ -70,6 +70,21 @@ function countsAsConfirmed(
   return Boolean(lead && CONFIRMED.has(lead.status));
 }
 
+/**
+ * Statuts qui n'ont jamais represente une vente possible.
+ *
+ * Un faux numero, une personne qui n'a rien commande, un doublon : il
+ * n'y avait rien a confirmer. Les laisser au denominateur faisait
+ * baisser le taux de confirmation a cause de lignes dont aucun appel
+ * n'aurait pu rien tirer, et punissait une equipe pour la qualite du
+ * trafic publicitaire.
+ *
+ * Elles sortent des deux taux de confirmation, numerateur comme
+ * denominateur. Elles restent visibles partout ailleurs : elles ont
+ * bien ete traitees, et ce travail-la compte.
+ */
+const NOT_A_PROSPECT = new Set(["Faux numero", "Non commandee", "En double"]);
+
 /** Une commande close : plus rien a faire dessus. */
 const CLOSED = new Set([
   "Confirme",
@@ -339,7 +354,16 @@ export async function getAgentStats(
       if (leadEvents.length > 1) handlingSpans.push(last - first);
     }
 
-    const treated = perLead.size;
+    /*
+     * Le denominateur du taux, faux numeros et doublons retires. Le
+     * compteur "Traitees" les garde : l'agent a bien passe l'appel.
+     */
+    let treated = 0;
+    for (const leadId of perLead.keys()) {
+      const lead = leads.get(leadId);
+      if (!lead || !NOT_A_PROSPECT.has(lead.status)) treated += 1;
+    }
+    const treatedTotal = perLead.size;
 
     const history: AgentAction[] = own
       .slice()
@@ -364,7 +388,7 @@ export async function getAgentStats(
       role: profile.role,
       active: profile.status === "Actif",
       avatarColor: profile.avatar_color,
-      treated,
+      treated: treatedTotal,
       contacted: contacted.size,
       confirmed: confirmed.size,
       pending,
@@ -383,9 +407,6 @@ export async function getAgentStats(
   // Les totaux d'equipe comptent des commandes distinctes, pas la somme
   // des colonnes : deux agents sur la meme commande ne font pas deux
   // commandes.
-  const teamTreated = new Set<string>();
-  const teamContacted = new Set<string>();
-  const teamConfirmed = new Set<string>();
   const teamFirstTouch: number[] = [];
 
   /*
@@ -407,21 +428,36 @@ export async function getAgentStats(
   };
 
   const allConfirmed = new Set<string>();
+  /*
+   * Les compteurs de l'equipe couvrent desormais toute la boutique.
+   *
+   * Ils ne comptaient que les commandes creditees a un agent : 112
+   * commandes confirmees par un administrateur, sur des lignes
+   * qu'aucun agent n'avait touchees, manquaient a l'appel. L'ecran
+   * annoncait 249 confirmees la ou l'onglet Commandes en montrait 361,
+   * et 249 confirmees pour 352 expediees — on n'expedie pourtant que
+   * ce qui est confirme.
+   *
+   * Le detail par agent, lui, reste credite : c'est la que se juge le
+   * travail de chacun, et ces 112 commandes n'y ont rien a faire.
+   */
+  const shopAll = new Set<string>();
+  const shopContacted = new Set<string>();
+  const shopClosed = new Set<string>();
   for (const lead of leads.values()) {
-    if (CONFIRMED.has(lead.status) && dansLaPeriode(lead.created_at)) {
-      allConfirmed.add(lead.id);
-    }
+    if (!dansLaPeriode(lead.created_at)) continue;
+    if (CONFIRMED.has(lead.status)) allConfirmed.add(lead.id);
+    // Faux numero, non commandee, doublon : rien a confirmer la-dedans.
+    if (NOT_A_PROSPECT.has(lead.status)) continue;
+    shopAll.add(lead.id);
+    if (REACHED.has(lead.status)) shopContacted.add(lead.id);
+    if (CLOSED.has(lead.status)) shopClosed.add(lead.id);
   }
   const teamHandling: number[] = [];
 
   const perLeadAll = new Map<string, EventRow[]>();
   for (const event of events) {
     if (!creditedTo(event)) continue;
-    teamTreated.add(event.lead_id);
-    if (event.field === STATUS_FIELD && event.new_value) {
-      if (REACHED.has(event.new_value)) teamContacted.add(event.lead_id);
-      if (countsAsConfirmed(event, leads)) teamConfirmed.add(event.lead_id);
-    }
     const list = perLeadAll.get(event.lead_id);
     if (list) list.push(event);
     else perLeadAll.set(event.lead_id, [event]);
@@ -442,6 +478,14 @@ export async function getAgentStats(
   // Ventilation par produit. Les memes definitions que pour l'equipe,
   // appliquees a un sous-ensemble : traitees, contactees, confirmees, et
   // le devenir des confirmees chez le transporteur.
+  /*
+   * Ventilation par produit, lue sur les commandes.
+   *
+   * Elle partait du journal des agents : un produit confirme par un
+   * administrateur seul n'apparaissait pas, et les lignes ne sommaient
+   * pas au total affiche au-dessus d'elles. Les memes definitions que
+   * pour l'equipe, appliquees produit par produit.
+   */
   const byProduct = new Map<
     string,
     { treated: Set<string>; contacted: Set<string>; confirmed: Set<string> }
@@ -450,27 +494,25 @@ export async function getAgentStats(
   const productOf = (leadId: string) =>
     (leads.get(leadId)?.product_name ?? "").trim() || "Sans produit";
 
-  for (const event of events) {
-    if (!creditedTo(event)) continue;
-    const key = productOf(event.lead_id);
-    const entry =
-      byProduct.get(key) ??
-      { treated: new Set<string>(), contacted: new Set<string>(), confirmed: new Set<string>() };
-    entry.treated.add(event.lead_id);
-    if (event.field === STATUS_FIELD && event.new_value) {
-      if (REACHED.has(event.new_value)) entry.contacted.add(event.lead_id);
-      if (countsAsConfirmed(event, leads)) entry.confirmed.add(event.lead_id);
-    }
-    byProduct.set(key, entry);
+  const entryFor = (key: string) => {
+    const found = byProduct.get(key);
+    if (found) return found;
+    const fresh = {
+      treated: new Set<string>(),
+      contacted: new Set<string>(),
+      confirmed: new Set<string>(),
+    };
+    byProduct.set(key, fresh);
+    return fresh;
+  };
+
+  for (const id of shopAll) {
+    const entry = entryFor(productOf(id));
+    entry.treated.add(id);
+    if (shopContacted.has(id)) entry.contacted.add(id);
+    if (allConfirmed.has(id)) entry.confirmed.add(id);
   }
 
-  /*
-   * Les confirmees par produit, cote commandes : la ligne de livraison
-   * d'un produit doit compter les memes colis que le total au-dessus
-   * d'elle. Un produit confirme uniquement par un administrateur
-   * n'apparaissait pas du tout, et les lignes ne sommaient pas au
-   * chiffre annonce.
-   */
   const confirmedByProduct = new Map<string, Set<string>>();
   for (const id of allConfirmed) {
     const key = productOf(id);
@@ -509,35 +551,22 @@ export async function getAgentStats(
     })
     .sort((a, b) => b.treated - a.treated || b.delivery.shipped - a.delivery.shipped);
 
-  /*
-   * Les commandes dont le traitement est termine.
-   *
-   * CLOSED les enumere deja : confirmee, annulee, faux numero, non
-   * commandee, expiree, en double, test. Tout le reste attend encore
-   * quelque chose — un rappel, un client qui decroche — et n'a rien a
-   * faire au denominateur d'un taux de reussite.
-   */
-  let teamClosed = 0;
-  for (const id of teamTreated) {
-    const lead = leads.get(id);
-    if (lead && CLOSED.has(lead.status)) teamClosed += 1;
-  }
 
   return {
     agents,
     products,
     team: {
-      treated: teamTreated.size,
-      contacted: teamContacted.size,
-      confirmed: teamConfirmed.size,
-      closed: teamClosed,
+      treated: shopAll.size,
+      contacted: shopContacted.size,
+      confirmed: allConfirmed.size,
+      closed: shopClosed.size,
       confirmRateFinal:
-        teamClosed > 0
-          ? Math.round((teamConfirmed.size / teamClosed) * 100)
+        shopClosed.size > 0
+          ? Math.round((allConfirmed.size / shopClosed.size) * 100)
           : 0,
       confirmRate:
-        teamTreated.size > 0
-          ? Math.round((teamConfirmed.size / teamTreated.size) * 100)
+        shopAll.size > 0
+          ? Math.round((allConfirmed.size / shopAll.size) * 100)
           : 0,
       avgHandling: formatDuration(average(teamHandling)),
       avgFirstTouch: formatDuration(average(teamFirstTouch)),
