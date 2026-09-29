@@ -13,6 +13,7 @@ import {
   Truck,
   User,
   Tag,
+  Megaphone,
   Package,
   Wallet,
   Inbox,
@@ -61,7 +62,7 @@ import {
 } from "./leads-data";
 import { displayAmount } from "@/lib/amount";
 import { clientFlags } from "@/lib/client-history";
-import { PlatformLogo, SourceLogo } from "./PlatformLogo";
+import { PlatformLogo, SourceLogo, platformLabel } from "./PlatformLogo";
 import { currentProfile } from "@/lib/session";
 import RowActionsMenu from "./RowActionsMenu";
 import CreateCommandeModal from "./CreateCommandeModal";
@@ -191,6 +192,9 @@ function LeadDate({ date }: { date: string }) {
   );
 }
 
+/** L'entree du filtre pour une origine que personne n'a renseignee. */
+const SANS_PLATEFORME = "Sans plateforme";
+
 export default function LeadsCommandesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -207,6 +211,7 @@ export default function LeadsCommandesPage() {
   const [filters, setFilters] = useState({
     produits: [] as string[],
     sources: [] as string[],
+    platform: [] as string[],
     agents: [] as string[],
     confirmation: [] as string[],
     livraison: [] as string[],
@@ -431,6 +436,16 @@ export default function LeadsCommandesPage() {
   const filterOptions = {
     produits: uniqueValues((l) => l.productName),
     sources: uniqueValues((l) => l.source),
+    /*
+     * Les plateformes presentes, plus "Sans plateforme". Sans cette
+     * derniere entree, les commandes dont l'origine est inconnue —
+     * l'immense majorite pour l'instant — ne pourraient pas etre
+     * isolees, et le filtre ne servirait qu'a les cacher.
+     */
+    platform: [
+      ...uniqueValues((l) => platformLabel(l.utmSource) ?? undefined),
+      SANS_PLATEFORME,
+    ],
     agents: uniqueValues((l) => assigneeName(l.lastModifiedBy)),
     confirmation: uniqueValues((l) => l.status),
     livraison: uniqueValues((l) => l.deliveryStatus),
@@ -443,6 +458,10 @@ export default function LeadsCommandesPage() {
     (filters.produits.length === 0 ||
       filters.produits.includes(lead.productName)) &&
     (filters.sources.length === 0 || filters.sources.includes(lead.source)) &&
+    (filters.platform.length === 0 ||
+      filters.platform.includes(
+        platformLabel(lead.utmSource) ?? SANS_PLATEFORME
+      )) &&
     (filters.agents.length === 0 ||
       filters.agents.includes(assigneeName(lead.lastModifiedBy) ?? "")) &&
     (filters.confirmation.length === 0 ||
@@ -465,6 +484,7 @@ export default function LeadsCommandesPage() {
       confirmation: [],
       livraison: [],
       paiement: [],
+      platform: [],
     });
     // Les pastilles gardent leur selection en interne : les remonter est le
     // seul moyen de les remettre a zero en meme temps que l'etat du parent.
@@ -960,6 +980,17 @@ export default function LeadsCommandesPage() {
           onMultiChange={(v) => setFilters((f) => ({ ...f, sources: v }))}
         />
         <SelectDropdown
+          key={`platform-${filtersResetKey}`}
+          variant="chip"
+          icon={Megaphone}
+          panelTitle="Platform"
+          pinnedLabel="Platform"
+          allLabel="Toutes les plateformes"
+          options={filterOptions.platform}
+          multi
+          onMultiChange={(v) => setFilters((f) => ({ ...f, platform: v }))}
+        />
+        <SelectDropdown
           key={`agents-${filtersResetKey}`}
           variant="chip"
           icon={User}
@@ -1111,7 +1142,6 @@ export default function LeadsCommandesPage() {
                   />
                 </th>
                 <th className="px-3 py-3">Date</th>
-                <th className="px-3 py-3">Reference</th>
                 <th className="px-3 py-3">Produits</th>
                 <th className="px-3 py-3">Client</th>
                 <th className="px-3 py-3">Ville / Tarif</th>
@@ -1169,9 +1199,7 @@ export default function LeadsCommandesPage() {
                   <td className="whitespace-nowrap px-3 py-3 font-mono text-gray-500">
                     <LeadDate date={lead.date} />
                   </td>
-                  <td className="px-3 py-3 font-medium text-gray-800">
-                    {lead.reference}
-                  </td>
+
                   <td className="px-3 py-3">
                     {(() => {
                       const ProductIcon = productIcon(lead.productName);
