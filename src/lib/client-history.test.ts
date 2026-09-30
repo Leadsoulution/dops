@@ -55,7 +55,50 @@ describe("clientFlags", () => {
     expect(flags.get("1")).toBe("pending");
   });
 
-  it("fait passer l'avertissement devant la bonne nouvelle", () => {
+  it("marque une commande passee ecartee a la confirmation", () => {
+    // Le cas qui manquait : un client deja rappele en vain, dont la
+    // commande a fini annulee, passait pour un inconnu.
+    for (const statut of [
+      "Annulee",
+      "Non commandee",
+      "Faux numero",
+      "En double",
+      "Expiree",
+    ]) {
+      const flags = clientFlags([
+        lead("1", "0612345678", "Nouveau"),
+        lead("2", "0612345678", statut),
+      ]);
+      expect(flags.get("1"), statut).toBe("rejected");
+    }
+  });
+
+  it("marque une commande confirmee encore en route", () => {
+    const flags = clientFlags([
+      lead("1", "0612345678", "Nouveau"),
+      lead("2", "0612345678", "Confirme", "DISTRIBUTION"),
+    ]);
+    expect(flags.get("1")).toBe("inTransit");
+  });
+
+  it("ne laisse jamais un client deja venu sans pastille", () => {
+    // Quel que soit le statut de l'autre commande, quelque chose
+    // s'affiche : c'est tout l'objet de la regle.
+    const statuts = [
+      "Nouveau", "Rappel", "Injoignable 3", "Pas de rep 2", "En attente",
+      "Whatsapp", "Reportee", "+3 jours", "Confirme", "EXPIDER",
+      "Annulee", "Non commandee", "Faux numero", "En double", "Expiree",
+    ];
+    for (const statut of statuts) {
+      const flags = clientFlags([
+        lead("1", "0612345678", "Nouveau"),
+        lead("2", "0612345678", statut),
+      ]);
+      expect(flags.get("1"), statut).toBeDefined();
+    }
+  });
+
+  it("fait passer le retour devant la livraison", () => {
     const flags = clientFlags([
       lead("1", "0612345678", "Nouveau"),
       lead("2", "0612345678", "Confirme", "DELIVERED"),
@@ -71,7 +114,7 @@ describe("clientFlags", () => {
       lead("1", "0612345678", "Confirme", "DELIVERED"),
       lead("2", "0612345678", "Confirme", "DISTRIBUTION"),
     ]);
-    expect(flags.get("1")).toBeUndefined();
+    expect(flags.get("1")).toBe("inTransit");
     expect(flags.get("2")).toBe("delivered");
   });
 
@@ -102,12 +145,32 @@ describe("clientFlags", () => {
     expect(flags.size).toBe(0);
   });
 
-  it("ne voit pas une confirmation tranchee comme une attente", () => {
-    // Annulee est une decision, pas une commande qui attend un appel.
+  it("distingue une annulation d'une commande qui attend un appel", () => {
     const flags = clientFlags([
       lead("1", "0612345678", "Nouveau"),
       lead("2", "0612345678", "Annulee"),
     ]);
-    expect(flags.get("1")).toBeUndefined();
+    expect(flags.get("1")).toBe("rejected");
+  });
+
+  it("fait passer le colis revenu devant le colis remis", () => {
+    const flags = clientFlags([
+      lead("1", "0612345678", "Nouveau"),
+      lead("2", "0612345678", "Confirme", "DELIVERED"),
+      lead("3", "0612345678", "Annulee"),
+      lead("4", "0612345678", "Confirme", "RETURNED"),
+    ]);
+    expect(flags.get("1")).toBe("failed");
+  });
+
+  it("fait passer le colis remis devant une annulation", () => {
+    // Un client qui a deja recu un colis vaut mieux qu'un client qui a
+    // deja renonce une fois.
+    const flags = clientFlags([
+      lead("1", "0612345678", "Nouveau"),
+      lead("2", "0612345678", "Confirme", "DELIVERED"),
+      lead("3", "0612345678", "Annulee"),
+    ]);
+    expect(flags.get("1")).toBe("delivered");
   });
 });

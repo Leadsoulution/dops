@@ -147,17 +147,31 @@ type ModalState =
  * L'anteriorite du client, en un point de couleur.
  *
  * Avant le nom, parce que c'est ce qu'on veut savoir avant de lire le
- * nom. Rien ne s'affiche pour une premiere commande : une place vide
- * dit "client inconnu", ce qui n'est pas la meme chose que "rien a
+ * nom. Des qu'une autre commande existe au meme numero, un point
+ * s'affiche, quel que soit son statut : un client deja rappele en vain
+ * et dont la commande a fini annulee passait auparavant pour un
+ * inconnu, ce qui etait exactement l'inverse de ce qu'il fallait
+ * montrer.
+ *
+ * Rien ne s'affiche pour une premiere commande : une place vide dit
+ * "client inconnu", ce qui n'est pas la meme chose que "rien a
  * signaler".
  *
  * L'infobulle porte le sens : une couleur seule ne se lit pas, et un
- * agent daltonien ne verrait qu'un point gris.
+ * agent daltonien ne verrait que cinq points gris.
  */
 const DOTS = {
   failed: { color: "bg-red-500", title: "Deja une commande non livree" },
-  pending: { color: "bg-amber-400", title: "Deja une commande a confirmer" },
   delivered: { color: "bg-emerald-500", title: "Deja une commande livree" },
+  rejected: {
+    color: "bg-orange-400",
+    title: "Deja une commande annulee, faux numero, non commandee ou en double",
+  },
+  pending: { color: "bg-amber-300", title: "Deja une commande a confirmer" },
+  inTransit: {
+    color: "bg-sky-400",
+    title: "Deja une commande confirmee, encore en route",
+  },
 } as const;
 
 function ClientDot({ flag }: { flag?: keyof typeof DOTS }) {

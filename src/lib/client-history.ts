@@ -6,10 +6,14 @@
  * colis n'est pas quelqu'un qui en a deja recu un, et cela se decide
  * avant de decrocher, pas apres.
  *
- * Trois pastilles, lues sur les AUTRES commandes du meme numero. La
- * commande en cours ne se juge jamais elle-meme : une premiere
- * commande n'a donc aucune pastille, et c'est voulu — l'absence de
- * marque veut dire "client inconnu", pas "rien a signaler".
+ * Des qu'une autre commande existe au meme numero, une pastille
+ * s'affiche — quel que soit son statut. La premiere version se taisait
+ * sur les commandes annulees, les faux numeros et les doublons : un
+ * client deja rappele trois fois sans succes passait pour un inconnu,
+ * ce qui est exactement l'inverse de ce qu'il fallait montrer.
+ *
+ * Seule une premiere commande reste sans marque. L'absence de point
+ * veut dire "client inconnu", pas "rien a signaler".
  */
 
 /** Code ForceLog d'un colis remis au client. */
@@ -29,28 +33,34 @@ const FAILED = new Set([
   "OUT_OF_AREA",
 ]);
 
+/** La commande est allee au bout de la confirmation, et a ete retenue. */
+const CONFIRMED = new Set(["Confirme", "EXPIDER"]);
+
 /**
- * Statuts ou la confirmation est tranchee, dans un sens ou dans
- * l'autre. Tout le reste attend encore un appel.
+ * La commande a ete ecartee a la confirmation : le client a renonce,
+ * n'avait rien commande, ou la ligne ne valait rien. Elle n'est jamais
+ * partie chez le transporteur.
  */
-const DECIDED = new Set([
-  "Confirme",
-  "EXPIDER",
+const REJECTED = new Set([
   "Annulee",
-  "Faux numero",
   "Non commandee",
-  "Expiree",
+  "Faux numero",
   "En double",
+  "Expiree",
   "TESTE",
 ]);
 
 export type ClientFlag =
   /** Une commande passee n'est pas arrivee. */
   | "failed"
+  /** Une commande passee a bien ete remise. */
+  | "delivered"
+  /** Une commande passee a ete ecartee a la confirmation. */
+  | "rejected"
   /** Une autre commande attend encore sa confirmation. */
   | "pending"
-  /** Une commande passee a bien ete remise. */
-  | "delivered";
+  /** Une autre commande est confirmee et encore en route. */
+  | "inTransit";
 
 export type HistoryLead = {
   id: string;
@@ -76,12 +86,40 @@ export function normalizePhone(phone: string | null | undefined): string {
 }
 
 /**
- * La pastille de chaque commande, par identifiant.
+ * Ce qu'une commande passee raconte, a elle seule.
  *
- * Priorite : rouge, puis jaune, puis vert — l'ordre donne par
- * l'exploitant. Un client qui a deja fait revenir un colis reste un
- * risque, meme s'il en a recu un autre : l'avertissement passe devant
- * la bonne nouvelle.
+ * L'ordre du test compte : le sort du colis prime sur le statut de
+ * confirmation, parce qu'une commande livree est forcement confirmee
+ * et que c'est la livraison qui renseigne.
+ */
+function readOne(lead: HistoryLead): ClientFlag | null {
+  const code = lead.deliveryStatusCode ?? "";
+  if (code === DELIVERED) return "delivered";
+  if (FAILED.has(code)) return "failed";
+  if (REJECTED.has(lead.status)) return "rejected";
+  if (CONFIRMED.has(lead.status)) return "inTransit";
+  return "pending";
+}
+
+/**
+ * Priorite entre plusieurs commandes passees, du plus parlant au moins
+ * parlant.
+ *
+ * Un colis revenu passe devant tout : c'est ce qui coute de l'argent.
+ * Vient ensuite un colis remis, qui est la meilleure nouvelle qu'on
+ * puisse avoir sur un client. Les trois autres decrivent des
+ * commandes qui n'ont encore rien prouve.
+ */
+const PRIORITE: ClientFlag[] = [
+  "failed",
+  "delivered",
+  "rejected",
+  "pending",
+  "inTransit",
+];
+
+/**
+ * La pastille de chaque commande, par identifiant.
  *
  * Les commandes sans numero de telephone sont laissees de cote : les
  * regrouper par chaine vide ferait d'elles un seul et meme client.
@@ -103,26 +141,15 @@ export function clientFlags(leads: HistoryLead[]): Map<string, ClientFlag> {
     if (commandes.length < 2) continue;
 
     for (const lead of commandes) {
-      let failed = false;
-      let pending = false;
-      let delivered = false;
-
+      const vus = new Set<ClientFlag>();
       for (const autre of commandes) {
+        // Une commande ne se juge jamais sur elle-meme.
         if (autre.id === lead.id) continue;
-        const code = autre.deliveryStatusCode ?? "";
-        if (FAILED.has(code)) failed = true;
-        else if (code === DELIVERED) delivered = true;
-        if (!DECIDED.has(autre.status)) pending = true;
+        const lu = readOne(autre);
+        if (lu) vus.add(lu);
       }
-
-      const flag: ClientFlag | null = failed
-        ? "failed"
-        : pending
-          ? "pending"
-          : delivered
-            ? "delivered"
-            : null;
-      if (flag) flags.set(lead.id, flag);
+      const retenu = PRIORITE.find((f) => vus.has(f));
+      if (retenu) flags.set(lead.id, retenu);
     }
   }
 
