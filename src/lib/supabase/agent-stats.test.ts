@@ -29,6 +29,7 @@ type Lead = {
   tracking_number?: string | null;
   delivery_status_code?: string | null;
   product_name?: string | null;
+  utm_source?: string | null;
 };
 
 type Event = {
@@ -733,5 +734,70 @@ describe("ventilation par produit", () => {
     );
     const { products } = await getAgentStats();
     expect(products[0].product).toBe("Sans produit");
+  });
+});
+
+describe("ventilation par plateforme", () => {
+  it("regroupe les commandes par origine publicitaire", async () => {
+    stubTables(
+      [ALICE],
+      [
+        { id: "1", reference: "A", phone: "06", status: "Confirme", created_at: at(0),
+          utm_source: "fb", tracking_number: "F-1", delivery_status_code: "DELIVERED" },
+        { id: "2", reference: "B", phone: "06", status: "Annulee", created_at: at(0),
+          utm_source: "fb" },
+        { id: "3", reference: "C", phone: "06", status: "Confirme", created_at: at(0),
+          utm_source: "ig", tracking_number: "F-3", delivery_status_code: "RETURNED" },
+      ],
+      []
+    );
+    const { platforms } = await getAgentStats();
+    const fb = platforms.find((p) => p.platform === "Facebook");
+    const ig = platforms.find((p) => p.platform === "Instagram");
+
+    expect(fb?.treated).toBe(2);
+    expect(fb?.confirmed).toBe(1);
+    expect(fb?.confirmRate).toBe(50);
+    expect(fb?.delivery.delivered).toBe(1);
+
+    expect(ig?.confirmRate).toBe(100);
+    expect(ig?.delivery.delivered).toBe(0);
+    expect(ig?.delivery.returned).toBe(1);
+  });
+
+  it("range les commandes sans origine a part, et en dernier", async () => {
+    // "Sans plateforme" n'est pas du trafic direct : WooCommerce ne
+    // note rien pour ces commandes, et les nommer inventerait une
+    // mesure.
+    stubTables(
+      [ALICE],
+      [
+        { id: "1", reference: "A", phone: "06", status: "Confirme", created_at: at(0) },
+        { id: "2", reference: "B", phone: "06", status: "Confirme", created_at: at(0) },
+        { id: "3", reference: "C", phone: "06", status: "Confirme", created_at: at(0),
+          utm_source: "fb" },
+      ],
+      []
+    );
+    const { platforms } = await getAgentStats();
+    expect(platforms.at(-1)?.platform).toBe("Sans plateforme");
+    expect(platforms.at(-1)?.treated).toBe(2);
+  });
+
+  it("laisse faux numero et doublon hors des taux, la aussi", async () => {
+    stubTables(
+      [ALICE],
+      [
+        { id: "1", reference: "A", phone: "06", status: "Confirme", created_at: at(0),
+          utm_source: "fb" },
+        { id: "2", reference: "B", phone: "06", status: "Faux numero", created_at: at(0),
+          utm_source: "fb" },
+      ],
+      []
+    );
+    const { platforms } = await getAgentStats();
+    const fb = platforms.find((p) => p.platform === "Facebook");
+    expect(fb?.treated).toBe(1);
+    expect(fb?.confirmRate).toBe(100);
   });
 });

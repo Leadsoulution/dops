@@ -130,8 +130,16 @@ export default function ConfirmationHome() {
       ],
       columns: ["Commandes", "Confirm.", "Contact."],
       rows: (stats?.products ?? []).map((p) => ({
-        product: p.product,
+        key: p.product,
+        label: p.product,
         image: p.image,
+        rate: p.confirmRate,
+        values: [p.treated, p.confirmed, p.contacted],
+      })),
+      platformRows: (stats?.platforms ?? []).map((p) => ({
+        key: p.platform,
+        label: p.platform,
+        color: p.color,
         rate: p.confirmRate,
         values: [p.treated, p.confirmed, p.contacted],
       })),
@@ -161,8 +169,24 @@ export default function ConfirmationHome() {
         // Un produit jamais expedie n'a rien a dire sur la livraison.
         .filter((p) => p.delivery.shipped > 0)
         .map((p) => ({
-          product: p.product,
+          key: p.product,
+          label: p.product,
           image: p.image,
+          rate: p.delivery.rate,
+          values: [
+            p.delivery.shipped,
+            p.delivery.delivered,
+            p.delivery.returned,
+          ],
+        })),
+      platformRows: (stats?.platforms ?? [])
+        // Meme regle : une plateforme dont rien n'est parti ne dit
+        // rien d'un taux de livraison.
+        .filter((p) => p.delivery.shipped > 0)
+        .map((p) => ({
+          key: p.platform,
+          label: p.platform,
+          color: p.color,
           rate: p.delivery.rate,
           values: [
             p.delivery.shipped,
@@ -306,84 +330,20 @@ export default function ConfirmationHome() {
                 </p>
                 )}
 
-                {card.rows.length > 0 && (
-                  <div className={`mt-4 border-t pt-3 ${a.line}`}>
-                    <p className="mb-1.5 text-[9.5px] font-semibold tracking-wide text-gray-400">
-                      PAR PRODUIT
-                    </p>
-
-                    {/*
-                      Un tableau aligne demande de la largeur. Sur
-                      telephone il ecraserait le nom du produit a deux
-                      lettres, donc les chiffres passent sous le nom,
-                      chacun avec son intitule.
-                    */}
-                    <div className="hidden sm:mb-1 sm:flex sm:items-center sm:gap-2 sm:text-[9.5px] sm:font-semibold sm:tracking-wide sm:text-gray-400">
-                      <span className="min-w-0 flex-1" />
-                      {card.columns.map((c) => (
-                        <span key={c} className="w-16 shrink-0 text-right">
-                          {c.toUpperCase()}
-                        </span>
-                      ))}
-                      <span className="w-11 shrink-0 text-right">TAUX</span>
-                    </div>
-
-                    <div className="space-y-2 sm:space-y-1">
-                      {card.rows.map((row) => (
-                        <div
-                          key={row.product}
-                          className="text-[12px] sm:flex sm:items-center sm:gap-2"
-                        >
-                          <span className="flex min-w-0 items-center gap-1.5 sm:flex-1">
-                            {row.image ? (
-                              <Image
-                                src={row.image}
-                                alt=""
-                                width={20}
-                                height={20}
-                                className="h-5 w-5 shrink-0 rounded object-cover"
-                                unoptimized
-                              />
-                            ) : (
-                              <span className="h-5 w-5 shrink-0 rounded bg-gray-100" />
-                            )}
-                            <span className="truncate text-gray-700">
-                              {row.product}
-                            </span>
-                          </span>
-
-                          {/* Telephone : les chiffres sous le nom, etiquetes. */}
-                          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 pl-[26px] text-[11.5px] text-gray-500 sm:hidden">
-                            {row.values.map((v, i) => (
-                              <span key={i}>
-                                <span className="font-mono text-gray-700">{v}</span>{" "}
-                                {card.columns[i].toLowerCase()}
-                              </span>
-                            ))}
-                            <span className={`font-mono font-semibold ${a.icon}`}>
-                              {row.rate}%
-                            </span>
-                          </span>
-
-                          {/* Ordinateur : en colonnes, sous les intitules. */}
-                          {row.values.map((v, i) => (
-                            <span
-                              key={i}
-                              className="hidden w-16 shrink-0 text-right font-mono text-gray-600 sm:inline"
-                            >
-                              {v}
-                            </span>
-                          ))}
-                          <span
-                            className={`hidden w-11 shrink-0 text-right font-mono font-semibold sm:inline ${a.icon}`}
-                          >
-                            {row.rate}%
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                <Breakdown
+                  title="PAR PRODUIT"
+                  columns={card.columns}
+                  rows={card.rows}
+                  line={a.line}
+                  accent={a.icon}
+                />
+                <Breakdown
+                  title="PAR PLATEFORME"
+                  columns={card.columns}
+                  rows={card.platformRows}
+                  line={a.line}
+                  accent={a.icon}
+                />
 
                 <p className="mt-4 text-[12.5px] font-medium text-gray-500 group-hover:text-gray-700">
                   Voir le detail par agent
@@ -478,6 +438,123 @@ function Figure({
         {value.toLocaleString("fr-FR")}
       </p>
       <p className="truncate text-[11.5px] text-gray-500">{label}</p>
+    </div>
+  );
+}
+
+
+/** Une ligne de ventilation : un produit, ou une plateforme. */
+type BreakdownRow = {
+  key: string;
+  label: string;
+  image?: string;
+  /** Couleur de la marque, quand la ligne n'a pas d'image. */
+  color?: string;
+  rate: number;
+  values: number[];
+};
+
+/**
+ * Le detail d'une carte, ventile.
+ *
+ * Le meme tableau sert deux fois — par produit, puis par plateforme —
+ * parce que ce sont les memes commandes regroupees autrement. Le
+ * dupliquer aurait garanti qu'une correction n'arrive un jour que dans
+ * l'un des deux.
+ */
+function Breakdown({
+  title,
+  columns,
+  rows,
+  line,
+  accent,
+}: {
+  title: string;
+  columns: string[];
+  rows: BreakdownRow[];
+  line: string;
+  accent: string;
+}) {
+  if (rows.length === 0) return null;
+
+  return (
+    <div className={`mt-4 border-t pt-3 ${line}`}>
+      <p className="mb-1.5 text-[9.5px] font-semibold tracking-wide text-gray-400">
+        {title}
+      </p>
+
+      {/*
+        Un tableau aligne demande de la largeur. Sur telephone il
+        ecraserait le nom a deux lettres, donc les chiffres passent
+        sous le nom, chacun avec son intitule.
+      */}
+      <div className="hidden sm:mb-1 sm:flex sm:items-center sm:gap-2 sm:text-[9.5px] sm:font-semibold sm:tracking-wide sm:text-gray-400">
+        <span className="min-w-0 flex-1" />
+        {columns.map((c) => (
+          <span key={c} className="w-16 shrink-0 text-right">
+            {c.toUpperCase()}
+          </span>
+        ))}
+        <span className="w-11 shrink-0 text-right">TAUX</span>
+      </div>
+
+      <div className="space-y-2 sm:space-y-1">
+        {rows.map((row) => (
+          <div
+            key={row.key}
+            className="text-[12px] sm:flex sm:items-center sm:gap-2"
+          >
+            <span className="flex min-w-0 items-center gap-1.5 sm:flex-1">
+              {row.image ? (
+                <Image
+                  src={row.image}
+                  alt=""
+                  width={20}
+                  height={20}
+                  className="h-5 w-5 shrink-0 rounded object-cover"
+                  unoptimized
+                />
+              ) : row.color ? (
+                <span
+                  className="h-5 w-5 shrink-0 rounded"
+                  style={{ backgroundColor: row.color }}
+                />
+              ) : (
+                <span className="h-5 w-5 shrink-0 rounded bg-gray-100" />
+              )}
+              <span className="truncate text-gray-700">{row.label}</span>
+            </span>
+
+            {/* Telephone : les chiffres sous le nom, etiquetes. */}
+            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 pl-[26px] text-[11.5px] text-gray-500 sm:hidden">
+              {row.values.map((v, i) => (
+                <span key={i}>
+                  <span className="font-mono text-gray-700">{v}</span>{" "}
+                  {columns[i].toLowerCase()}
+                </span>
+              ))}
+              <span className={`font-mono font-semibold ${accent}`}>
+                {row.rate}%
+              </span>
+            </span>
+
+            {/* Ordinateur : en colonnes, sous les intitules. */}
+            {row.values.map((v, i) => (
+              <span
+                key={i}
+                className="hidden w-16 shrink-0 text-right font-mono text-gray-600 sm:inline"
+              >
+                {v}
+              </span>
+            ))}
+            <span
+              className={`hidden w-11 shrink-0 text-right font-mono font-semibold sm:inline ${accent}`}
+            >
+              {row.rate}%
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -2,10 +2,12 @@ import "server-only";
 import { getSupabaseServerClient } from "./server";
 import { resolveAttribution } from "./attribution";
 import { fetchAll } from "./page";
+import { adPlatformOf } from "@/lib/ad-platform";
 import type {
   AgentAction,
   AgentStats,
   DeliveryStats,
+  PlatformStats,
   ProductStats,
   TeamStats,
 } from "@/components/dashboard/confirmation-data";
@@ -84,6 +86,15 @@ function countsAsConfirmed(
  * bien ete traitees, et ce travail-la compte.
  */
 const NOT_A_PROSPECT = new Set(["Faux numero", "Non commandee", "En double"]);
+
+/**
+ * Les commandes dont personne ne sait d'ou elles viennent.
+ *
+ * A distinguer du trafic direct : WooCommerce ne note rien pour
+ * elles, et les appeler "Direct" ferait passer une ignorance pour
+ * une mesure.
+ */
+const SANS_PLATEFORME = "Sans plateforme";
 
 /** Une commande close : plus rien a faire dessus. */
 const CLOSED = new Set([
@@ -226,6 +237,7 @@ type LeadRow = {
   tracking_number: string | null;
   delivery_status_code: string | null;
   product_name: string | null;
+  utm_source: string | null;
 };
 
 export async function getAgentStats(
@@ -243,7 +255,7 @@ export async function getAgentStats(
       supabase
         .from("leads")
         .select(
-          "id,reference,phone,status,created_at,tracking_number,delivery_status_code,product_name"
+          "id,reference,phone,status,created_at,tracking_number,delivery_status_code,product_name,utm_source"
         )
     ),
     supabase.from("products").select("name,image").not("image", "is", null),
@@ -521,6 +533,83 @@ export async function getAgentStats(
     confirmedByProduct.set(key, set);
   }
 
+  /*
+   * Ventilation par plateforme publicitaire.
+   *
+   * Meme perimetre et memes definitions que les produits : ce sont les
+   * memes commandes, regroupees autrement. Savoir qu'une campagne
+   * remplit la boite ne dit rien tant qu'on ignore ce qui se confirme
+   * et ce qui arrive.
+   *
+   * "Sans plateforme" rassemble les commandes dont l'origine n'a pas
+   * ete transmise. Ce n'est pas du trafic direct — nous n'avons
+   * simplement pas l'information, et lui donner un nom de source
+   * inventerait une reponse.
+   */
+  const byPlatform = new Map<
+    string,
+    {
+      color?: string;
+      treated: Set<string>;
+      contacted: Set<string>;
+      confirmed: Set<string>;
+    }
+  >();
+
+  const platformOf = (leadId: string) => {
+    const found = adPlatformOf(leads.get(leadId)?.utm_source);
+    return {
+      name: found?.label ?? SANS_PLATEFORME,
+      color: found?.color,
+    };
+  };
+
+  for (const id of shopAll) {
+    const { name, color } = platformOf(id);
+    const entry =
+      byPlatform.get(name) ??
+      {
+        color,
+        treated: new Set<string>(),
+        contacted: new Set<string>(),
+        confirmed: new Set<string>(),
+      };
+    entry.treated.add(id);
+    if (shopContacted.has(id)) entry.contacted.add(id);
+    if (allConfirmed.has(id)) entry.confirmed.add(id);
+    byPlatform.set(name, entry);
+  }
+
+  const confirmedByPlatform = new Map<string, Set<string>>();
+  for (const id of allConfirmed) {
+    const { name } = platformOf(id);
+    const set = confirmedByPlatform.get(name) ?? new Set<string>();
+    set.add(id);
+    confirmedByPlatform.set(name, set);
+  }
+
+  const platforms: PlatformStats[] = [...byPlatform.entries()]
+    .map(([platform, entry]) => ({
+      platform,
+      color: entry.color,
+      treated: entry.treated.size,
+      contacted: entry.contacted.size,
+      confirmed: entry.confirmed.size,
+      confirmRate:
+        entry.treated.size > 0
+          ? Math.round((entry.confirmed.size / entry.treated.size) * 100)
+          : 0,
+      delivery: deliveryOf(confirmedByPlatform.get(platform) ?? [], leads),
+    }))
+    // Les plateformes d'abord, du plus gros au plus petit ; les
+    // commandes sans origine ferment la marche, elles ne se comparent
+    // pas aux autres.
+    .sort((a, b) => {
+      if (a.platform === SANS_PLATEFORME) return 1;
+      if (b.platform === SANS_PLATEFORME) return -1;
+      return b.treated - a.treated;
+    });
+
   const imageByProduct = new Map(
     ((productsRes.data ?? []) as { name: string; image: string }[]).map((p) => [
       p.name.trim().toLowerCase(),
@@ -555,6 +644,7 @@ export async function getAgentStats(
   return {
     agents,
     products,
+    platforms,
     team: {
       treated: shopAll.size,
       contacted: shopContacted.size,

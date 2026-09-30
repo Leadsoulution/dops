@@ -96,10 +96,31 @@ export type ProductStats = {
   delivery: DeliveryStats;
 };
 
+/**
+ * Les memes comptes, ventiles par plateforme publicitaire.
+ *
+ * Savoir qu'une campagne rapporte des commandes ne suffit pas : encore
+ * faut-il qu'elles se confirment et qu'elles arrivent. Une plateforme
+ * peut remplir la boite et ne rien livrer.
+ */
+export type PlatformStats = {
+  /** "Facebook", "Instagram", ou "Sans plateforme". */
+  platform: string;
+  /** Couleur de la marque, pour la pastille. Absente si inconnue. */
+  color?: string;
+  treated: number;
+  contacted: number;
+  confirmed: number;
+  confirmRate: number;
+  delivery: DeliveryStats;
+};
+
 export type TeamStats = {
   agents: AgentStats[];
   /** Du plus traite au moins traite. */
   products: ProductStats[];
+  /** Du plus traite au moins traite, "Sans plateforme" toujours en fin. */
+  platforms: PlatformStats[];
   team: {
     treated: number;
     contacted: number;
