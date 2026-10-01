@@ -56,6 +56,8 @@ const DELIVERY_FOLLOW_UP = new Set([
   "RELAUNCH",
   "RERETURN",
   "TSUIVI",
+  // Annules et refuses : trois jours, pas plus (voir plus bas).
+  "REFUSE",
 ]);
 
 /**
@@ -69,16 +71,58 @@ const DELIVERY_FOLLOW_UP = new Set([
 export const RETARD_CONFIRMATION_JOURS = 2;
 export const RETARD_LIVRAISON_JOURS = 3;
 
+/**
+ * Au-dela, on renonce : le dossier quitte la file.
+ *
+ * Trois jours, c'est la duree pendant laquelle un rappel a encore des
+ * chances d'aboutir. Passe ce delai le client s'est decide ailleurs,
+ * et laisser le dossier en liste ferait porter la file par des cas
+ * perdus — ceux qu'il faut appeler aujourd'hui disparaitraient sous
+ * ceux de la semaine derniere.
+ */
+export const ABANDON_JOURS = 3;
+
+/**
+ * Colis annules ou refuses : le client a dit non une fois. On retente
+ * trois jours, pas plus. Les autres echecs de livraison — sans
+ * reponse, reporte — restent en file sans limite : le client n'a rien
+ * refuse, il n'a pas encore repondu.
+ */
+const RENONCE_APRES_TROIS_JOURS = new Set([
+  "CANCELED",
+  "CANCELED_TEAM",
+  "REFUSE",
+]);
+
 export type FollowUpKind = "confirmation" | "livraison";
 
-/** Cette commande attend-elle un appel de confirmation ? */
-export function needsConfirmationFollowUp(status: string): boolean {
-  return !CLOSED.has(status) && status !== NOT_YET_CALLED;
+/**
+ * Cette commande attend-elle un appel de confirmation ?
+ *
+ * `days` est le silence depuis la derniere action. Au-dela de trois
+ * jours le dossier sort de la file : ce n'est plus une relance, c'est
+ * un abandon, et il n'a rien a faire dans une liste d'appels du jour.
+ */
+export function needsConfirmationFollowUp(status: string, days = 0): boolean {
+  if (CLOSED.has(status) || status === NOT_YET_CALLED) return false;
+  return days <= ABANDON_JOURS;
 }
 
-/** Ce colis demande-t-il qu'on rattrape sa livraison ? */
-export function needsDeliveryFollowUp(code: string | null | undefined): boolean {
-  return DELIVERY_FOLLOW_UP.has((code ?? "").trim().toUpperCase());
+/**
+ * Ce colis demande-t-il qu'on rattrape sa livraison ?
+ *
+ * Un colis annule ou refuse ne reste en file que trois jours : le
+ * client a deja dit non une fois, insister au-dela encombre la liste.
+ * Un colis sans reponse y reste, lui, tant qu'il n'a pas repondu.
+ */
+export function needsDeliveryFollowUp(
+  code: string | null | undefined,
+  days = 0
+): boolean {
+  const c = (code ?? "").trim().toUpperCase();
+  if (!DELIVERY_FOLLOW_UP.has(c)) return false;
+  if (RENONCE_APRES_TROIS_JOURS.has(c)) return days <= ABANDON_JOURS;
+  return true;
 }
 
 /**

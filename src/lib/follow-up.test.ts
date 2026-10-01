@@ -34,6 +34,14 @@ describe("needsConfirmationFollowUp", () => {
     }
   });
 
+  it("laisse tomber au-dela de trois jours de silence", () => {
+    // Passe ce delai le client s'est decide ailleurs ; garder le
+    // dossier ferait disparaitre les appels du jour sous les perdus.
+    expect(needsConfirmationFollowUp("Injoignable 2", 3)).toBe(true);
+    expect(needsConfirmationFollowUp("Injoignable 2", 4)).toBe(false);
+    expect(needsConfirmationFollowUp("+3 jours", 14)).toBe(false);
+  });
+
   it("ecarte une commande jamais appelee", () => {
     // C'est le travail courant, pas une relance : elle a son onglet, et
     // la melanger ici noierait les dossiers qui trainent.
@@ -56,11 +64,25 @@ describe("needsDeliveryFollowUp", () => {
   });
 
   it("ecarte les colis dont le sort est joue", () => {
-    // Un retour est rentre, un refus a eu lieu a la porte : relancer
-    // ferait perdre du temps sur un dossier mort.
-    for (const c of ["DELIVERED", "RETURNED", "REFUSE", "OUT_OF_AREA"]) {
+    // Un retour est rentre, le colis est hors zone : relancer ferait
+    // perdre du temps sur un dossier mort.
+    for (const c of ["DELIVERED", "RETURNED", "OUT_OF_AREA"]) {
       expect(needsDeliveryFollowUp(c), c).toBe(false);
     }
+  });
+
+  it("ne garde un refus ou une annulation que trois jours", () => {
+    // Le client a dit non une fois : on retente, mais pas indefiniment.
+    for (const c of ["CANCELED", "CANCELED_TEAM", "REFUSE"]) {
+      expect(needsDeliveryFollowUp(c, 3), c).toBe(true);
+      expect(needsDeliveryFollowUp(c, 4), c).toBe(false);
+    }
+  });
+
+  it("garde sans limite un colis qui n'a pas repondu", () => {
+    // Rien n'a ete refuse : le client n'a simplement pas encore repondu.
+    expect(needsDeliveryFollowUp("NO_ANSWER", 30)).toBe(true);
+    expect(needsDeliveryFollowUp("POSTPONED", 30)).toBe(true);
   });
 
   it("ecarte un colis qui roule normalement", () => {

@@ -190,17 +190,24 @@ function Carte({ lead }: { lead: FollowUpLead }) {
             <h2 className="text-[15px] font-semibold text-gray-900">
               {lead.client}
             </h2>
-            <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[11.5px] font-medium text-amber-700">
-              {lead.status}
-            </span>
             {lead.late && (
               <span className="flex items-center gap-1 rounded-md bg-red-50 px-2 py-0.5 text-[11.5px] font-medium text-red-700">
                 <AlertTriangle className="h-3 w-3" />
                 EN RETARD
               </span>
             )}
-            <span className="ml-auto rounded-md border border-gray-200 px-2 py-0.5 font-mono text-[11.5px] text-gray-500">
-              {lead.reference}
+            {/*
+              Le statut a droite, en gras et sombre : c'est ce qu'on
+              cherche en parcourant la liste, et une pastille pale
+              perdue entre le nom et la reference se lisait en dernier.
+            */}
+            <span className="ml-auto flex items-center gap-2">
+              <span className="text-[13.5px] font-bold text-gray-900">
+                {lead.status}
+              </span>
+              <span className="rounded-md border border-gray-200 px-2 py-0.5 font-mono text-[11.5px] text-gray-500">
+                {lead.reference}
+              </span>
             </span>
           </div>
 

@@ -141,16 +141,23 @@ export async function getFollowUps(): Promise<{
   const livraison: FollowUpLead[] = [];
 
   for (const row of rows) {
+    // L'anciennete decide aussi de l'appartenance : passe trois jours
+    // de silence, un dossier quitte la file au lieu de l'encombrer.
+    const jours = daysSince(row.last_modified_at ?? row.created_at, maintenant);
+
     /*
      * Un colis parti ne se rappelle plus pour etre confirme : c'est la
      * file livraison qui s'en occupe. Sans cette garde, une commande au
      * statut "+3 jours" expediee depuis apparaitrait dans les deux.
      */
-    if (row.tracking_number && needsDeliveryFollowUp(row.delivery_status_code)) {
+    if (
+      row.tracking_number &&
+      needsDeliveryFollowUp(row.delivery_status_code, jours)
+    ) {
       livraison.push(build(row, "livraison"));
       continue;
     }
-    if (!row.tracking_number && needsConfirmationFollowUp(row.status)) {
+    if (!row.tracking_number && needsConfirmationFollowUp(row.status, jours)) {
       confirmation.push(build(row, "confirmation"));
     }
   }
