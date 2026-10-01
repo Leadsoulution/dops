@@ -12,6 +12,8 @@ import {
   MapPin,
   MessageCircle,
   Package,
+  Check,
+  CheckCircle2,
   Pencil,
   Phone,
   RotateCcw,
@@ -20,6 +22,7 @@ import {
 import type { FollowUpLead } from "@/lib/supabase/follow-up";
 import { whatsappAppChat, whatsappNumber } from "@/lib/whatsapp";
 import { openWhatsapp } from "@/lib/open-outside";
+import { markLabel } from "@/lib/follow-up";
 
 /**
  * Les commandes qui attendent un geste.
@@ -32,16 +35,29 @@ import { openWhatsapp } from "@/lib/open-outside";
  * faut traiter, pas celui d'hier.
  */
 
-type Data = { confirmation: FollowUpLead[]; livraison: FollowUpLead[] };
+type Onglets = "confirmation" | "livraison" | "traite";
+type Data = Record<Onglets, FollowUpLead[]>;
 
 const nf = new Intl.NumberFormat("fr-FR");
 
 export default function SuiviPage() {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [onglet, setOnglet] = useState<"confirmation" | "livraison">(
-    "confirmation"
-  );
+  const [onglet, setOnglet] = useState<Onglets>("confirmation");
+  const [marquage, setMarquage] = useState<string | null>(null);
+
+  async function load() {
+    try {
+      const body = await fetch("/api/follow-up").then((r) => r.json());
+      if (body.error) setError(body.error);
+      else {
+        setData(body as Data);
+        setError(null);
+      }
+    } catch {
+      setError("Liste indisponible.");
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -59,6 +75,29 @@ export default function SuiviPage() {
       cancelled = true;
     };
   }, []);
+
+  /**
+   * Un cran de plus au compteur. Le serveur decide de la valeur : deux
+   * agents sur la meme commande poseraient sinon le meme chiffre.
+   */
+  async function marquer(lead: FollowUpLead) {
+    setMarquage(lead.id);
+    setError(null);
+    try {
+      const res = await fetch("/api/follow-up", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: lead.id }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Marquage refuse.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur inattendue.");
+    } finally {
+      setMarquage(null);
+    }
+  }
 
   const liste = data?.[onglet] ?? [];
   const enRetard = liste.filter((l) => l.late).length;
@@ -91,6 +130,14 @@ export default function SuiviPage() {
           label="Livraison"
           count={data?.livraison.length}
         />
+        {/* Les dossiers marques, au repos pour vingt-quatre heures. */}
+        <Onglet
+          actif={onglet === "traite"}
+          onClick={() => setOnglet("traite")}
+          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+          label="Traite"
+          count={data?.traite.length}
+        />
       </div>
 
       {error && (
@@ -119,13 +166,21 @@ export default function SuiviPage() {
 
       {data && liste.length === 0 && (
         <p className="rounded-xl border border-gray-200 bg-white py-16 text-center text-[13px] text-gray-400">
-          Rien a relancer dans cette file.
+          {onglet === "traite"
+            ? "Aucun dossier au repos."
+            : "Rien a relancer dans cette file."}
         </p>
       )}
 
       <div className="space-y-3">
         {liste.map((lead) => (
-          <Carte key={lead.id} lead={lead} />
+          <Carte
+            key={lead.id}
+            lead={lead}
+            repos={onglet === "traite"}
+            busy={marquage === lead.id}
+            onMarquer={() => void marquer(lead)}
+          />
         ))}
       </div>
     </main>
@@ -174,7 +229,18 @@ function Onglet({
  * qu'on peut faire a droite. Sur telephone elles s'empilent, les
  * actions en dernier — on lit avant d'agir.
  */
-function Carte({ lead }: { lead: FollowUpLead }) {
+function Carte({
+  lead,
+  repos,
+  busy,
+  onMarquer,
+}: {
+  lead: FollowUpLead;
+  /** Vrai dans l'onglet Traite : le dossier attend son retour. */
+  repos: boolean;
+  busy: boolean;
+  onMarquer: () => void;
+}) {
   const tel = lead.phone?.trim();
 
   return (
@@ -201,6 +267,16 @@ function Carte({ lead }: { lead: FollowUpLead }) {
               cherche en parcourant la liste, et une pastille pale
               perdue entre le nom et la reference se lisait en dernier.
             */}
+            {repos && (
+              <span className="flex items-center gap-1 rounded-md bg-gray-100 px-2 py-0.5 text-[11.5px] font-medium text-gray-600">
+                {lead.kind === "livraison" ? (
+                  <Truck className="h-3 w-3" />
+                ) : (
+                  <Phone className="h-3 w-3" />
+                )}
+                {lead.kind === "livraison" ? "Livraison" : "Confirmation"}
+              </span>
+            )}
             <span className="ml-auto flex items-center gap-2">
               <span className="text-[13.5px] font-bold text-gray-900">
                 {lead.status}
@@ -347,6 +423,31 @@ function Carte({ lead }: { lead: FollowUpLead }) {
               Ouvrir
             </a>
           </div>
+
+          {/*
+            Le marquage. Au repos, le bouton laisse place a la raison
+            de l'attente : appuyer une seconde fois le meme jour ferait
+            sauter un tour au dossier sans qu'on l'ait rappele.
+          */}
+          {repos ? (
+            <p className="mt-2 flex items-center justify-center gap-1.5 rounded-lg bg-white py-2 text-[12px] text-gray-500">
+              <Check className="h-3.5 w-3.5 text-emerald-600" />
+              Traite {lead.followUpCount} fois &mdash; revient demain
+            </p>
+          ) : (
+            <button
+              onClick={onMarquer}
+              disabled={busy}
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-300 bg-white py-2 text-[12px] font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
+            >
+              {busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              )}
+              {markLabel(lead.followUpCount)}
+            </button>
+          )}
 
           {lead.trackingNumber && (
             <p className="mt-2 flex items-center justify-center gap-1 text-[11.5px] text-gray-400">

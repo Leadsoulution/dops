@@ -150,3 +150,54 @@ export function isLate(kind: FollowUpKind, days: number): boolean {
       : RETARD_LIVRAISON_JOURS;
   return days >= seuil;
 }
+
+/**
+ * Le cycle "traite".
+ *
+ * Marquer un dossier le met de cote pour vingt-quatre heures, puis il
+ * revient de lui-meme. Trois marquages suffisent : au troisieme, on a
+ * appele trois jours de suite sans resultat, et le dossier quitte la
+ * file pour de bon. Il reste visible dans Commandes, ou rien ne
+ * disparait jamais.
+ */
+export const MARQUAGES_MAX = 3;
+
+/** Duree pendant laquelle un dossier marque reste de cote. */
+const REPOS_HEURES = 24;
+
+export type FollowUpState =
+  /** A traiter maintenant, dans sa file d'origine. */
+  | "due"
+  /** Marque il y a moins de 24 h : au repos, onglet Traite. */
+  | "resting"
+  /** Trois marquages : le dossier sort du suivi. */
+  | "done";
+
+/**
+ * Ou en est un dossier de son cycle.
+ *
+ * `markedAt` est la date du dernier marquage, `count` le nombre de
+ * marquages. Un dossier jamais marque est du tout de suite.
+ */
+export function followUpState(
+  count: number,
+  markedAt: string | null | undefined,
+  now = new Date()
+): FollowUpState {
+  if (count >= MARQUAGES_MAX) return "done";
+  if (!markedAt) return "due";
+
+  const avecFuseau = /[zZ]|[+-]\d{2}:?\d{2}$/.test(markedAt)
+    ? markedAt
+    : `${markedAt}+01:00`;
+  const t = new Date(avecFuseau).getTime();
+  if (!Number.isFinite(t)) return "due";
+
+  const ecoule = now.getTime() - t;
+  return ecoule < REPOS_HEURES * 3_600_000 ? "resting" : "due";
+}
+
+/** Le libelle du bouton : "Marquer traite 1", puis 2, puis 3. */
+export function markLabel(count: number): string {
+  return `Marquer traite ${Math.min(count + 1, MARQUAGES_MAX)}`;
+}

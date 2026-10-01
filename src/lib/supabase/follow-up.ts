@@ -3,6 +3,7 @@ import { getSupabaseServerClient } from "./server";
 import { fetchAll } from "./page";
 import {
   daysSince,
+  followUpState,
   isLate,
   needsConfirmationFollowUp,
   needsDeliveryFollowUp,
@@ -46,6 +47,10 @@ export type FollowUpLead = {
   daysWaiting: number;
   /** Au-dela du seuil de sa file. */
   late: boolean;
+  /** Sa file d'origine : l'onglet Traite melange les deux. */
+  kind: FollowUpKind;
+  /** Nombre de marquages deja poses, de 0 a 3. */
+  followUpCount: number;
 };
 
 type Row = {
@@ -71,17 +76,20 @@ type Row = {
   deliverer_phone: string | null;
   created_at: string;
   last_modified_at: string | null;
+  follow_up_count: number | null;
+  follow_up_at: string | null;
 };
 
 const CHAMPS =
   "id,reference,client,phone,ville,quartier,adresse,product_name," +
   "product_label,item_count,amount,status,date,source,customer_note," +
   "tracking_number,delivery_status,delivery_status_code,deliverer," +
-  "deliverer_phone,created_at,last_modified_at";
+  "deliverer_phone,created_at,last_modified_at,follow_up_count,follow_up_at";
 
 export async function getFollowUps(): Promise<{
   confirmation: FollowUpLead[];
   livraison: FollowUpLead[];
+  traite: FollowUpLead[];
 }> {
   const supabase = getSupabaseServerClient();
 
@@ -104,8 +112,13 @@ export async function getFollowUps(): Promise<{
      * La date de reference est la derniere action connue, pas la
      * creation : une commande rappelee hier n'attend pas depuis trois
      * semaines, meme si elle a ete passee il y a trois semaines.
+     *
+     * Marquer un dossier traite compte comme une action : sans cela
+     * l'horloge de l'abandon continuerait de tourner pendant le cycle,
+     * et un dossier marque deux fois sortirait de la file au milieu de
+     * son propre parcours.
      */
-    const lastActionAt = row.last_modified_at ?? row.created_at;
+    const lastActionAt = derniereAction(row);
     const daysWaiting = daysSince(lastActionAt, maintenant);
 
     return {
@@ -134,32 +147,54 @@ export async function getFollowUps(): Promise<{
       lastActionAt,
       daysWaiting,
       late: isLate(kind, daysWaiting),
+      kind,
+      followUpCount: row.follow_up_count ?? 0,
     };
   };
 
   const confirmation: FollowUpLead[] = [];
   const livraison: FollowUpLead[] = [];
+  const traite: FollowUpLead[] = [];
 
   for (const row of rows) {
+    // Trois marquages : le dossier a quitte le suivi. Inutile d'aller
+    // plus loin, il n'ira dans aucune des trois listes.
+    const etat = followUpState(
+      row.follow_up_count ?? 0,
+      row.follow_up_at,
+      maintenant
+    );
+    if (etat === "done") continue;
+
     // L'anciennete decide aussi de l'appartenance : passe trois jours
     // de silence, un dossier quitte la file au lieu de l'encombrer.
-    const jours = daysSince(row.last_modified_at ?? row.created_at, maintenant);
+    const jours = daysSince(derniereAction(row), maintenant);
 
     /*
      * Un colis parti ne se rappelle plus pour etre confirme : c'est la
      * file livraison qui s'en occupe. Sans cette garde, une commande au
      * statut "+3 jours" expediee depuis apparaitrait dans les deux.
      */
+    let kind: FollowUpKind | null = null;
     if (
       row.tracking_number &&
       needsDeliveryFollowUp(row.delivery_status_code, jours)
     ) {
-      livraison.push(build(row, "livraison"));
-      continue;
+      kind = "livraison";
+    } else if (
+      !row.tracking_number &&
+      needsConfirmationFollowUp(row.status, jours)
+    ) {
+      kind = "confirmation";
     }
-    if (!row.tracking_number && needsConfirmationFollowUp(row.status, jours)) {
-      confirmation.push(build(row, "confirmation"));
-    }
+    if (!kind) continue;
+
+    const lead = build(row, kind);
+    // Un dossier au repos garde sa file d'origine dans `kind`, mais
+    // s'affiche dans Traite tant que ses vingt-quatre heures courent.
+    if (etat === "resting") traite.push(lead);
+    else if (kind === "livraison") livraison.push(lead);
+    else confirmation.push(lead);
   }
 
   const parAnciennete = (a: FollowUpLead, b: FollowUpLead) =>
@@ -168,5 +203,17 @@ export async function getFollowUps(): Promise<{
   return {
     confirmation: confirmation.sort(parAnciennete),
     livraison: livraison.sort(parAnciennete),
+    traite: traite.sort(parAnciennete),
   };
+}
+
+/**
+ * La derniere fois qu'on s'est occupe de ce dossier, marquage compris.
+ * La plus recente des trois dates connues, jamais la premiere trouvee.
+ */
+function derniereAction(row: Row): string {
+  const dates = [row.follow_up_at, row.last_modified_at, row.created_at]
+    .filter((d): d is string => Boolean(d))
+    .sort();
+  return dates.at(-1) ?? row.created_at;
 }

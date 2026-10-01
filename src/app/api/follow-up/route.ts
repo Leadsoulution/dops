@@ -1,7 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { getSessionProfile } from "@/lib/supabase/auth";
 import { isSupabaseServerConfigured } from "@/lib/supabase/server";
 import { getFollowUps } from "@/lib/supabase/follow-up";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { MARQUAGES_MAX } from "@/lib/follow-up";
 
 /**
  * Les deux files de relance. Ouvertes a toute personne connectee :
@@ -18,6 +20,61 @@ export async function GET() {
   }
   try {
     return NextResponse.json(await getFollowUps());
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Erreur inattendue." },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * Marque un dossier traite.
+ *
+ * Le compteur monte d'un cran et l'heure est notee : le dossier part
+ * au repos pour vingt-quatre heures, puis revient de lui-meme. Au
+ * troisieme, il quitte le suivi.
+ *
+ * Le serveur incremente lui-meme plutot que d'accepter un compteur
+ * venu du navigateur : deux agents sur la meme commande poseraient
+ * sinon la meme valeur, et le dossier reviendrait indefiniment.
+ */
+export async function PATCH(request: NextRequest) {
+  const profile = await getSessionProfile();
+  if (!profile) {
+    return NextResponse.json({ error: "Non connecte." }, { status: 401 });
+  }
+
+  try {
+    const { id } = await request.json();
+    if (!id) {
+      return NextResponse.json({ error: "Commande manquante." }, { status: 400 });
+    }
+
+    const supabase = getSupabaseServerClient();
+    const { data: avant, error: lecture } = await supabase
+      .from("leads")
+      .select("follow_up_count")
+      .eq("id", id)
+      .maybeSingle();
+    if (lecture) throw new Error(lecture.message);
+    if (!avant) {
+      return NextResponse.json({ error: "Commande introuvable." }, { status: 404 });
+    }
+
+    const courant = (avant as { follow_up_count: number | null }).follow_up_count ?? 0;
+    const suivant = Math.min(courant + 1, MARQUAGES_MAX);
+
+    const { error } = await supabase
+      .from("leads")
+      .update({
+        follow_up_count: suivant,
+        follow_up_at: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (error) throw new Error(error.message);
+
+    return NextResponse.json({ count: suivant });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Erreur inattendue." },

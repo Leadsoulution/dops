@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   daysSince,
+  followUpState,
   isLate,
+  markLabel,
   needsConfirmationFollowUp,
   needsDeliveryFollowUp,
 } from "./follow-up";
@@ -116,5 +118,48 @@ describe("isLate", () => {
     expect(isLate("confirmation", 2)).toBe(true);
     expect(isLate("livraison", 2)).toBe(false);
     expect(isLate("livraison", 3)).toBe(true);
+  });
+});
+
+describe("followUpState", () => {
+  const maintenant = new Date("2026-10-01T12:00:00+01:00");
+
+  it("rend du tout de suite un dossier jamais marque", () => {
+    expect(followUpState(0, null, maintenant)).toBe("due");
+  });
+
+  it("met de cote pendant vingt-quatre heures", () => {
+    expect(followUpState(1, "2026-10-01T09:00:00+01:00", maintenant)).toBe(
+      "resting"
+    );
+  });
+
+  it("le rend a sa file le lendemain", () => {
+    expect(followUpState(1, "2026-09-30T09:00:00+01:00", maintenant)).toBe(
+      "due"
+    );
+  });
+
+  it("sort du suivi au troisieme marquage", () => {
+    // Meme marque a l'instant : trois fois suffit.
+    expect(followUpState(3, "2026-10-01T11:59:00+01:00", maintenant)).toBe(
+      "done"
+    );
+  });
+
+  it("lit une date sans fuseau a l'heure du Maroc", () => {
+    expect(followUpState(1, "2026-10-01 09:00:00", maintenant)).toBe("resting");
+  });
+});
+
+describe("markLabel", () => {
+  it("numerote le prochain marquage", () => {
+    expect(markLabel(0)).toBe("Marquer traite 1");
+    expect(markLabel(1)).toBe("Marquer traite 2");
+    expect(markLabel(2)).toBe("Marquer traite 3");
+  });
+
+  it("ne depasse jamais trois", () => {
+    expect(markLabel(3)).toBe("Marquer traite 3");
   });
 });
