@@ -17,7 +17,6 @@ describe("needsConfirmationFollowUp", () => {
       "En attente",
       "Rappel",
       "Reportee",
-      "+3 jours",
     ]) {
       expect(needsConfirmationFollowUp(s), s).toBe(true);
     }
@@ -41,13 +40,19 @@ describe("needsConfirmationFollowUp", () => {
     // dossier ferait disparaitre les appels du jour sous les perdus.
     expect(needsConfirmationFollowUp("Injoignable 2", 3)).toBe(true);
     expect(needsConfirmationFollowUp("Injoignable 2", 4)).toBe(false);
-    expect(needsConfirmationFollowUp("+3 jours", 14)).toBe(false);
   });
 
   it("ecarte une commande jamais appelee", () => {
     // C'est le travail courant, pas une relance : elle a son onglet, et
     // la melanger ici noierait les dossiers qui trainent.
     expect(needsConfirmationFollowUp("Nouveau")).toBe(false);
+  });
+
+  it("ecarte les dossiers mis de cote a '+3 jours'", () => {
+    // Quelqu'un a choisi de repousser ce client : le rappeler
+    // aujourd'hui irait contre cette decision.
+    expect(needsConfirmationFollowUp("+3 jours")).toBe(false);
+    expect(needsConfirmationFollowUp("+3 jours", 0)).toBe(false);
   });
 });
 

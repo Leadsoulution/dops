@@ -27,11 +27,18 @@ const CLOSED = new Set([
 ]);
 
 /**
- * Une commande jamais appelee n'est pas une relance : c'est le travail
- * courant, et elle a deja son onglet. La melanger ici noierait les
+ * Statuts qui n'ont rien a faire dans une liste d'appels du jour.
+ *
+ * "Nouveau" est le travail courant : la commande n'a jamais ete
+ * appelee, elle a deja son onglet, et la melanger ici noierait les
  * dossiers qui trainent sous les arrivees du jour.
+ *
+ * "+3 jours" est une mise de cote deliberee : quelqu'un a decide de
+ * repousser ce client, le rappeler aujourd'hui irait contre cette
+ * decision. Ces dossiers etaient les plus nombreux de la file et la
+ * remplissaient de cas qu'on avait justement choisi de laisser.
  */
-const NOT_YET_CALLED = "Nouveau";
+const HORS_FILE = new Set(["Nouveau", "+3 jours"]);
 
 /**
  * Codes du transporteur qui appellent une intervention.
@@ -104,7 +111,7 @@ export type FollowUpKind = "confirmation" | "livraison";
  * un abandon, et il n'a rien a faire dans une liste d'appels du jour.
  */
 export function needsConfirmationFollowUp(status: string, days = 0): boolean {
-  if (CLOSED.has(status) || status === NOT_YET_CALLED) return false;
+  if (CLOSED.has(status) || HORS_FILE.has(status)) return false;
   return days <= ABANDON_JOURS;
 }
 
