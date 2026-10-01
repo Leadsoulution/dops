@@ -118,16 +118,20 @@ export default function SuiviPage() {
 
       {/* Les deux files, comme deux pastilles. */}
       {/*
-        Les pastilles passent a la ligne plutot que de deborder : a
-        trois sur un telephone elles depassaient la fenetre, et toute
-        la page se decalait quand on faisait glisser du doigt.
+        Les trois files se partagent la largeur, en parts egales.
+        Laissees libres elles depassaient la fenetre d'un telephone, et
+        passer a la ligne laissait une rangee a moitie vide sous une
+        rangee pleine. Un tiers chacune tient partout et donne trois
+        cibles franches au pouce.
       */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-4 grid grid-cols-3 gap-2">
         <Onglet
           actif={onglet === "confirmation"}
           onClick={() => setOnglet("confirmation")}
           icon={<Phone className="h-3.5 w-3.5" />}
           label="Confirmation"
+          // Un tiers de telephone ne tient pas "Confirmation" en entier.
+          labelCourt="Confirm."
           count={data?.confirmation.length}
         />
         <Onglet
@@ -199,25 +203,35 @@ function Onglet({
   onClick,
   icon,
   label,
+  labelCourt,
   count,
 }: {
   actif: boolean;
   onClick: () => void;
   icon: React.ReactNode;
   label: string;
+  /** Repli pour les petits ecrans, quand le nom entier ne tient pas. */
+  labelCourt?: string;
   count?: number;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium transition-colors ${
+      className={`flex w-full items-center justify-center gap-1.5 rounded-full px-2 py-2.5 text-[12.5px] font-medium transition-colors sm:gap-2 sm:px-4 sm:text-[13px] ${
         actif
           ? "bg-blue-600 text-white"
           : "border border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
       }`}
     >
       {icon}
-      {label}
+      {labelCourt ? (
+        <>
+          <span className="sm:hidden">{labelCourt}</span>
+          <span className="hidden sm:inline">{label}</span>
+        </>
+      ) : (
+        label
+      )}
       <span
         className={`rounded-full px-1.5 py-0.5 text-[11.5px] font-semibold ${
           actif ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"
