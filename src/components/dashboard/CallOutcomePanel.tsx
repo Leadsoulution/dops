@@ -19,6 +19,7 @@ import {
   whatsappNumber,
 } from "@/lib/whatsapp";
 import { openWhatsapp } from "@/lib/open-outside";
+import { copyProductPhoto } from "@/lib/product-photo";
 import ConfirmDialog from "./ConfirmDialog";
 
 /**
@@ -57,27 +58,6 @@ function supportsImageCopy() {
  * donc les convertir — ce que le navigateur sait faire seul, puisqu'il
  * decode le webp pour l'afficher.
  */
-async function toPng(blob: Blob): Promise<Blob> {
-  if (blob.type === "image/png") return blob;
-  try {
-    const bitmap = await createImageBitmap(blob);
-    const canvas = document.createElement("canvas");
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-    const context = canvas.getContext("2d");
-    if (!context) return blob;
-    context.drawImage(bitmap, 0, 0);
-    bitmap.close();
-    return await new Promise((resolve) =>
-      canvas.toBlob((png) => resolve(png ?? blob), "image/png")
-    );
-  } catch {
-    // Format que le navigateur ne decode pas : tenter l'original vaut
-    // mieux que renoncer.
-    return blob;
-  }
-}
-
 const QUICK_STATUSES: { label: LeadStatus; className: string }[] = [
   { label: "Confirme", className: "bg-emerald-700 hover:bg-emerald-800" },
   { label: "Rappel", className: "bg-blue-600 hover:bg-blue-700" },
@@ -170,17 +150,7 @@ export default function CallOutcomePanel({
     setShareError(null);
     setSharing(true);
     try {
-      // L'image est confiee a ClipboardItem sous forme de promesse :
-      // Safari refuse une ecriture qui arrive apres un `await`, le geste
-      // de l'utilisateur etant alors considere comme termine.
-      const png = (async () => {
-        const res = await fetch(`/api/leads/${lead.id}/product-image`);
-        if (!res.ok) throw new Error("Photo du produit indisponible.");
-        return toPng(await res.blob());
-      })();
-      await navigator.clipboard.write([
-        new ClipboardItem({ "image/png": png }),
-      ]);
+      await copyProductPhoto(lead.id);
     } catch {
       // Photo introuvable ou presse-papier ferme : le message part
       // quand meme, sans image.

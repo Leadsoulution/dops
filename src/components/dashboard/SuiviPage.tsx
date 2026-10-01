@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import {
   AlertCircle,
@@ -23,6 +23,8 @@ import type { FollowUpLead } from "@/lib/supabase/follow-up";
 import { whatsappAppChat, whatsappNumber } from "@/lib/whatsapp";
 import { openWhatsapp } from "@/lib/open-outside";
 import { markLabel } from "@/lib/follow-up";
+import { copyProductPhoto } from "@/lib/product-photo";
+import AnchoredMenu from "./AnchoredMenu";
 
 /**
  * Les commandes qui attendent un geste.
@@ -115,7 +117,12 @@ export default function SuiviPage() {
       </div>
 
       {/* Les deux files, comme deux pastilles. */}
-      <div className="mb-4 flex items-center gap-2">
+      {/*
+        Les pastilles passent a la ligne plutot que de deborder : a
+        trois sur un telephone elles depassaient la fenetre, et toute
+        la page se decalait quand on faisait glisser du doigt.
+      */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <Onglet
           actif={onglet === "confirmation"}
           onClick={() => setOnglet("confirmation")}
@@ -269,6 +276,37 @@ function Carte({
   onMarquer: () => void;
 }) {
   const tel = lead.phone?.trim();
+  const livreurRef = useRef<HTMLButtonElement>(null);
+  const [menuLivreur, setMenuLivreur] = useState(false);
+  const [photo, setPhoto] = useState<"copie" | "absente" | null>(null);
+
+  /**
+   * La photo du produit part avec le message.
+   *
+   * Un lien wa.me ne transporte que du texte : l'image passe par le
+   * presse-papier, d'ou un appui long la sort dans la conversation. La
+   * conversation s'ouvre dans tous les cas — un presse-papier refuse ne
+   * doit pas retenir l'agent devant un bouton qui ne fait rien.
+   */
+  async function whatsappClient() {
+    if (!tel) return;
+    setPhoto(null);
+    try {
+      await copyProductPhoto(lead.id);
+      setPhoto("copie");
+    } catch {
+      setPhoto("absente");
+    }
+    openWhatsapp(whatsappAppChat(tel), `https://wa.me/${whatsappNumber(tel)}`);
+  }
+
+  /** Ce qu'un livreur a besoin de lire : le colis, et pour qui. */
+  const messageLivreur = [
+    lead.trackingNumber ? `Colis ${lead.trackingNumber}` : "",
+    [lead.client, lead.ville].filter(Boolean).join(" - "),
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   return (
     <article className="overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -423,30 +461,86 @@ function Carte({
           )}
 
           {tel && (
-            <button
-              onClick={() =>
-                openWhatsapp(
-                  whatsappAppChat(tel),
-                  `https://wa.me/${whatsappNumber(tel)}`
-                )
-              }
-              className="mb-2 flex w-full items-center justify-center gap-2 rounded-lg bg-[#25D366] py-2 text-[12.5px] font-medium text-white hover:bg-[#1eb855]"
-            >
-              <MessageCircle className="h-3.5 w-3.5" />
-              WhatsApp
-            </button>
+            <>
+              <button
+                onClick={() => void whatsappClient()}
+                className="mb-1 flex w-full items-center justify-center gap-2 rounded-lg bg-[#25D366] py-2 text-[12.5px] font-medium text-white hover:bg-[#1eb855]"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                WhatsApp
+              </button>
+              {photo && (
+                <p
+                  className={`mb-2 text-center text-[11px] ${
+                    photo === "copie" ? "text-emerald-700" : "text-amber-700"
+                  }`}
+                >
+                  {photo === "copie"
+                    ? "Photo copiee : appui long pour la coller."
+                    : "Photo indisponible, le message part sans elle."}
+                </p>
+              )}
+            </>
           )}
 
           <div className="flex gap-2">
             {lead.delivererPhone && (
-              <a
-                href={`tel:${lead.delivererPhone}`}
-                title={lead.deliverer ?? "Livreur"}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white py-2 text-[12px] font-medium text-gray-700 hover:bg-gray-50"
-              >
-                <Truck className="h-3.5 w-3.5" />
-                Livreur
-              </a>
+              <>
+                {/*
+                  Deux gestes possibles vers le livreur, et pas le meme
+                  selon l'heure : on l'appelle quand c'est urgent, on
+                  lui ecrit quand il roule. Le bouton ouvrait l'appel
+                  d'office, ce qui tranchait a la place de l'agent.
+                */}
+                <button
+                  ref={livreurRef}
+                  onClick={() => setMenuLivreur((v) => !v)}
+                  title={lead.deliverer ?? "Livreur"}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white py-2 text-[12px] font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  <Truck className="h-3.5 w-3.5" />
+                  Livreur
+                </button>
+                <AnchoredMenu
+                  open={menuLivreur}
+                  anchorRef={livreurRef}
+                  onClose={() => setMenuLivreur(false)}
+                  width={196}
+                >
+                  <p className="truncate px-3 pb-1 pt-1.5 text-[11px] font-semibold tracking-wide text-gray-400">
+                    {lead.deliverer ?? "LIVREUR"}
+                  </p>
+                  <a
+                    href={`tel:${lead.delivererPhone}`}
+                    onClick={() => setMenuLivreur(false)}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] text-gray-700 hover:bg-gray-50"
+                  >
+                    <Phone className="h-3.5 w-3.5 text-blue-600" />
+                    Appeler
+                    <span className="ml-auto font-mono text-[11px] text-gray-400">
+                      {lead.delivererPhone}
+                    </span>
+                  </a>
+                  <button
+                    onClick={() => {
+                      setMenuLivreur(false);
+                      openWhatsapp(
+                        whatsappAppChat(lead.delivererPhone!, messageLivreur),
+                        `https://wa.me/${whatsappNumber(lead.delivererPhone!)}?text=${encodeURIComponent(messageLivreur)}`
+                      );
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12.5px] text-gray-700 hover:bg-gray-50"
+                  >
+                    <MessageCircle className="h-3.5 w-3.5 text-[#25D366]" />
+                    WhatsApp
+                    {lead.trackingNumber && (
+                      <span className="ml-auto font-mono text-[11px] text-gray-400">
+                        {lead.trackingNumber}
+                      </span>
+                    )}
+                  </button>
+                </AnchoredMenu>
+              </>
             )}
             <a
               href={`/?lead=${lead.id}`}
@@ -471,7 +565,7 @@ function Carte({
             <button
               onClick={onMarquer}
               disabled={busy}
-              className="mt-3 flex w-full items-center justify-center gap-1.5 py-1 text-[12.5px] font-medium text-emerald-700 hover:text-emerald-800 disabled:opacity-60"
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 py-2 text-[12.5px] font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
             >
               {busy ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
