@@ -40,6 +40,12 @@ export const APP_SECTIONS: AppSection[] = [
       { label: "Paiement de confirmatrice", href: "/confirmation/paiement" },
     ],
   },
+  /*
+   * L'adresse ne peut pas etre "/suivi" : "/suivi-CODE" est la page
+   * publique de suivi des colis, et le proxy laisse passer tout ce
+   * qui commence par "/suivi-" sans demander de compte.
+   */
+  { key: "suivi", label: "Suivi", href: "/relances", group: "PRINCIPAL" },
   { key: "perf-agents", label: "Perf. Agents", href: "/perf-agents", group: "PRINCIPAL" },
   { key: "products", label: "Produits", href: "/products", group: "COMMERCE" },
   { key: "inventaire", label: "Inventaire", href: "/inventaire", group: "COMMERCE" },
