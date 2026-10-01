@@ -11,12 +11,19 @@ import {
 } from "@/lib/follow-up";
 
 /**
- * Les deux files de relance, pretes a afficher.
+ * Les files de relance, pretes a afficher.
  *
  * Le tri met les dossiers les plus anciens en tete : c'est celui qui
  * attend depuis douze jours qu'il faut appeler, pas celui d'hier. Une
  * liste rangee par date de commande aurait enterre les premiers sous
  * les seconds.
+ *
+ * L'avancement appartient a l'agent, pas a la commande. Chacun traite
+ * la meme commande de son cote : Centrecall peut en etre a son
+ * deuxieme passage quand Sanaa n'a encore rien marque, et ce que l'une
+ * met de cote reste du a l'autre. Un compteur unique par commande
+ * aurait fait disparaitre un dossier de la liste de tout le monde des
+ * qu'une seule personne y avait touche.
  */
 
 export type FollowUpLead = {
@@ -76,27 +83,42 @@ type Row = {
   deliverer_phone: string | null;
   created_at: string;
   last_modified_at: string | null;
-  follow_up_count: number | null;
-  follow_up_at: string | null;
+};
+
+/** L'avancement d'un agent sur une commande. */
+type SuiviRow = {
+  lead_id: string;
+  count: number | null;
+  marked_at: string | null;
 };
 
 const CHAMPS =
   "id,reference,client,phone,ville,quartier,adresse,product_name," +
   "product_label,item_count,amount,status,date,source,customer_note," +
   "tracking_number,delivery_status,delivery_status_code,deliverer," +
-  "deliverer_phone,created_at,last_modified_at,follow_up_count,follow_up_at";
+  "deliverer_phone,created_at,last_modified_at";
 
-export async function getFollowUps(): Promise<{
+export async function getFollowUps(userId: string): Promise<{
   confirmation: FollowUpLead[];
   livraison: FollowUpLead[];
   traite: FollowUpLead[];
 }> {
   const supabase = getSupabaseServerClient();
 
-  const [rows, produits] = await Promise.all([
+  const [rows, produits, suivis] = await Promise.all([
     fetchAll<Row>(() => supabase.from("leads").select(CHAMPS)),
     supabase.from("products").select("name,image").not("image", "is", null),
+    // Seulement les lignes de cette personne : celles des autres ne la
+    // regardent pas et ne doivent pas vider sa file.
+    fetchAll<SuiviRow>(() =>
+      supabase
+        .from("lead_follow_ups")
+        .select("lead_id,count,marked_at")
+        .eq("user_id", userId)
+    ),
   ]);
+
+  const avancement = new Map(suivis.map((x) => [x.lead_id, x]));
 
   const imageParNom = new Map(
     ((produits.data ?? []) as { name: string; image: string }[]).map((p) => [
@@ -118,7 +140,7 @@ export async function getFollowUps(): Promise<{
      * et un dossier marque deux fois sortirait de la file au milieu de
      * son propre parcours.
      */
-    const lastActionAt = derniereAction(row);
+    const lastActionAt = derniereAction(row, avancement.get(row.id));
     const daysWaiting = daysSince(lastActionAt, maintenant);
 
     return {
@@ -148,7 +170,7 @@ export async function getFollowUps(): Promise<{
       daysWaiting,
       late: isLate(kind, daysWaiting),
       kind,
-      followUpCount: row.follow_up_count ?? 0,
+      followUpCount: avancement.get(row.id)?.count ?? 0,
     };
   };
 
@@ -159,16 +181,13 @@ export async function getFollowUps(): Promise<{
   for (const row of rows) {
     // Trois marquages : le dossier a quitte le suivi. Inutile d'aller
     // plus loin, il n'ira dans aucune des trois listes.
-    const etat = followUpState(
-      row.follow_up_count ?? 0,
-      row.follow_up_at,
-      maintenant
-    );
+    const mien = avancement.get(row.id);
+    const etat = followUpState(mien?.count ?? 0, mien?.marked_at, maintenant);
     if (etat === "done") continue;
 
     // L'anciennete decide aussi de l'appartenance : passe trois jours
     // de silence, un dossier quitte la file au lieu de l'encombrer.
-    const jours = daysSince(derniereAction(row), maintenant);
+    const jours = daysSince(derniereAction(row, mien), maintenant);
 
     /*
      * Un colis parti ne se rappelle plus pour etre confirme : c'est la
@@ -211,8 +230,8 @@ export async function getFollowUps(): Promise<{
  * La derniere fois qu'on s'est occupe de ce dossier, marquage compris.
  * La plus recente des trois dates connues, jamais la premiere trouvee.
  */
-function derniereAction(row: Row): string {
-  const dates = [row.follow_up_at, row.last_modified_at, row.created_at]
+function derniereAction(row: Row, mien?: SuiviRow): string {
+  const dates = [mien?.marked_at, row.last_modified_at, row.created_at]
     .filter((d): d is string => Boolean(d))
     .sort();
   return dates.at(-1) ?? row.created_at;

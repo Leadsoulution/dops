@@ -19,7 +19,7 @@ export async function GET() {
     return NextResponse.json({ error: "Non connecte." }, { status: 401 });
   }
   try {
-    return NextResponse.json(await getFollowUps());
+    return NextResponse.json(await getFollowUps(profile.id));
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Erreur inattendue." },
@@ -29,15 +29,17 @@ export async function GET() {
 }
 
 /**
- * Marque un dossier traite.
+ * Marque un dossier traite, pour la personne connectee.
  *
  * Le compteur monte d'un cran et l'heure est notee : le dossier part
  * au repos pour vingt-quatre heures, puis revient de lui-meme. Au
- * troisieme, il quitte le suivi.
+ * troisieme, il quitte le suivi — celui de cette personne seulement.
+ * Ce qu'une agente met de cote reste du a l'autre.
  *
- * Le serveur incremente lui-meme plutot que d'accepter un compteur
- * venu du navigateur : deux agents sur la meme commande poseraient
- * sinon la meme valeur, et le dossier reviendrait indefiniment.
+ * Le serveur lit le compteur et l'incremente lui-meme plutot que
+ * d'accepter une valeur venue du navigateur : un onglet reste ouvert
+ * une heure renverrait un chiffre perime et ferait reculer
+ * l'avancement.
  */
 export async function PATCH(request: NextRequest) {
   const profile = await getSessionProfile();
@@ -53,25 +55,26 @@ export async function PATCH(request: NextRequest) {
 
     const supabase = getSupabaseServerClient();
     const { data: avant, error: lecture } = await supabase
-      .from("leads")
-      .select("follow_up_count")
-      .eq("id", id)
+      .from("lead_follow_ups")
+      .select("count")
+      .eq("lead_id", id)
+      .eq("user_id", profile.id)
       .maybeSingle();
     if (lecture) throw new Error(lecture.message);
-    if (!avant) {
-      return NextResponse.json({ error: "Commande introuvable." }, { status: 404 });
-    }
 
-    const courant = (avant as { follow_up_count: number | null }).follow_up_count ?? 0;
+    const courant = (avant as { count: number | null } | null)?.count ?? 0;
     const suivant = Math.min(courant + 1, MARQUAGES_MAX);
 
-    const { error } = await supabase
-      .from("leads")
-      .update({
-        follow_up_count: suivant,
-        follow_up_at: new Date().toISOString(),
-      })
-      .eq("id", id);
+    const { error } = await supabase.from("lead_follow_ups").upsert(
+      {
+        lead_id: id,
+        user_id: profile.id,
+        count: suivant,
+        marked_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "lead_id,user_id" }
+    );
     if (error) throw new Error(error.message);
 
     return NextResponse.json({ count: suivant });
