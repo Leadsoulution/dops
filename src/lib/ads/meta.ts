@@ -48,8 +48,24 @@ async function get<T>(path: string, token: string, params: Record<string, string
     // 4, 17 et 613 disent tous "trop de requetes" : ce n'est pas une
     // panne, c'est une invitation a revenir plus tard.
     const rateLimited = code === 4 || code === 17 || code === 613;
+
+    /*
+     * Le message de Meta seul ne suffit pas a reparer.
+     *
+     * "Invalid parameter" est renvoye pour une douzaine de causes
+     * differentes, et sans savoir quel appel l'a provoque il faut
+     * deviner. On garde donc le chemin et les codes : ce sont eux
+     * qu'on cite au support, et eux qui designent la ligne fautive.
+     */
+    const details = [
+      code !== undefined ? `code ${code}` : null,
+      body.error?.error_subcode ? `sous-code ${body.error.error_subcode}` : null,
+    ]
+      .filter(Boolean)
+      .join(", ");
+    const message = body.error?.message ?? `Meta a repondu ${res.status}.`;
     throw new AdApiError(
-      body.error?.message ?? `Meta a repondu ${res.status}.`,
+      `${path} — ${message}${details ? ` (${details})` : ""}`,
       "meta",
       rateLimited
     );
@@ -119,9 +135,16 @@ export async function getCampaigns(
     stop_time?: string;
   }>(`/${accountPath(externalId)}/campaigns`, token, {
     fields: "id,name,status,objective,start_time,stop_time",
-    // Les campagnes supprimees restent dans les depenses passees : les
-    // ecarter ici laisserait des lignes orphelines dans le journal.
-    effective_status: '["ACTIVE","PAUSED","ARCHIVED","DELETED"]',
+    /*
+     * Les campagnes archivees restent demandees : leurs depenses
+     * passees figurent dans les releves, et les ecarter ici laisserait
+     * des lignes orphelines dans le journal.
+     *
+     * "DELETED" en revanche a ete retire. Meta le refuse dans ce
+     * filtre et repond "Invalid parameter", ce qui faisait echouer
+     * tout le relevee avant meme d'arriver aux depenses.
+     */
+    effective_status: '["ACTIVE","PAUSED","ARCHIVED"]',
   });
 
   return rows.map((c) => ({

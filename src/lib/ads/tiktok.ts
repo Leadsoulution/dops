@@ -47,8 +47,11 @@ async function get<T>(
   const body = (await res.json().catch(() => ({}))) as TikTokBody<T>;
   // 0 est le seul code qui vaut succes chez TikTok.
   if (!res.ok || (body.code ?? 0) !== 0) {
+    // Le chemin et le code avec le message : sans eux, "parameter
+    // error" ne designe aucune ligne a corriger.
+    const details = body.code ? ` (code ${body.code})` : "";
     throw new AdApiError(
-      body.message ?? `TikTok a repondu ${res.status}.`,
+      `${path} — ${body.message ?? `TikTok a repondu ${res.status}.`}${details}`,
       "tiktok",
       RATE_LIMIT_CODES.has(body.code ?? 0)
     );
