@@ -30,19 +30,39 @@ export type Metric = {
   hint?: string;
 };
 
-/** La depense, toujours disponible, lue sur sa propre colonne. */
+/** La depense convertie en dirhams, lue sur sa propre colonne. */
 export const SPEND_KEY = "spend_mad";
 
+/**
+ * La depense dans la devise du compte, telle que la plateforme
+ * l'affiche.
+ *
+ * Elle existe pour une raison simple : on compare l'application au
+ * gestionnaire de publicites, cote a cote, et deux nombres convertis
+ * ne se comparent pas. 374,21 CAD et 2 619,47 DH sont le meme montant,
+ * mais rien ne le dit a qui les regarde.
+ */
+export const SPEND_SOURCE_KEY = "spend_src";
+
 export const METRICS: Metric[] = [
-  { key: SPEND_KEY, label: "Montant depense", kind: "sum", format: "money" },
+  { key: SPEND_KEY, label: "Montant depense (DH)", kind: "sum", format: "money" },
+  {
+    key: SPEND_SOURCE_KEY,
+    label: "Montant depense",
+    kind: "sum",
+    format: "decimal",
+    hint: "Dans la devise du compte, comme le gestionnaire de publicites.",
+  },
   {
     key: "reach",
     label: "Couverture",
     kind: "sum",
     format: "entier",
     hint:
-      "Somme des couvertures quotidiennes. Une personne touchee deux jours " +
-      "compte deux fois : seule la plateforme sait dedoublonner sur une periode.",
+      "Somme des couvertures quotidiennes, donc surevaluee : une personne " +
+      "touchee deux jours y compte deux fois. Mesure faite sur ce compte : " +
+      "173 181 contre 160 002 annonces par la plateforme, soit 8 % de trop. " +
+      "Seule la plateforme sait dedoublonner sur une periode.",
   },
   { key: "impressions", label: "Impressions", kind: "sum", format: "entier" },
   {
@@ -249,7 +269,11 @@ export function formatMetric(metric: Metric, value: number): string {
  * releves ont fait apparaitre. Une action jamais produite par le
  * compte n'encombre pas la liste.
  */
-export function availableMetrics(bags: (MetricBag | null | undefined)[]): Metric[] {
+export function availableMetrics(
+  bags: (MetricBag | null | undefined)[],
+  /** Devise du compte, pour nommer la colonne de depense d'origine. */
+  currency?: string
+): Metric[] {
   const vues = new Set<string>();
   for (const bag of bags) {
     for (const k of Object.keys(bag ?? {})) {
@@ -257,8 +281,15 @@ export function availableMetrics(bags: (MetricBag | null | undefined)[]): Metric
     }
   }
   const actions = [...vues].sort();
+  const base = currency
+    ? METRICS.map((m) =>
+        m.key === SPEND_SOURCE_KEY
+          ? { ...m, label: `Montant depense (${currency})` }
+          : m
+      )
+    : METRICS;
   return [
-    ...METRICS,
+    ...base,
     ...actions.map(actionMetric),
     ...actions.map(actionCostMetric),
   ];
@@ -266,8 +297,8 @@ export function availableMetrics(bags: (MetricBag | null | undefined)[]): Metric
 
 /** Ce qu'on affiche tant que personne n'a choisi ses colonnes. */
 export const DEFAULT_COLUMNS = [
+  SPEND_SOURCE_KEY,
   SPEND_KEY,
-  "reach",
   "impressions",
   "frequency",
   "clicks",

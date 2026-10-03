@@ -2,7 +2,7 @@ import "server-only";
 import { getSupabaseServerClient } from "./server";
 import { fetchAll } from "./page";
 import { amountValue, roundToTen } from "@/lib/amount";
-import { SPEND_KEY, sumMetrics } from "@/lib/ads/metrics";
+import { SPEND_KEY, SPEND_SOURCE_KEY, sumMetrics } from "@/lib/ads/metrics";
 
 /**
  * Le rapprochement entre ce qui est depense et ce qui est vendu.
@@ -78,6 +78,8 @@ export type AdsOverview = {
   roas: number;
 
   campaigns: CampaignRow[];
+  /** Devise des comptes relevees, pour nommer la colonne de depense. */
+  currency?: string;
   /** Depense et livraisons par jour, pour la courbe. */
   daily: { day: string; spendMad: number; delivered: number }[];
   lastSyncAt?: string;
@@ -87,6 +89,8 @@ type InsightRow = {
   campaign_id: string;
   day: string;
   spend_mad: string | number;
+  spend: string | number;
+  currency: string | null;
   impressions: number;
   clicks: number;
   conversions: string | number;
@@ -137,7 +141,7 @@ export async function getAdsOverview(
     fetchAll<InsightRow>(() => {
       let q = supabase
         .from("ad_insights_daily")
-        .select("campaign_id,day,spend_mad,impressions,clicks,conversions,metrics,synced_at");
+        .select("campaign_id,day,spend,currency,spend_mad,impressions,clicks,conversions,metrics,synced_at");
       if (from) q = q.gte("day", from.slice(0, 10));
       if (to) q = q.lte("day", to.slice(0, 10));
       if (platform) q = q.eq("platform", platform);
@@ -209,6 +213,11 @@ export async function getAdsOverview(
       metrics: {
         ...sumMetrics(lignes.map((l) => l.metrics)),
         [SPEND_KEY]: round2(spendMad),
+        // La depense telle que la plateforme la facture, pour que les
+        // deux ecrans affichent le meme nombre cote a cote.
+        [SPEND_SOURCE_KEY]: round2(
+          lignes.reduce((t, l) => t + Number(l.spend ?? 0), 0)
+        ),
       },
     });
   }
@@ -288,6 +297,7 @@ export async function getAdsOverview(
     roas: round2(ratio(revenueDelivered, spendMad)),
 
     campaigns: rows,
+    currency: insights.find((i) => i.currency)?.currency ?? undefined,
     daily,
     lastSyncAt,
   };

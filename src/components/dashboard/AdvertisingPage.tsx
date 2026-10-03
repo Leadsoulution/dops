@@ -296,7 +296,7 @@ export default function AdvertisingPage() {
               />
             </div>
 
-            <CampaignTable campaigns={o.campaigns} />
+            <CampaignTable campaigns={o.campaigns} currency={o.currency} />
           </>
         )
       )}
@@ -357,7 +357,13 @@ function Kpi({
  * Les etages sont replies par defaut. Quarante publicites deroulees
  * sous dix-huit campagnes feraient une liste que personne ne lit.
  */
-function CampaignTable({ campaigns }: { campaigns: CampaignRow[] }) {
+function CampaignTable({
+  campaigns,
+  currency,
+}: {
+  campaigns: CampaignRow[];
+  currency?: string;
+}) {
   const [ouverts, setOuverts] = useState<Set<string>>(new Set());
   const [choisies, setChoisies] = useState<string[]>(DEFAULT_COLUMNS);
   const [picker, setPicker] = useState(false);
@@ -366,7 +372,10 @@ function CampaignTable({ campaigns }: { campaigns: CampaignRow[] }) {
    * Les colonnes possibles dependent du compte : une action que ces
    * campagnes n'ont jamais produite n'a pas a encombrer la liste.
    */
-  const disponibles = availableMetrics(campaigns.map((c) => c.metrics));
+  const disponibles = availableMetrics(
+    campaigns.map((c) => c.metrics),
+    currency
+  );
   const colonnes = choisies
     .map((k) => disponibles.find((m) => m.key === k))
     .filter((m): m is Metric => Boolean(m));
