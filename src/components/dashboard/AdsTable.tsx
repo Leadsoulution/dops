@@ -14,10 +14,13 @@ import {
   DEFAULT_COLUMNS,
   PRESETS,
   SPEND_SOURCE_KEY,
+  RESULTS_KEY,
   availableMetrics,
   formatMetric,
   metricValue,
+  resultLabel,
   sumMetrics,
+  withResultTotal,
   type Metric,
 } from "@/lib/ads/metrics";
 
@@ -87,8 +90,17 @@ export default function AdsTable({
     desc: true,
   });
 
+  /*
+   * Le total des resultats est pose dans chaque sac avant tout
+   * calcul : le cout par resultat en a besoin comme denominateur.
+   */
+  const lignesPretes = campaigns.map((c) => ({
+    ...c,
+    metrics: withResultTotal(c.metrics),
+  }));
+  const parId = new Map(lignesPretes.map((c) => [c.id, c]));
   const disponibles = availableMetrics(
-    campaigns.map((c) => c.metrics),
+    lignesPretes.map((c) => c.metrics),
     currency
   );
   const colonnes = choisies
@@ -105,7 +117,7 @@ export default function AdsTable({
 
   // Les enfants par identifiant de plateforme du parent.
   const enfants = new Map<string, CampaignRow[]>();
-  for (const c of campaigns) {
+  for (const c of lignesPretes) {
     if (!c.parentExternalId) continue;
     const liste = enfants.get(c.parentExternalId);
     if (liste) liste.push(c);
@@ -129,11 +141,11 @@ export default function AdsTable({
     return tri.desc ? vb - va : va - vb;
   };
 
-  const visibles = campaigns.filter((c) => c.level === niveau && garde(c));
+  const visibles = lignesPretes.filter((c) => c.level === niveau && garde(c));
   const triees = visibles.slice().sort(comparer);
 
   /** Les totaux, sommes des lignes affichees puis taux recalcules. */
-  const totaux = sumMetrics(triees.map((c) => c.metrics));
+  const totaux = withResultTotal(sumMetrics(triees.map((c) => c.metrics)));
 
   const trierPar = (cle: string) =>
     setTri((prev) =>
@@ -146,7 +158,9 @@ export default function AdsTable({
     // ailleurs la liste est deja a plat, comme chez la plateforme.
     const sous =
       niveau === "campaign"
-        ? (enfants.get(row.externalId) ?? []).slice().sort(comparer)
+        ? (enfants.get(row.externalId) ?? [])
+            .map((c) => parId.get(c.id) ?? c)
+            .sort(comparer)
         : [];
     const ouvert = ouverts.has(row.id);
     const sortie: React.ReactNode[] = [
@@ -203,6 +217,11 @@ export default function AdsTable({
             className="whitespace-nowrap px-4 py-3 text-right font-mono text-[12.5px] text-gray-700"
           >
             {formatMetric(m, metricValue(m, row.metrics))}
+            {m.key === RESULTS_KEY && resultLabel(row.metrics) && (
+              <span className="block font-sans text-[10.5px] text-gray-400">
+                {resultLabel(row.metrics)}
+              </span>
+            )}
           </td>
         ))}
       </tr>,
@@ -214,7 +233,7 @@ export default function AdsTable({
   }
 
   const compte = (k: string) =>
-    campaigns.filter((c) => c.level === k && garde(c)).length;
+    lignesPretes.filter((c) => c.level === k && garde(c)).length;
 
   return (
     <div className="mb-6 rounded-xl border border-gray-200 bg-white">
@@ -267,7 +286,7 @@ export default function AdsTable({
           <button
             onClick={() =>
               setOuverts((prev) =>
-                prev.size > 0 ? new Set() : new Set(campaigns.map((c) => c.id))
+                prev.size > 0 ? new Set() : new Set(lignesPretes.map((c) => c.id))
               )
             }
             className="whitespace-nowrap text-[12px] font-medium text-blue-600 hover:text-blue-700"
@@ -392,6 +411,11 @@ export default function AdsTable({
                     className="whitespace-nowrap px-4 py-3 text-right font-mono"
                   >
                     {formatMetric(m, metricValue(m, totaux))}
+                    {m.key === RESULTS_KEY && resultLabel(totaux) && (
+                      <span className="block font-sans text-[10.5px] font-normal text-gray-400">
+                        {resultLabel(totaux)}
+                      </span>
+                    )}
                   </td>
                 ))}
               </tr>

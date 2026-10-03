@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  COST_PER_RESULT_KEY,
   METRICS,
+  RESULTS_KEY,
+  RESULT_METRICS,
   SPEND_KEY,
+  resultLabel,
+  resultTotal,
+  withResultTotal,
   availableMetrics,
   formatMetric,
   metricValue,
@@ -100,5 +106,52 @@ describe("formatMetric", () => {
     expect(formatMetric(trouve("impressions"), 1234.6)).toBe(
       new Intl.NumberFormat("fr-FR").format(1235)
     );
+  });
+});
+
+describe("resultats", () => {
+  it("additionne les resultats quel que soit leur indicateur", () => {
+    expect(
+      resultTotal({ "result:purchase": 5, "result:post_engagement": 3 })
+    ).toBe(8);
+  });
+
+  it("nomme l'indicateur quand il n'y en a qu'un", () => {
+    expect(resultLabel({ "result:offsite_conversion.fb_pixel_purchase": 2 })).toBe(
+      "Achats (pixel)"
+    );
+  });
+
+  it("dit 'plusieurs conversions' quand ils different, comme Meta", () => {
+    // Un achat et une visite de profil ne sont pas la meme grandeur :
+    // le total les compte sans pretendre qu'ils sont comparables.
+    expect(
+      resultLabel({ "result:purchase": 2, "result:total_profile_visits": 91 })
+    ).toBe("Plusieurs conversions");
+  });
+
+  it("ne dit rien quand il n'y a aucun resultat", () => {
+    expect(resultLabel({ clicks: 10 })).toBe("");
+  });
+
+  it("pose le total sous une cle fixe, pour le cout par resultat", () => {
+    const sac = withResultTotal({ "result:purchase": 4, spend_mad: 200 });
+    expect(sac[RESULTS_KEY]).toBe(4);
+    const cout = RESULT_METRICS.find((m) => m.key === COST_PER_RESULT_KEY)!;
+    expect(metricValue(cout, sac)).toBe(50);
+  });
+
+  it("laisse le sac intact quand il n'y a pas de resultat", () => {
+    const sac = { clicks: 3 };
+    expect(withResultTotal(sac)).toBe(sac);
+  });
+
+  it("n'offre les colonnes de resultat que si le compte en produit", () => {
+    expect(availableMetrics([{ clicks: 1 }]).map((m) => m.key)).not.toContain(
+      RESULTS_KEY
+    );
+    expect(
+      availableMetrics([{ "result:purchase": 1 }]).map((m) => m.key)
+    ).toContain(RESULTS_KEY);
   });
 });

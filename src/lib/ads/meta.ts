@@ -254,6 +254,30 @@ const CHAMPS_ACTIONS = [
   "video_p100_watched_actions",
 ];
 
+/**
+ * Le resultat, tel que Meta le compte.
+ *
+ * C'est la colonne la plus utile de leur tableau, et la seule qu'on ne
+ * saurait pas recalculer : le "resultat" d'une campagne depend de ce
+ * qu'elle optimise. Une campagne de vente compte des achats, une
+ * campagne d'engagement compte des interactions, une autre des visites
+ * de profil. Meta nomme cet indicateur dans sa reponse ; on le garde
+ * avec le chiffre, pour que l'ecran puisse dire de quoi il parle.
+ *
+ * Il porte aussi la fenetre d'attribution du compte, que les listes
+ * `actions` n'appliquent pas : c'est pourquoi ce champ affiche des
+ * achats la ou `actions` n'en montre aucun.
+ */
+const CHAMPS_RESULTATS = ["results"];
+
+type ResultList = {
+  indicator?: string;
+  values?: { value?: string }[];
+}[];
+
+/** Prefixe des resultats, l'indicateur collant a la cle. */
+export const RESULT_PREFIX = "result:";
+
 type ActionList = { action_type: string; value: string }[];
 
 export async function getInsights(
@@ -265,7 +289,9 @@ export async function getInsights(
 ): Promise<AdInsightRow[]> {
   const champ = ID_FIELD[level];
   const rows = await getAll<
-    Record<string, string | ActionList | undefined> & { date_start?: string }
+    Record<string, string | ActionList | ResultList | undefined> & {
+      date_start?: string;
+    }
   >(`/${accountPath(externalId)}/insights`, token, {
     level,
     time_increment: "1",
@@ -278,7 +304,12 @@ export async function getInsights(
      * additionner sur une semaine donnerait n'importe quoi ; on les
      * recalcule a l'affichage depuis leurs deux termes.
      */
-    fields: [champ, ...CHAMPS_SIMPLES, ...CHAMPS_ACTIONS].join(","),
+    fields: [
+      champ,
+      ...CHAMPS_SIMPLES,
+      ...CHAMPS_ACTIONS,
+      ...CHAMPS_RESULTATS,
+    ].join(","),
   });
 
   return rows
@@ -305,6 +336,20 @@ export async function getInsights(
       }
       for (const a of (r.outbound_clicks as ActionList | undefined) ?? []) {
         metrics.outbound_clicks = Number(a.value ?? 0);
+      }
+
+      /*
+       * Le resultat, range sous son indicateur. Deux campagnes qui
+       * n'optimisent pas la meme chose gardent ainsi des colonnes
+       * distinctes, et leur total se nomme "plusieurs conversions"
+       * comme chez Meta, au lieu d'additionner des achats avec des
+       * visites de profil.
+       */
+      for (const res of (r.results as unknown as ResultList | undefined) ?? []) {
+        const valeur = Number(res.values?.[0]?.value ?? 0);
+        if (!res.indicator || !valeur) continue;
+        const cle = `${RESULT_PREFIX}${res.indicator.replace(/^actions:/, "")}`;
+        metrics[cle] = (metrics[cle] ?? 0) + valeur;
       }
 
       return {

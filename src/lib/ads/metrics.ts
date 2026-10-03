@@ -153,8 +153,68 @@ export const METRICS: Metric[] = [
   { key: "video_p100", label: "Video 100 %", kind: "sum", format: "entier" },
 ];
 
+/**
+ * Les deux colonnes de resultat.
+ *
+ * Elles ne se calculent pas depuis une cle fixe : leur valeur est la
+ * somme de toutes les cles `result:`, qui varient d'une campagne a
+ * l'autre. L'ecran les traite donc a part.
+ */
+export const RESULTS_KEY = "__results__";
+export const COST_PER_RESULT_KEY = "__cost_per_result__";
+
+export const RESULT_METRICS: Metric[] = [
+  {
+    key: RESULTS_KEY,
+    label: "Resultats",
+    kind: "sum",
+    format: "entier",
+    hint:
+      "Ce que la campagne optimise : achat, interaction, visite de profil. " +
+      "L'indicateur est rappele sous le chiffre.",
+  },
+  {
+    key: COST_PER_RESULT_KEY,
+    label: "Cout par resultat",
+    kind: "ratio",
+    format: "money",
+    of: { num: SPEND_KEY, den: RESULTS_KEY },
+  },
+];
+
 /** Prefixe des resultats par type d'action, decouverts a la relevee. */
 export const ACTION_PREFIX = "action:";
+
+/**
+ * Prefixe du resultat tel que la plateforme le compte, suivi de son
+ * indicateur : achat pixel, interaction, visite de profil.
+ */
+export const RESULT_PREFIX = "result:";
+
+/** Les cles de resultat presentes dans un sac de mesures. */
+export function resultKeys(bag: MetricBag): string[] {
+  return Object.keys(bag).filter((k) => k.startsWith(RESULT_PREFIX));
+}
+
+/**
+ * Le total des resultats, quel que soit l'indicateur.
+ *
+ * Deux campagnes qui n'optimisent pas la meme chose ont des resultats
+ * de nature differente. Les additionner est ce que fait Meta lui-meme
+ * dans sa ligne de total, en la nommant "plusieurs conversions" —
+ * c'est un compte d'evenements, pas une grandeur homogene.
+ */
+export function resultTotal(bag: MetricBag): number {
+  return resultKeys(bag).reduce((t, k) => t + (bag[k] ?? 0), 0);
+}
+
+/** De quoi sont faits ces resultats, pour le dire sous le chiffre. */
+export function resultLabel(bag: MetricBag): string {
+  const cles = resultKeys(bag);
+  if (cles.length === 0) return "";
+  if (cles.length > 1) return "Plusieurs conversions";
+  return actionLabel(cles[0].slice(RESULT_PREFIX.length));
+}
 
 /**
  * Les actions n'ont pas de liste figee : chaque objectif publicitaire
@@ -281,6 +341,7 @@ export function availableMetrics(
     }
   }
   const actions = [...vues].sort();
+  const aDesResultats = bags.some((b) => b && resultKeys(b).length > 0);
   const base = currency
     ? METRICS.map((m) =>
         m.key === SPEND_SOURCE_KEY
@@ -289,10 +350,23 @@ export function availableMetrics(
       )
     : METRICS;
   return [
+    ...(aDesResultats ? RESULT_METRICS : []),
     ...base,
     ...actions.map(actionMetric),
     ...actions.map(actionCostMetric),
   ];
+}
+
+/**
+ * Pose le total des resultats dans le sac, sous une cle fixe.
+ *
+ * Le cout par resultat est un rapport comme les autres : il lui faut
+ * un denominateur nomme. Sans cette etape il diviserait par une cle
+ * qui n'existe dans aucun releve.
+ */
+export function withResultTotal(bag: MetricBag): MetricBag {
+  const total = resultTotal(bag);
+  return total > 0 ? { ...bag, [RESULTS_KEY]: total } : bag;
 }
 
 /** Ce qu'on affiche tant que personne n'a choisi ses colonnes. */
@@ -309,6 +383,30 @@ export const DEFAULT_COLUMNS = [
 
 /** Les groupes de colonnes de Meta, repris tels quels. */
 export const PRESETS: { label: string; columns: string[] }[] = [
+  /*
+   * Les colonnes du preReglage "NASSIM" du compte, relevees sur son
+   * ecran. "Budget" en est absent : c'est un reglage de la campagne,
+   * pas une mesure, et il ne vient pas du meme appel. "Hold Rate" et
+   * "CREAT RAT" aussi : Meta n'expose aucune metrique personnalisee.
+   */
+  {
+    label: "NASSIM",
+    columns: [
+      RESULTS_KEY,
+      COST_PER_RESULT_KEY,
+      SPEND_SOURCE_KEY,
+      "reach",
+      "impressions",
+      "frequency",
+      "cpm",
+      "clicks",
+      "cpc",
+      "ctr",
+      "inline_link_click_ctr",
+      "action:landing_page_view",
+      "cost:landing_page_view",
+    ],
+  },
   { label: "Performance", columns: DEFAULT_COLUMNS },
   {
     label: "Engagement",
