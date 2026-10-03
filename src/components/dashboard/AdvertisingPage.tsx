@@ -6,9 +6,6 @@ import {
   Check,
   Eye,
   Loader2,
-  ChevronDown,
-  Columns3,
-  ChevronRight,
   Megaphone,
   MousePointerClick,
   Plug,
@@ -18,16 +15,9 @@ import {
   Wallet,
 } from "lucide-react";
 import PeriodFilter from "./PeriodFilter";
+import AdsTable from "./AdsTable";
 import { periodBounds, type Range } from "./useTeamStats";
-import type { AdsOverview, CampaignRow } from "@/lib/supabase/ads";
-import {
-  DEFAULT_COLUMNS,
-  PRESETS,
-  availableMetrics,
-  formatMetric,
-  metricValue,
-  type Metric,
-} from "@/lib/ads/metrics";
+import type { AdsOverview } from "@/lib/supabase/ads";
 import type { AdAccountView } from "@/lib/supabase/ad-accounts";
 
 /**
@@ -55,21 +45,6 @@ const nf2 = new Intl.NumberFormat("fr-FR", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
-
-/** Un statut de campagne, dit comme la plateforme le dit. */
-function statusStyle(status?: string): string {
-  const s = (status ?? "").toUpperCase();
-  if (s.includes("ACTIVE") || s.includes("ENABLE") || s.includes("DELIVER")) {
-    return "bg-emerald-50 text-emerald-700";
-  }
-  if (s.includes("PAUSE") || s.includes("DISABLE")) {
-    return "bg-amber-50 text-amber-700";
-  }
-  if (s.includes("DELETE") || s.includes("ARCHIVE")) {
-    return "bg-gray-100 text-gray-500";
-  }
-  return "bg-gray-100 text-gray-600";
-}
 
 export default function AdvertisingPage() {
   const [platform, setPlatform] = useState<Platform>("meta");
@@ -296,7 +271,7 @@ export default function AdvertisingPage() {
               />
             </div>
 
-            <CampaignTable campaigns={o.campaigns} currency={o.currency} />
+            <AdsTable campaigns={o.campaigns} currency={o.currency} />
           </>
         )
       )}
@@ -343,257 +318,6 @@ function Kpi({
       <p className="font-mono text-[28px] font-semibold text-gray-900">{value}</p>
       <p className="text-[12px] text-gray-500">{note}</p>
     </section>
-  );
-}
-
-/**
- * Les campagnes, leurs ensembles et leurs publicites.
- *
- * Emboites comme dans le gestionnaire de la plateforme, parce que
- * c'est ainsi qu'on repare une campagne : le total ne dit pas ou part
- * l'argent, l'ensemble le dit, et la publicite fautive est encore un
- * cran plus bas.
- *
- * Les etages sont replies par defaut. Quarante publicites deroulees
- * sous dix-huit campagnes feraient une liste que personne ne lit.
- */
-function CampaignTable({
-  campaigns,
-  currency,
-}: {
-  campaigns: CampaignRow[];
-  currency?: string;
-}) {
-  const [ouverts, setOuverts] = useState<Set<string>>(new Set());
-  const [choisies, setChoisies] = useState<string[]>(DEFAULT_COLUMNS);
-  const [picker, setPicker] = useState(false);
-
-  /*
-   * Les colonnes possibles dependent du compte : une action que ces
-   * campagnes n'ont jamais produite n'a pas a encombrer la liste.
-   */
-  const disponibles = availableMetrics(
-    campaigns.map((c) => c.metrics),
-    currency
-  );
-  const colonnes = choisies
-    .map((k) => disponibles.find((m) => m.key === k))
-    .filter((m): m is Metric => Boolean(m));
-
-  const basculer = (id: string) =>
-    setOuverts((prev) => {
-      const suite = new Set(prev);
-      if (suite.has(id)) suite.delete(id);
-      else suite.add(id);
-      return suite;
-    });
-
-  // Les enfants par identifiant de plateforme du parent.
-  const enfants = new Map<string, CampaignRow[]>();
-  for (const c of campaigns) {
-    if (!c.parentExternalId) continue;
-    const liste = enfants.get(c.parentExternalId);
-    if (liste) liste.push(c);
-    else enfants.set(c.parentExternalId, [c]);
-  }
-  for (const liste of enfants.values()) liste.sort((a, b) => b.spendMad - a.spendMad);
-
-  const racines = campaigns.filter((c) => c.level === "campaign");
-
-  /** Une ligne, puis ses descendants si elle est ouverte. */
-  function lignes(row: CampaignRow, profondeur: number): React.ReactNode[] {
-    const sous = enfants.get(row.externalId) ?? [];
-    const ouvert = ouverts.has(row.id);
-    const sortie: React.ReactNode[] = [
-      <tr key={row.id} className="border-b border-gray-50 last:border-0">
-        <td className="px-4 py-3">
-          <div
-            className="flex min-w-0 items-center gap-1.5"
-            style={{ paddingLeft: profondeur * 18 }}
-          >
-            {sous.length > 0 ? (
-              <button
-                onClick={() => basculer(row.id)}
-                className="shrink-0 rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-                title={ouvert ? "Replier" : "Deplier"}
-              >
-                {ouvert ? (
-                  <ChevronDown className="h-3.5 w-3.5" />
-                ) : (
-                  <ChevronRight className="h-3.5 w-3.5" />
-                )}
-              </button>
-            ) : (
-              <span className="w-[22px] shrink-0" />
-            )}
-            <span
-              className={`max-w-[260px] truncate text-[12.5px] ${
-                profondeur === 0
-                  ? "font-semibold text-gray-900"
-                  : profondeur === 1
-                    ? "font-medium text-gray-700"
-                    : "text-gray-600"
-              }`}
-              title={row.name}
-            >
-              {row.name}
-            </span>
-            {sous.length > 0 && (
-              <span className="shrink-0 rounded-full bg-gray-100 px-1.5 text-[10.5px] text-gray-500">
-                {sous.length}
-              </span>
-            )}
-          </div>
-        </td>
-        <td className="px-4 py-3">
-          <span
-            className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${statusStyle(row.status)}`}
-          >
-            {row.status ?? "-"}
-          </span>
-        </td>
-        {colonnes.map((m) => (
-          <td
-            key={m.key}
-            className="whitespace-nowrap px-4 py-3 text-right font-mono text-[12.5px] text-gray-700"
-          >
-            {formatMetric(m, metricValue(m, row.metrics))}
-          </td>
-        ))}
-      </tr>,
-    ];
-    if (ouvert) {
-      for (const fils of sous) sortie.push(...lignes(fils, profondeur + 1));
-    }
-    return sortie;
-  }
-
-  const total = racines.length;
-
-  return (
-    <div className="mb-6 rounded-xl border border-gray-200 bg-white">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-3">
-        <p className="text-[13px] font-semibold text-gray-800">
-          Campagnes
-          <span className="ml-1.5 font-normal text-gray-400">
-            {total} sur la periode
-          </span>
-        </p>
-        <div className="flex items-center gap-3">
-          {campaigns.length > total && (
-            <button
-              onClick={() =>
-                setOuverts((prev) =>
-                  prev.size > 0 ? new Set() : new Set(campaigns.map((c) => c.id))
-                )
-              }
-              className="text-[12px] font-medium text-blue-600 hover:text-blue-700"
-            >
-              {ouverts.size > 0 ? "Tout replier" : "Tout deplier"}
-            </button>
-          )}
-          <button
-            onClick={() => setPicker((v) => !v)}
-            className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-[12px] font-medium text-gray-700 hover:bg-gray-50"
-          >
-            <Columns3 className="h-3.5 w-3.5" />
-            Colonnes
-            <span className="rounded-full bg-gray-100 px-1.5 text-[10.5px] text-gray-500">
-              {colonnes.length}
-            </span>
-          </button>
-        </div>
-      </div>
-
-      {picker && (
-        <div className="border-b border-gray-100 bg-gray-50/60 px-4 py-3">
-          <div className="mb-2 flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] font-semibold tracking-wide text-gray-400">
-              PREREGLAGES
-            </span>
-            {PRESETS.map((p) => (
-              <button
-                key={p.label}
-                onClick={() =>
-                  setChoisies(
-                    p.columns.filter((k) =>
-                      disponibles.some((m) => m.key === k)
-                    )
-                  )
-                }
-                className="rounded-full border border-gray-300 bg-white px-2.5 py-1 text-[11.5px] text-gray-600 hover:bg-gray-100"
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-
-          {/*
-            Toutes les colonnes que ce compte sait remplir. Celles
-            qu'il n'a jamais produites ne figurent pas : proposer une
-            colonne vide ferait croire a une mesure a zero.
-          */}
-          <div className="flex flex-wrap gap-1.5">
-            {disponibles.map((m) => {
-              const prise = choisies.includes(m.key);
-              return (
-                <button
-                  key={m.key}
-                  title={m.hint}
-                  onClick={() =>
-                    setChoisies((prev) =>
-                      prise
-                        ? prev.filter((k) => k !== m.key)
-                        : [...prev, m.key]
-                    )
-                  }
-                  className={`rounded-md border px-2 py-1 text-[11.5px] transition-colors ${
-                    prise
-                      ? "border-blue-500 bg-blue-50 font-medium text-blue-800"
-                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  {m.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {total === 0 ? (
-        <p className="px-4 py-10 text-center text-[12.5px] text-gray-400">
-          Aucune depense relevee sur cette periode.
-        </p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[920px]">
-            <thead>
-              <tr className="border-b border-gray-100 text-left text-[11px] font-semibold tracking-wide text-gray-400">
-                <th className="px-4 py-2.5">CAMPAGNE / ENSEMBLE / PUBLICITE</th>
-                <th className="px-4 py-2.5">STATUT</th>
-                {colonnes.map((m) => (
-                  <th
-                    key={m.key}
-                    title={m.hint}
-                    className="whitespace-nowrap px-4 py-2.5 text-right"
-                  >
-                    {m.label.toUpperCase()}
-                    {m.hint && <span className="ml-0.5 text-gray-300">*</span>}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {racines
-                .slice()
-                .sort((a, b) => b.spendMad - a.spendMad)
-                .flatMap((r) => lignes(r, 0))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
   );
 }
 

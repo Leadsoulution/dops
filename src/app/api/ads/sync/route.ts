@@ -32,7 +32,10 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
     const seulement = body.accountId ? String(body.accountId) : null;
-    const jours = Number(body.days) > 0 ? Math.min(Number(body.days), 90) : undefined;
+    // Plafonne a quatre-vingt-dix jours : au-dela, Meta decoupe ses
+    // reponses et la relevee depasserait le temps alloue a la route.
+    const jours =
+      Number(body.days) > 0 ? Math.min(Number(body.days), 90) : undefined;
 
     const comptes = (await listAdAccounts()).filter(
       (a) => a.status === ACTIF && (!seulement || a.id === seulement)

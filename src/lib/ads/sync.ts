@@ -19,8 +19,19 @@ import * as tiktok from "./tiktok";
  * deux passages le meme jour ne doivent pas doubler la depense.
  */
 
-/** Fenetre relue a chaque passage : les plateformes corrigent encore J-6. */
-const JOURS_PAR_DEFAUT = 7;
+/**
+ * Fenetre relue a chaque passage.
+ *
+ * Sept jours suffisaient a corriger les chiffres que les plateformes
+ * revisent encore, mais pas a remplir un ecran : choisir "Ce mois-ci"
+ * ou "Mois dernier" ne montrait rien au-dela de la semaine. Trente
+ * jours couvrent les periodes qu'on consulte vraiment, et la relevee
+ * reste rapide — une centaine d'entites sur trente jours.
+ *
+ * L'ecran peut en demander davantage, jusqu'a quatre-vingt-dix, pour
+ * reconstituer un historique.
+ */
+const JOURS_PAR_DEFAUT = 30;
 
 const CLIENTS = { meta, tiktok } as const;
 
