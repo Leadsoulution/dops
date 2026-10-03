@@ -66,7 +66,18 @@ export async function syncAdAccount(
     // Le compte d'abord : c'est lui qui porte la devise, donc le taux.
     const info = await client.getAccount(token, externalId);
 
-    const campagnes = await client.getCampaigns(token, externalId);
+    /*
+     * Les trois etages, du plus large au plus fin.
+     *
+     * Ils se relevent separement : aucune plateforme ne rend les
+     * depenses d'un ensemble en descendant celles de sa campagne. Les
+     * campagnes d'abord, parce que les ensembles s'y rattachent.
+     */
+    const campagnes = [
+      ...(await client.getCampaigns(token, externalId)),
+      ...(await client.getAdSets(token, externalId)),
+      ...(await client.getAds(token, externalId)),
+    ];
     if (campagnes.length > 0) {
       const { error } = await supabase.from("ad_campaigns").upsert(
         campagnes.map((c) => ({
@@ -101,7 +112,11 @@ export async function syncAdAccount(
       )
     );
 
-    const insights = await client.getInsights(token, externalId, since, until);
+    const insights = [
+      ...(await client.getInsights(token, externalId, since, until, "campaign")),
+      ...(await client.getInsights(token, externalId, since, until, "adset")),
+      ...(await client.getInsights(token, externalId, since, until, "ad")),
+    ];
 
     let devisePerdue: string | undefined;
     const lignes = insights
@@ -141,13 +156,17 @@ export async function syncAdAccount(
       if (error) throw new Error(error.message);
     }
 
-    await supabase.from("ad_sync_logs").insert({
+    // L'echec du journal ne doit pas faire echouer la relevee, mais il
+    // ne doit pas passer inapercu non plus : une relevee sans trace
+    // est une relevee qu'on ne saura pas expliquer.
+    const { error: journalError } = await supabase.from("ad_sync_logs").insert({
       ...journal,
       status: "Succes",
       rows_written: lignes.length,
       finished_at: new Date().toISOString(),
       duration_ms: Date.now() - debut,
     });
+    if (journalError) console.error("ad_sync_logs:", journalError.message);
     await markSynced(accountId);
 
     return {

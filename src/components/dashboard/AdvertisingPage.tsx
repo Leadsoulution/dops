@@ -6,6 +6,8 @@ import {
   Check,
   Eye,
   Loader2,
+  ChevronDown,
+  ChevronRight,
   Megaphone,
   MousePointerClick,
   Plug,
@@ -335,28 +337,156 @@ function Kpi({
   );
 }
 
+/**
+ * Les campagnes, leurs ensembles et leurs publicites.
+ *
+ * Emboites comme dans le gestionnaire de la plateforme, parce que
+ * c'est ainsi qu'on repare une campagne : le total ne dit pas ou part
+ * l'argent, l'ensemble le dit, et la publicite fautive est encore un
+ * cran plus bas.
+ *
+ * Les etages sont replies par defaut. Quarante publicites deroulees
+ * sous dix-huit campagnes feraient une liste que personne ne lit.
+ */
 function CampaignTable({ campaigns }: { campaigns: CampaignRow[] }) {
+  const [ouverts, setOuverts] = useState<Set<string>>(new Set());
+
+  const basculer = (id: string) =>
+    setOuverts((prev) => {
+      const suite = new Set(prev);
+      if (suite.has(id)) suite.delete(id);
+      else suite.add(id);
+      return suite;
+    });
+
+  // Les enfants par identifiant de plateforme du parent.
+  const enfants = new Map<string, CampaignRow[]>();
+  for (const c of campaigns) {
+    if (!c.parentExternalId) continue;
+    const liste = enfants.get(c.parentExternalId);
+    if (liste) liste.push(c);
+    else enfants.set(c.parentExternalId, [c]);
+  }
+  for (const liste of enfants.values()) liste.sort((a, b) => b.spendMad - a.spendMad);
+
+  const racines = campaigns.filter((c) => c.level === "campaign");
+
+  /** Une ligne, puis ses descendants si elle est ouverte. */
+  function lignes(row: CampaignRow, profondeur: number): React.ReactNode[] {
+    const sous = enfants.get(row.externalId) ?? [];
+    const ouvert = ouverts.has(row.id);
+    const sortie: React.ReactNode[] = [
+      <tr key={row.id} className="border-b border-gray-50 last:border-0">
+        <td className="px-4 py-3">
+          <div
+            className="flex min-w-0 items-center gap-1.5"
+            style={{ paddingLeft: profondeur * 18 }}
+          >
+            {sous.length > 0 ? (
+              <button
+                onClick={() => basculer(row.id)}
+                className="shrink-0 rounded p-0.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                title={ouvert ? "Replier" : "Deplier"}
+              >
+                {ouvert ? (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5" />
+                )}
+              </button>
+            ) : (
+              <span className="w-[22px] shrink-0" />
+            )}
+            <span
+              className={`max-w-[260px] truncate text-[12.5px] ${
+                profondeur === 0
+                  ? "font-semibold text-gray-900"
+                  : profondeur === 1
+                    ? "font-medium text-gray-700"
+                    : "text-gray-600"
+              }`}
+              title={row.name}
+            >
+              {row.name}
+            </span>
+            {sous.length > 0 && (
+              <span className="shrink-0 rounded-full bg-gray-100 px-1.5 text-[10.5px] text-gray-500">
+                {sous.length}
+              </span>
+            )}
+          </div>
+        </td>
+        <td className="px-4 py-3">
+          <span
+            className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${statusStyle(row.status)}`}
+          >
+            {row.status ?? "-"}
+          </span>
+        </td>
+        <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-900">
+          {nf2.format(row.spendMad)}
+        </td>
+        <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-600">
+          {nf.format(row.impressions)}
+        </td>
+        <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-600">
+          {nf.format(row.clicks)}
+        </td>
+        <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-600">
+          {nf2.format(row.ctr)} %
+        </td>
+        <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-600">
+          {nf2.format(row.cpc)}
+        </td>
+        <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-600">
+          {nf2.format(row.cpm)}
+        </td>
+        <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-800">
+          {nf.format(row.conversions)}
+        </td>
+      </tr>,
+    ];
+    if (ouvert) {
+      for (const fils of sous) sortie.push(...lignes(fils, profondeur + 1));
+    }
+    return sortie;
+  }
+
+  const total = racines.length;
+
   return (
     <div className="mb-6 rounded-xl border border-gray-200 bg-white">
-      <div className="border-b border-gray-100 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-3">
         <p className="text-[13px] font-semibold text-gray-800">
           Campagnes
           <span className="ml-1.5 font-normal text-gray-400">
-            {campaigns.length} sur la periode
+            {total} sur la periode
           </span>
         </p>
+        {campaigns.length > total && (
+          <button
+            onClick={() =>
+              setOuverts((prev) =>
+                prev.size > 0 ? new Set() : new Set(campaigns.map((c) => c.id))
+              )
+            }
+            className="text-[12px] font-medium text-blue-600 hover:text-blue-700"
+          >
+            {ouverts.size > 0 ? "Tout replier" : "Tout deplier"}
+          </button>
+        )}
       </div>
 
-      {campaigns.length === 0 ? (
+      {total === 0 ? (
         <p className="px-4 py-10 text-center text-[12.5px] text-gray-400">
           Aucune depense relevee sur cette periode.
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px]">
+          <table className="w-full min-w-[920px]">
             <thead>
               <tr className="border-b border-gray-100 text-left text-[11px] font-semibold tracking-wide text-gray-400">
-                <th className="px-4 py-2.5">CAMPAGNE</th>
+                <th className="px-4 py-2.5">CAMPAGNE / ENSEMBLE / PUBLICITE</th>
                 <th className="px-4 py-2.5">STATUT</th>
                 <th className="px-4 py-2.5 text-right">DEPENSE</th>
                 <th className="px-4 py-2.5 text-right">IMPRESSIONS</th>
@@ -368,41 +498,10 @@ function CampaignTable({ campaigns }: { campaigns: CampaignRow[] }) {
               </tr>
             </thead>
             <tbody>
-              {campaigns.map((c) => (
-                <tr key={c.id} className="border-b border-gray-50 last:border-0">
-                  <td className="max-w-[260px] truncate px-4 py-3 text-[12.5px] font-medium text-gray-800">
-                    {c.name}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`rounded-md px-2 py-0.5 text-[11px] font-medium ${statusStyle(c.status)}`}
-                    >
-                      {c.status ?? "-"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-900">
-                    {nf2.format(c.spendMad)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-600">
-                    {nf.format(c.impressions)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-600">
-                    {nf.format(c.clicks)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-600">
-                    {nf2.format(c.ctr)} %
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-600">
-                    {nf2.format(c.cpc)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-600">
-                    {nf2.format(c.cpm)}
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-800">
-                    {nf.format(c.conversions)}
-                  </td>
-                </tr>
-              ))}
+              {racines
+                .slice()
+                .sort((a, b) => b.spendMad - a.spendMad)
+                .flatMap((r) => lignes(r, 0))}
             </tbody>
           </table>
         </div>

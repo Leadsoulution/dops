@@ -4,6 +4,7 @@ import {
   type AdAccountInfo,
   type AdCampaignInfo,
   type AdInsightRow,
+  type AdLevel,
 } from "./types";
 
 /**
@@ -126,36 +127,97 @@ export async function getCampaigns(
 }
 
 /**
- * Les depenses jour par jour.
+ * Les groupes d'annonces, rattaches a leur campagne.
+ *
+ * TikTok les nomme "ad groups" la ou Meta dit "ad sets" : c'est le
+ * meme etage, celui du ciblage et du budget.
+ */
+export async function getAdSets(
+  token: string,
+  advertiserId: string
+): Promise<AdCampaignInfo[]> {
+  const rows = await getAll<{
+    adgroup_id: string;
+    adgroup_name?: string;
+    campaign_id?: string;
+    operation_status?: string;
+    secondary_status?: string;
+    create_time?: string;
+  }>("/adgroup/get/", token, { advertiser_id: advertiserId });
+
+  return rows.map((a) => ({
+    externalId: a.adgroup_id,
+    level: "adset" as const,
+    parentExternalId: a.campaign_id,
+    name: a.adgroup_name ?? a.adgroup_id,
+    status: a.secondary_status ?? a.operation_status,
+    startedAt: a.create_time,
+  }));
+}
+
+/** Les publicites, rattachees a leur groupe. */
+export async function getAds(
+  token: string,
+  advertiserId: string
+): Promise<AdCampaignInfo[]> {
+  const rows = await getAll<{
+    ad_id: string;
+    ad_name?: string;
+    adgroup_id?: string;
+    operation_status?: string;
+    secondary_status?: string;
+    create_time?: string;
+  }>("/ad/get/", token, { advertiser_id: advertiserId });
+
+  return rows.map((a) => ({
+    externalId: a.ad_id,
+    level: "ad" as const,
+    parentExternalId: a.adgroup_id,
+    name: a.ad_name ?? a.ad_id,
+    status: a.secondary_status ?? a.operation_status,
+    startedAt: a.create_time,
+  }));
+}
+
+/**
+ * Les depenses jour par jour, a l'etage demande.
  *
  * `stat_time_day` dans les dimensions est ce qui decoupe par journee :
  * sans lui, TikTok renvoie un total sur la periode, et resynchroniser
  * une semaine ecraserait sept jours par un seul chiffre.
  */
+const NIVEAUX: Record<AdLevel, { dataLevel: string; dimension: string }> = {
+  campaign: { dataLevel: "AUCTION_CAMPAIGN", dimension: "campaign_id" },
+  adset: { dataLevel: "AUCTION_ADGROUP", dimension: "adgroup_id" },
+  ad: { dataLevel: "AUCTION_AD", dimension: "ad_id" },
+};
+
 export async function getInsights(
   token: string,
   advertiserId: string,
   since: string,
-  until: string
+  until: string,
+  level: AdLevel = "campaign"
 ): Promise<AdInsightRow[]> {
+  const { dataLevel, dimension } = NIVEAUX[level];
   const rows = await getAll<{
-    dimensions?: { campaign_id?: string; stat_time_day?: string };
+    dimensions?: Record<string, string | undefined>;
     metrics?: Record<string, string | number>;
   }>("/report/integrated/get/", token, {
     advertiser_id: advertiserId,
     report_type: "BASIC",
-    data_level: "AUCTION_CAMPAIGN",
-    dimensions: JSON.stringify(["campaign_id", "stat_time_day"]),
+    data_level: dataLevel,
+    dimensions: JSON.stringify([dimension, "stat_time_day"]),
     metrics: JSON.stringify(["spend", "impressions", "clicks", "conversion"]),
     start_date: since,
     end_date: until,
   });
 
   return rows
-    .filter((r) => r.dimensions?.campaign_id && r.dimensions?.stat_time_day)
+    .filter((r) => r.dimensions?.[dimension] && r.dimensions?.stat_time_day)
     .map((r) => ({
-      campaignExternalId: r.dimensions!.campaign_id!,
-      level: "campaign" as const,
+      campaignExternalId: r.dimensions![dimension]!,
+      level,
       // TikTok rend "2026-09-21 00:00:00" : seule la date nous interesse.
       day: r.dimensions!.stat_time_day!.slice(0, 10),
       spend: Number(r.metrics?.spend ?? 0),

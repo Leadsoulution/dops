@@ -4,6 +4,7 @@ import {
   type AdAccountInfo,
   type AdCampaignInfo,
   type AdInsightRow,
+  type AdLevel,
 } from "./types";
 
 /**
@@ -159,37 +160,107 @@ export async function getCampaigns(
 }
 
 /**
- * Les depenses jour par jour, au niveau campagne.
+ * Les ensembles de publicites, rattaches a leur campagne.
+ *
+ * C'est a cet etage que se decident le ciblage et le budget : une
+ * campagne qui coute cher sans vendre se repare presque toujours en
+ * regardant lequel de ses ensembles mange le budget.
+ */
+export async function getAdSets(
+  token: string,
+  externalId: string
+): Promise<AdCampaignInfo[]> {
+  const rows = await getAll<{
+    id: string;
+    name?: string;
+    status?: string;
+    campaign_id?: string;
+    start_time?: string;
+    end_time?: string;
+  }>(`/${accountPath(externalId)}/adsets`, token, {
+    fields: "id,name,status,campaign_id,start_time,end_time",
+    effective_status: '["ACTIVE","PAUSED","ARCHIVED"]',
+  });
+
+  return rows.map((a) => ({
+    externalId: a.id,
+    level: "adset" as const,
+    parentExternalId: a.campaign_id,
+    name: a.name ?? a.id,
+    status: a.status,
+    startedAt: a.start_time,
+    stoppedAt: a.end_time,
+  }));
+}
+
+/** Les publicites elles-memes, rattachees a leur ensemble. */
+export async function getAds(
+  token: string,
+  externalId: string
+): Promise<AdCampaignInfo[]> {
+  const rows = await getAll<{
+    id: string;
+    name?: string;
+    status?: string;
+    adset_id?: string;
+    created_time?: string;
+  }>(`/${accountPath(externalId)}/ads`, token, {
+    fields: "id,name,status,adset_id,created_time",
+    effective_status: '["ACTIVE","PAUSED","ARCHIVED"]',
+  });
+
+  return rows.map((a) => ({
+    externalId: a.id,
+    level: "ad" as const,
+    parentExternalId: a.adset_id,
+    name: a.name ?? a.id,
+    status: a.status,
+    startedAt: a.created_time,
+  }));
+}
+
+/**
+ * Les depenses jour par jour, a l'etage demande.
  *
  * `time_increment=1` demande une ligne par journee plutot qu'un total :
  * sans lui, resynchroniser une semaine ecraserait sept jours par un
  * seul chiffre.
+ *
+ * Les trois etages se relevent separement. Meta ne rend pas les
+ * depenses d'un ensemble en descendant celles de sa campagne : un
+ * total de campagne ne se repartit pas, il faut le redemander.
  */
+const ID_FIELD: Record<AdLevel, string> = {
+  campaign: "campaign_id",
+  adset: "adset_id",
+  ad: "ad_id",
+};
+
 export async function getInsights(
   token: string,
   externalId: string,
   since: string,
-  until: string
+  until: string,
+  level: AdLevel = "campaign"
 ): Promise<AdInsightRow[]> {
-  const rows = await getAll<{
-    campaign_id?: string;
-    date_start?: string;
-    spend?: string;
-    impressions?: string;
-    clicks?: string;
-    actions?: { action_type: string; value: string }[];
-  }>(`/${accountPath(externalId)}/insights`, token, {
-    level: "campaign",
+  const champ = ID_FIELD[level];
+  const rows = await getAll<
+    Record<string, string | undefined> & {
+      date_start?: string;
+      actions?: { action_type: string; value: string }[];
+    }
+  >(`/${accountPath(externalId)}/insights`, token, {
+    level,
     time_increment: "1",
     time_range: JSON.stringify({ since, until }),
-    fields: "campaign_id,spend,impressions,clicks,actions",
+    fields: `${champ},spend,impressions,clicks,actions`,
   });
 
   return rows
-    .filter((r) => r.campaign_id && r.date_start)
+    .filter((r) => r[champ] && r.date_start)
     .map((r) => ({
-      campaignExternalId: r.campaign_id!,
-      level: "campaign" as const,
+      campaignExternalId: r[champ] as string,
+      level,
       day: r.date_start!,
       spend: Number(r.spend ?? 0),
       impressions: Number(r.impressions ?? 0),

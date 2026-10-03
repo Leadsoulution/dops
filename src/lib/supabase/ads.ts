@@ -29,6 +29,10 @@ export type CampaignRow = {
   id: string;
   platform: "meta" | "tiktok";
   externalId: string;
+  /** Campagne, ensemble de publicites, ou publicite. */
+  level: "campaign" | "adset" | "ad";
+  /** L'etage du dessus, par son identifiant de plateforme. */
+  parentExternalId?: string;
   name: string;
   status?: string;
   spendMad: number;
@@ -87,6 +91,8 @@ type CampaignMeta = {
   id: string;
   platform: "meta" | "tiktok";
   external_id: string;
+  level: "campaign" | "adset" | "ad";
+  parent_external_id: string | null;
   name: string;
   status: string | null;
 };
@@ -130,11 +136,15 @@ export async function getAdsOverview(
       if (platform) q = q.eq("platform", platform);
       return q;
     }),
+    /*
+     * Les trois etages, pas seulement les campagnes. L'ecran les
+     * emboite ensuite : un budget qui derape se lit a l'etage de
+     * l'ensemble, et la publicite fautive est encore un cran plus bas.
+     */
     fetchAll<CampaignMeta>(() => {
       let q = supabase
         .from("ad_campaigns")
-        .select("id,platform,external_id,name,status")
-        .eq("level", "campaign");
+        .select("id,platform,external_id,level,parent_external_id,name,status");
       if (platform) q = q.eq("platform", platform);
       return q;
     }),
@@ -171,6 +181,8 @@ export async function getAdsOverview(
       id: meta.id,
       platform: meta.platform,
       externalId: meta.external_id,
+      level: meta.level,
+      parentExternalId: meta.parent_external_id ?? undefined,
       name: meta.name,
       status: meta.status ?? undefined,
       spendMad: round2(spendMad),
@@ -184,10 +196,18 @@ export async function getAdsOverview(
   }
   rows.sort((a, b) => b.spendMad - a.spendMad);
 
-  const spendMad = round2(rows.reduce((s, r) => s + r.spendMad, 0));
-  const impressions = rows.reduce((s, r) => s + r.impressions, 0);
-  const clicks = rows.reduce((s, r) => s + r.clicks, 0);
-  const conversions = rows.reduce((s, r) => s + r.conversions, 0);
+  /*
+   * Les totaux ne somment que les campagnes.
+   *
+   * Les trois etages decrivent la meme depense vue de trois hauteurs :
+   * les additionner la compterait trois fois, et la carte Depense
+   * aurait annonce le triple du montant reellement paye.
+   */
+  const racines = rows.filter((r) => r.level === "campaign");
+  const spendMad = round2(racines.reduce((s, r) => s + r.spendMad, 0));
+  const impressions = racines.reduce((s, r) => s + r.impressions, 0);
+  const clicks = racines.reduce((s, r) => s + r.clicks, 0);
+  const conversions = racines.reduce((s, r) => s + r.conversions, 0);
 
   // --- Cote commandes ---------------------------------------------
   const confirmed = leads.filter((l) => CONFIRMED.has(l.status));
@@ -205,7 +225,11 @@ export async function getAdsOverview(
   const pose = (jour: string) =>
     jours.get(jour) ?? (jours.set(jour, { spendMad: 0, delivered: 0 }), jours.get(jour)!);
 
-  for (const l of insights) pose(l.day).spendMad += Number(l.spend_mad ?? 0);
+  const idsRacines = new Set(racines.map((r) => r.id));
+  for (const l of insights) {
+    if (!idsRacines.has(l.campaign_id)) continue;
+    pose(l.day).spendMad += Number(l.spend_mad ?? 0);
+  }
   for (const l of delivered) {
     // Faute de date de livraison, la commande est rangee au jour de sa
     // creation : mieux vaut un jour approchant qu'une ligne perdue.
