@@ -2,6 +2,7 @@ import "server-only";
 import { getSupabaseServerClient } from "./server";
 import { fetchAll } from "./page";
 import { amountValue, roundToTen } from "@/lib/amount";
+import { SPEND_KEY, sumMetrics } from "@/lib/ads/metrics";
 
 /**
  * Le rapprochement entre ce qui est depense et ce qui est vendu.
@@ -45,6 +46,11 @@ export type CampaignRow = {
   cpc: number;
   /** Cout de mille impressions. */
   cpm: number;
+  /**
+   * Les autres mesures, deja sommees pour cette ligne. Les taux n'y
+   * sont pas : ils se recalculent a l'affichage.
+   */
+  metrics: Record<string, number>;
 };
 
 export type AdsOverview = {
@@ -84,6 +90,7 @@ type InsightRow = {
   impressions: number;
   clicks: number;
   conversions: string | number;
+  metrics: Record<string, number> | null;
   synced_at: string;
 };
 
@@ -130,7 +137,7 @@ export async function getAdsOverview(
     fetchAll<InsightRow>(() => {
       let q = supabase
         .from("ad_insights_daily")
-        .select("campaign_id,day,spend_mad,impressions,clicks,conversions,synced_at");
+        .select("campaign_id,day,spend_mad,impressions,clicks,conversions,metrics,synced_at");
       if (from) q = q.gte("day", from.slice(0, 10));
       if (to) q = q.lte("day", to.slice(0, 10));
       if (platform) q = q.eq("platform", platform);
@@ -192,6 +199,17 @@ export async function getAdsOverview(
       ctr: round2(ratio(clicks, impressions) * 100),
       cpc: round2(ratio(spendMad, clicks)),
       cpm: round2(ratio(spendMad, impressions) * 1000),
+      /*
+       * Les mesures des journees, sommees. `sumMetrics` ecarte les
+       * taux : ils se recalculent a l'affichage depuis leurs deux
+       * termes, sans quoi une semaine afficherait sept fois son CTR.
+       * La depense entre dans le sac pour que les couts par action
+       * trouvent leur numerateur.
+       */
+      metrics: {
+        ...sumMetrics(lignes.map((l) => l.metrics)),
+        [SPEND_KEY]: round2(spendMad),
+      },
     });
   }
   rows.sort((a, b) => b.spendMad - a.spendMad);

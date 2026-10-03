@@ -7,6 +7,7 @@ import {
   Eye,
   Loader2,
   ChevronDown,
+  Columns3,
   ChevronRight,
   Megaphone,
   MousePointerClick,
@@ -19,6 +20,14 @@ import {
 import PeriodFilter from "./PeriodFilter";
 import { periodBounds, type Range } from "./useTeamStats";
 import type { AdsOverview, CampaignRow } from "@/lib/supabase/ads";
+import {
+  DEFAULT_COLUMNS,
+  PRESETS,
+  availableMetrics,
+  formatMetric,
+  metricValue,
+  type Metric,
+} from "@/lib/ads/metrics";
 import type { AdAccountView } from "@/lib/supabase/ad-accounts";
 
 /**
@@ -350,6 +359,17 @@ function Kpi({
  */
 function CampaignTable({ campaigns }: { campaigns: CampaignRow[] }) {
   const [ouverts, setOuverts] = useState<Set<string>>(new Set());
+  const [choisies, setChoisies] = useState<string[]>(DEFAULT_COLUMNS);
+  const [picker, setPicker] = useState(false);
+
+  /*
+   * Les colonnes possibles dependent du compte : une action que ces
+   * campagnes n'ont jamais produite n'a pas a encombrer la liste.
+   */
+  const disponibles = availableMetrics(campaigns.map((c) => c.metrics));
+  const colonnes = choisies
+    .map((k) => disponibles.find((m) => m.key === k))
+    .filter((m): m is Metric => Boolean(m));
 
   const basculer = (id: string) =>
     setOuverts((prev) => {
@@ -423,27 +443,14 @@ function CampaignTable({ campaigns }: { campaigns: CampaignRow[] }) {
             {row.status ?? "-"}
           </span>
         </td>
-        <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-900">
-          {nf2.format(row.spendMad)}
-        </td>
-        <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-600">
-          {nf.format(row.impressions)}
-        </td>
-        <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-600">
-          {nf.format(row.clicks)}
-        </td>
-        <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-600">
-          {nf2.format(row.ctr)} %
-        </td>
-        <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-600">
-          {nf2.format(row.cpc)}
-        </td>
-        <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-600">
-          {nf2.format(row.cpm)}
-        </td>
-        <td className="px-4 py-3 text-right font-mono text-[12.5px] text-gray-800">
-          {nf.format(row.conversions)}
-        </td>
+        {colonnes.map((m) => (
+          <td
+            key={m.key}
+            className="whitespace-nowrap px-4 py-3 text-right font-mono text-[12.5px] text-gray-700"
+          >
+            {formatMetric(m, metricValue(m, row.metrics))}
+          </td>
+        ))}
       </tr>,
     ];
     if (ouvert) {
@@ -463,19 +470,87 @@ function CampaignTable({ campaigns }: { campaigns: CampaignRow[] }) {
             {total} sur la periode
           </span>
         </p>
-        {campaigns.length > total && (
+        <div className="flex items-center gap-3">
+          {campaigns.length > total && (
+            <button
+              onClick={() =>
+                setOuverts((prev) =>
+                  prev.size > 0 ? new Set() : new Set(campaigns.map((c) => c.id))
+                )
+              }
+              className="text-[12px] font-medium text-blue-600 hover:text-blue-700"
+            >
+              {ouverts.size > 0 ? "Tout replier" : "Tout deplier"}
+            </button>
+          )}
           <button
-            onClick={() =>
-              setOuverts((prev) =>
-                prev.size > 0 ? new Set() : new Set(campaigns.map((c) => c.id))
-              )
-            }
-            className="text-[12px] font-medium text-blue-600 hover:text-blue-700"
+            onClick={() => setPicker((v) => !v)}
+            className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-[12px] font-medium text-gray-700 hover:bg-gray-50"
           >
-            {ouverts.size > 0 ? "Tout replier" : "Tout deplier"}
+            <Columns3 className="h-3.5 w-3.5" />
+            Colonnes
+            <span className="rounded-full bg-gray-100 px-1.5 text-[10.5px] text-gray-500">
+              {colonnes.length}
+            </span>
           </button>
-        )}
+        </div>
       </div>
+
+      {picker && (
+        <div className="border-b border-gray-100 bg-gray-50/60 px-4 py-3">
+          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-semibold tracking-wide text-gray-400">
+              PREREGLAGES
+            </span>
+            {PRESETS.map((p) => (
+              <button
+                key={p.label}
+                onClick={() =>
+                  setChoisies(
+                    p.columns.filter((k) =>
+                      disponibles.some((m) => m.key === k)
+                    )
+                  )
+                }
+                className="rounded-full border border-gray-300 bg-white px-2.5 py-1 text-[11.5px] text-gray-600 hover:bg-gray-100"
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {/*
+            Toutes les colonnes que ce compte sait remplir. Celles
+            qu'il n'a jamais produites ne figurent pas : proposer une
+            colonne vide ferait croire a une mesure a zero.
+          */}
+          <div className="flex flex-wrap gap-1.5">
+            {disponibles.map((m) => {
+              const prise = choisies.includes(m.key);
+              return (
+                <button
+                  key={m.key}
+                  title={m.hint}
+                  onClick={() =>
+                    setChoisies((prev) =>
+                      prise
+                        ? prev.filter((k) => k !== m.key)
+                        : [...prev, m.key]
+                    )
+                  }
+                  className={`rounded-md border px-2 py-1 text-[11.5px] transition-colors ${
+                    prise
+                      ? "border-blue-500 bg-blue-50 font-medium text-blue-800"
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-100"
+                  }`}
+                >
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {total === 0 ? (
         <p className="px-4 py-10 text-center text-[12.5px] text-gray-400">
@@ -488,13 +563,16 @@ function CampaignTable({ campaigns }: { campaigns: CampaignRow[] }) {
               <tr className="border-b border-gray-100 text-left text-[11px] font-semibold tracking-wide text-gray-400">
                 <th className="px-4 py-2.5">CAMPAGNE / ENSEMBLE / PUBLICITE</th>
                 <th className="px-4 py-2.5">STATUT</th>
-                <th className="px-4 py-2.5 text-right">DEPENSE</th>
-                <th className="px-4 py-2.5 text-right">IMPRESSIONS</th>
-                <th className="px-4 py-2.5 text-right">CLICS</th>
-                <th className="px-4 py-2.5 text-right">CTR</th>
-                <th className="px-4 py-2.5 text-right">CPC</th>
-                <th className="px-4 py-2.5 text-right">CPM</th>
-                <th className="px-4 py-2.5 text-right">CONV.</th>
+                {colonnes.map((m) => (
+                  <th
+                    key={m.key}
+                    title={m.hint}
+                    className="whitespace-nowrap px-4 py-2.5 text-right"
+                  >
+                    {m.label.toUpperCase()}
+                    {m.hint && <span className="ml-0.5 text-gray-300">*</span>}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>

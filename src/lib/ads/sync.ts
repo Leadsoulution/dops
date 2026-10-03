@@ -143,6 +143,8 @@ export async function syncAdAccount(
           impressions: i.impressions,
           clicks: i.clicks,
           conversions: i.conversions,
+          // Tout ce que la plateforme a renvoye en plus, tel quel.
+          metrics: i.metrics ?? null,
           synced_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };

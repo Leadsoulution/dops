@@ -42,6 +42,13 @@ export type AdInsightRow = {
   impressions: number;
   clicks: number;
   conversions: number;
+  /**
+   * Toutes les autres mesures de la plateforme, telles quelles :
+   * couverture, frequence, clics uniques, resultats par type d'action.
+   * Les taux n'y sont pas ranges — ils se recalculent, ils ne se
+   * transportent pas.
+   */
+  metrics?: Record<string, number>;
 };
 
 /**

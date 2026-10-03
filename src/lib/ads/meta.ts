@@ -236,6 +236,26 @@ const ID_FIELD: Record<AdLevel, string> = {
   ad: "ad_id",
 };
 
+/** Les mesures simples, demandees telles quelles. */
+const CHAMPS_SIMPLES = [
+  "spend",
+  "reach",
+  "impressions",
+  "clicks",
+  "unique_clicks",
+  "inline_link_clicks",
+];
+
+/** Les mesures livrees sous forme de liste d'actions. */
+const CHAMPS_ACTIONS = [
+  "actions",
+  "outbound_clicks",
+  "video_p25_watched_actions",
+  "video_p100_watched_actions",
+];
+
+type ActionList = { action_type: string; value: string }[];
+
 export async function getInsights(
   token: string,
   externalId: string,
@@ -245,28 +265,63 @@ export async function getInsights(
 ): Promise<AdInsightRow[]> {
   const champ = ID_FIELD[level];
   const rows = await getAll<
-    Record<string, string | undefined> & {
-      date_start?: string;
-      actions?: { action_type: string; value: string }[];
-    }
+    Record<string, string | ActionList | undefined> & { date_start?: string }
   >(`/${accountPath(externalId)}/insights`, token, {
     level,
     time_increment: "1",
     time_range: JSON.stringify({ since, until }),
-    fields: `${champ},spend,impressions,clicks,actions`,
+    /*
+     * On ne demande que les mesures brutes, pas les taux.
+     *
+     * Meta renvoie volontiers ctr, cpc et frequence, mais ce sont des
+     * rapports calcules sur la journee. Les enregistrer puis les
+     * additionner sur une semaine donnerait n'importe quoi ; on les
+     * recalcule a l'affichage depuis leurs deux termes.
+     */
+    fields: [champ, ...CHAMPS_SIMPLES, ...CHAMPS_ACTIONS].join(","),
   });
 
   return rows
     .filter((r) => r[champ] && r.date_start)
-    .map((r) => ({
-      campaignExternalId: r[champ] as string,
-      level,
-      day: r.date_start!,
-      spend: Number(r.spend ?? 0),
-      impressions: Number(r.impressions ?? 0),
-      clicks: Number(r.clicks ?? 0),
-      conversions: countLeads(r.actions),
-    }));
+    .map((r) => {
+      const metrics: Record<string, number> = {};
+
+      for (const c of CHAMPS_SIMPLES) {
+        const n = Number(r[c] ?? 0);
+        if (Number.isFinite(n) && n !== 0) metrics[c] = n;
+      }
+
+      // Les quartiles video arrivent en liste d'une seule entree.
+      for (const [champVideo, cle] of [
+        ["video_p25_watched_actions", "video_p25"],
+        ["video_p100_watched_actions", "video_p100"],
+      ] as const) {
+        const total = somme(r[champVideo] as ActionList | undefined);
+        if (total) metrics[cle] = total;
+      }
+
+      for (const a of (r.actions as ActionList | undefined) ?? []) {
+        metrics[`action:${a.action_type}`] = Number(a.value ?? 0);
+      }
+      for (const a of (r.outbound_clicks as ActionList | undefined) ?? []) {
+        metrics.outbound_clicks = Number(a.value ?? 0);
+      }
+
+      return {
+        campaignExternalId: r[champ] as string,
+        level,
+        day: r.date_start!,
+        spend: Number(r.spend ?? 0),
+        impressions: Number(r.impressions ?? 0),
+        clicks: Number(r.clicks ?? 0),
+        conversions: countLeads(r.actions as ActionList | undefined),
+        metrics,
+      };
+    });
+}
+
+function somme(list?: ActionList): number {
+  return (list ?? []).reduce((t, a) => t + Number(a.value ?? 0), 0);
 }
 
 /**
