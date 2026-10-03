@@ -20,7 +20,15 @@ import {
   Truck,
 } from "lucide-react";
 import type { FollowUpLead } from "@/lib/supabase/follow-up";
-import { whatsappAppChat, whatsappNumber } from "@/lib/whatsapp";
+import {
+  messageKeyFor,
+  messageLabelFor,
+  templateFor,
+  whatsappAppChat,
+  whatsappAppLink,
+  whatsappLink,
+  whatsappNumber,
+} from "@/lib/whatsapp";
 import { openWhatsapp } from "@/lib/open-outside";
 import { markLabel } from "@/lib/follow-up";
 import { copyProductPhoto } from "@/lib/product-photo";
@@ -47,6 +55,17 @@ export default function SuiviPage() {
   const [error, setError] = useState<string | null>(null);
   const [onglet, setOnglet] = useState<Onglets>("confirmation");
   const [marquage, setMarquage] = useState<string | null>(null);
+  /**
+   * Les modeles de messages, comme dans la fiche d'appel.
+   *
+   * Tant qu'ils ne sont pas arrives, le bouton attend : partir sur les
+   * modeles par defaut enverrait au client un texte que personne n'a
+   * valide, alors qu'un modele enregistre existe peut-etre.
+   */
+  const [templates, setTemplates] = useState<{
+    map: Record<string, string>;
+    loaded: boolean;
+  }>({ map: {}, loaded: false });
 
   async function load() {
     try {
@@ -72,6 +91,19 @@ export default function SuiviPage() {
       })
       .catch(() => {
         if (!cancelled) setError("Liste indisponible.");
+      });
+
+    fetch("/api/settings/whatsapp")
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error())))
+      .then((body) => {
+        if (!cancelled) {
+          setTemplates({ map: body?.templates ?? {}, loaded: true });
+        }
+      })
+      .catch(() => {
+        // Reglages injoignables : on se rabat sur les modeles par
+        // defaut plutot que de bloquer le bouton indefiniment.
+        if (!cancelled) setTemplates({ map: {}, loaded: true });
       });
     return () => {
       cancelled = true;
@@ -191,6 +223,7 @@ export default function SuiviPage() {
             repos={onglet === "traite"}
             busy={marquage === lead.id}
             onMarquer={() => void marquer(lead)}
+            templates={templates}
           />
         ))}
       </div>
@@ -282,17 +315,34 @@ function Carte({
   repos,
   busy,
   onMarquer,
+  templates,
 }: {
   lead: FollowUpLead;
   /** Vrai dans l'onglet Traite : le dossier attend son retour. */
   repos: boolean;
   busy: boolean;
   onMarquer: () => void;
+  templates: { map: Record<string, string>; loaded: boolean };
 }) {
   const tel = lead.phone?.trim();
   const livreurRef = useRef<HTMLButtonElement>(null);
   const [menuLivreur, setMenuLivreur] = useState(false);
   const [photo, setPhoto] = useState<"copie" | "absente" | null>(null);
+
+  /*
+   * Le message du client : le meme modele que dans Leads & Commandes.
+   *
+   * La cle se deduit des statuts bruts — statut de confirmation, ou
+   * code du transporteur une fois le colis parti — exactement comme
+   * dans la fiche d'appel. Deux ecrans qui ecriraient deux textes
+   * differents pour la meme commande finiraient par se contredire
+   * devant le client.
+   */
+  const messageKey = messageKeyFor({
+    status: lead.confirmationStatus,
+    deliveryStatusCode: lead.deliveryStatusCode,
+  });
+  const modele = templateFor(messageKey, templates.map);
 
   /**
    * La photo du produit part avec le message.
@@ -311,7 +361,10 @@ function Carte({
     } catch {
       setPhoto("absente");
     }
-    openWhatsapp(whatsappAppChat(tel), `https://wa.me/${whatsappNumber(tel)}`);
+    openWhatsapp(
+      whatsappAppLink(lead, modele),
+      whatsappLink(lead, modele)
+    );
   }
 
   /** Ce qu'un livreur a besoin de lire : le colis, et pour qui. */
@@ -478,11 +531,18 @@ function Carte({
             <>
               <button
                 onClick={() => void whatsappClient()}
-                className="mb-1 flex w-full items-center justify-center gap-2 rounded-lg bg-[#25D366] py-2 text-[12.5px] font-medium text-white hover:bg-[#1eb855]"
+                disabled={!templates.loaded}
+                title={modele}
+                className="mb-1 flex w-full items-center justify-center gap-2 rounded-lg bg-[#25D366] py-2 text-[12.5px] font-medium text-white hover:bg-[#1eb855] disabled:opacity-60"
               >
                 <MessageCircle className="h-3.5 w-3.5" />
-                WhatsApp
+                {templates.loaded ? "WhatsApp" : "Lecture des messages..."}
               </button>
+              {templates.loaded && (
+                <p className="mb-1 truncate text-center text-[11px] text-gray-400">
+                  {messageLabelFor(messageKey)}
+                </p>
+              )}
               {photo && (
                 <p
                   className={`mb-2 text-center text-[11px] ${

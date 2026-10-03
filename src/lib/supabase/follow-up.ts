@@ -41,6 +41,15 @@ export type FollowUpLead = {
   amount: string;
   /** Statut de confirmation, ou libelle du transporteur selon la file. */
   status: string;
+  /*
+   * Les deux statuts bruts, en plus de celui qu'on affiche. Ce sont
+   * eux qui choisissent le modele de message WhatsApp, exactement
+   * comme dans la fiche d'appel : l'etiquette lisible ne suffit pas a
+   * retrouver la cle.
+   */
+  confirmationStatus: string;
+  deliveryStatusCode?: string;
+  deliveryDate?: string;
   /** Date de creation, telle qu'affichee partout ailleurs. */
   date: string;
   source: string;
@@ -81,6 +90,7 @@ type Row = {
   delivery_status_code: string | null;
   deliverer: string | null;
   deliverer_phone: string | null;
+  delivery_date: string | null;
   created_at: string;
   last_modified_at: string | null;
 };
@@ -96,7 +106,7 @@ const CHAMPS =
   "id,reference,client,phone,ville,quartier,adresse,product_name," +
   "product_label,item_count,amount,status,date,source,customer_note," +
   "tracking_number,delivery_status,delivery_status_code,deliverer," +
-  "deliverer_phone,created_at,last_modified_at";
+  "deliverer_phone,delivery_date,created_at,last_modified_at";
 
 export async function getFollowUps(userId: string): Promise<{
   confirmation: FollowUpLead[];
@@ -160,6 +170,9 @@ export async function getFollowUps(userId: string): Promise<{
         kind === "confirmation"
           ? row.status
           : (row.delivery_status ?? row.delivery_status_code ?? ""),
+      confirmationStatus: row.status,
+      deliveryStatusCode: row.delivery_status_code ?? undefined,
+      deliveryDate: row.delivery_date ?? undefined,
       date: row.date ?? "",
       source: row.source ?? "",
       note: row.customer_note?.trim() || undefined,
