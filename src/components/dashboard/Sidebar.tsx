@@ -102,8 +102,15 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           className="fixed inset-0 z-40 bg-black/40 lg:hidden"
         />
       )}
+      {/*
+        La place que la barre occupe dans la page, sur grand ecran.
+        La barre elle-meme flotte au-dessus : en s'elargissant au
+        survol elle recouvre le contenu au lieu de le pousser, sinon
+        tout le tableau se decalerait chaque fois que la souris passe.
+      */}
+      <div className="hidden w-[68px] shrink-0 lg:block" />
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex h-full w-[248px] shrink-0 flex-col bg-[#0B1120] text-slate-300 transition-transform duration-200 ease-out lg:static lg:z-auto lg:translate-x-0 ${
+        className={`group fixed inset-y-0 left-0 z-50 flex h-full w-[248px] shrink-0 flex-col overflow-hidden bg-[#0B1120] text-slate-300 transition-[transform,width] duration-200 ease-out lg:z-50 lg:w-[68px] lg:translate-x-0 lg:hover:w-[248px] lg:hover:shadow-2xl ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -112,14 +119,26 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           Le fond du logo a ete detoure : il se pose directement sur le
           #0B1120 de la barre laterale, sans rectangle visible.
         */}
-        <Link href="/" className="min-w-0">
+        <Link href="/" className="min-w-0" title="Orderly">
+          {/*
+            Retractee, la barre ne montre que la marque : le logo
+            complet est un mot long, il serait coupe en plein milieu.
+          */}
+          <Image
+            src="/icon-192.png"
+            alt="Orderly"
+            width={192}
+            height={192}
+            priority
+            className="hidden h-9 w-9 rounded-lg object-contain lg:block lg:group-hover:hidden"
+          />
           <Image
             src="/logo-orderly.png"
             alt="Orderly - Gestion des commandes"
             width={720}
             height={168}
             priority
-            className="h-9 w-auto lg:h-10"
+            className="h-9 w-auto lg:hidden lg:h-10 lg:group-hover:block"
           />
         </Link>
         <button
@@ -140,7 +159,12 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           if (items.length === 0) return null;
           return (
             <div key={group} className="mb-4">
-              <p className="mb-1 px-3 text-[10.5px] font-semibold tracking-wider text-slate-500">
+              {/*
+                Invisible plutot que supprime : la hauteur ne change
+                pas, et les icones ne sautent pas d'un pixel quand la
+                souris arrive.
+              */}
+              <p className="mb-1 truncate px-3 text-[10.5px] font-semibold tracking-wider text-slate-500 lg:invisible lg:group-hover:visible">
                 {group}
               </p>
               <ul className="space-y-0.5">
@@ -158,6 +182,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
                       <Link
                         href={item.href}
                         onClick={onClose}
+                        title={item.label}
                         className={`flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] transition-colors ${
                           active
                             ? "bg-blue-600 font-medium text-white"
@@ -165,11 +190,13 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
                         }`}
                       >
                         <Icon className="h-[17px] w-[17px] shrink-0" />
-                        <span>{item.label}</span>
+                        <span className="truncate whitespace-nowrap lg:hidden lg:group-hover:inline">
+                          {item.label}
+                        </span>
                       </Link>
 
                       {item.children && inSection && (
-                        <ul className="mt-0.5 ml-[26px] space-y-0.5 border-l border-white/10 pl-3">
+                        <ul className="mt-0.5 ml-[26px] space-y-0.5 border-l border-white/10 pl-3 lg:hidden lg:group-hover:block">
                           {item.children.map((child) => (
                             <li key={child.href}>
                               <Link
@@ -201,6 +228,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
         <button
           onClick={signOut}
           disabled={signingOut}
+          title="Deconnexion"
           className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] text-slate-400 transition-colors hover:bg-red-500/10 hover:text-red-300 disabled:opacity-60"
         >
           {signingOut ? (
@@ -208,7 +236,9 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           ) : (
             <LogOut className="h-[17px] w-[17px]" />
           )}
-          <span>{signingOut ? "Deconnexion..." : "Deconnexion"}</span>
+          <span className="truncate whitespace-nowrap lg:hidden lg:group-hover:inline">
+            {signingOut ? "Deconnexion..." : "Deconnexion"}
+          </span>
         </button>
       </div>
       </aside>

@@ -113,9 +113,14 @@ export default function InstallAppButton() {
 
   if (installed) {
     return (
-      <div className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12.5px] text-slate-500">
+      <div
+        title="Application installee"
+        className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[12.5px] text-slate-500"
+      >
         <Check className="h-[17px] w-[17px] shrink-0 text-emerald-500" />
-        <span>Application installee</span>
+        <span className="truncate whitespace-nowrap lg:hidden lg:group-hover:inline">
+          Application installee
+        </span>
       </div>
     );
   }
@@ -125,10 +130,13 @@ export default function InstallAppButton() {
       <>
         <button
           onClick={() => setShowIOSHelp(true)}
+          title="Installer l'application"
           className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] text-slate-400 transition-colors hover:bg-white/5 hover:text-slate-200"
         >
           <Download className="h-[17px] w-[17px] shrink-0" />
-          <span>Installer l&apos;application</span>
+          <span className="truncate whitespace-nowrap lg:hidden lg:group-hover:inline">
+            Installer l&apos;application
+          </span>
         </button>
 
         {showIOSHelp && (
@@ -187,14 +195,17 @@ export default function InstallAppButton() {
           // nouveau s'il juge l'installation toujours possible.
           setPrompt(null);
         }}
+        title="Installer l'application"
         className="flex w-full items-center gap-2.5 rounded-lg bg-blue-600/10 px-3 py-2 text-left text-[13px] font-medium text-blue-300 transition-colors hover:bg-blue-600/20"
       >
         <Download className="h-[17px] w-[17px] shrink-0" />
-        <span>Installer l&apos;application</span>
+        <span className="truncate whitespace-nowrap lg:hidden lg:group-hover:inline">
+          Installer l&apos;application
+        </span>
       </button>
 
       {androidOtherBrowser && (
-        <p className="mt-1.5 flex items-start gap-2 px-3 text-[11.5px] leading-relaxed text-amber-300/80">
+        <p className="mt-1.5 flex items-start gap-2 px-3 text-[11.5px] leading-relaxed text-amber-300/80 lg:hidden lg:group-hover:flex">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           Installez depuis Chrome : depuis ce navigateur, Android peut
           refuser l&apos;installation.
