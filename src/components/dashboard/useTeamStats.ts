@@ -1,6 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  moroccoDate,
+  moroccoDateShift,
+  moroccoMonthStart,
+  moroccoSpan,
+} from "@/lib/morocco-day";
 import type { TeamStats } from "./confirmation-data";
 
 /**
@@ -19,43 +25,48 @@ export type Range = {
 };
 
 /**
- * Bornes d'une periode. Fonction pure : le hook s'en sert, et les pages
- * qui interrogent une autre route aussi, pour qu'un meme choix couvre
- * partout le meme intervalle.
+ * Bornes d'une periode, ancrees sur la journee marocaine.
  *
  * Elles portent sur ce que les agents ont fait pendant l'intervalle, et
  * non sur la date des commandes : c'est le travail qui est mesure.
+ *
+ * Le jour commence a minuit a Casablanca, pas a minuit sur le poste
+ * qui pose la question. Un navigateur regle sur Paris ouvrait sa
+ * journee une heure trop tot, et "Aujourd'hui" ramassait la derniere
+ * heure de la veille.
  */
-export function periodBounds(range: Range): { from?: string; to?: string } {
-  const now = new Date();
-  const startOfDay = (d: Date) =>
-    new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const endOfDay = (d: Date) =>
-    new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
-  const span = (a: Date, b: Date) => ({
-    from: a.toISOString(),
-    to: b.toISOString(),
+export function periodBounds(range: Range): {
+  from?: string;
+  to?: string;
+  /** Les memes bornes en dates de calendrier, pour les tables datees. */
+  fromDay?: string;
+  toDay?: string;
+} {
+  const today = moroccoDate();
+  const plage = (premier: string, dernier: string) => ({
+    ...moroccoSpan(premier, dernier),
+    fromDay: premier,
+    toDay: dernier,
   });
 
   switch (range.label) {
     case "Aujourd'hui":
-      return span(startOfDay(now), endOfDay(now));
+      return plage(today, today);
     case "Hier": {
-      const yesterday = new Date(now);
-      yesterday.setDate(now.getDate() - 1);
-      return span(startOfDay(yesterday), endOfDay(yesterday));
+      const hier = moroccoDateShift(today, -1);
+      return plage(hier, hier);
     }
-    case "7 derniers jours": {
+    case "7 derniers jours":
       // Aujourd'hui compris, donc six jours en arriere.
-      const from = new Date(now);
-      from.setDate(now.getDate() - 6);
-      return span(startOfDay(from), endOfDay(now));
-    }
+      return plage(moroccoDateShift(today, -6), today);
     case "Ce mois-ci":
-      return span(new Date(now.getFullYear(), now.getMonth(), 1), endOfDay(now));
+      return plage(moroccoMonthStart(today), today);
     case "Personnalisee":
       return range.custom
-        ? span(startOfDay(range.custom.start), endOfDay(range.custom.end))
+        ? plage(
+            moroccoDate(range.custom.start),
+            moroccoDate(range.custom.end)
+          )
         : {};
     // "Maximum" couvre tout l'historique.
     default:
@@ -73,9 +84,7 @@ export function periodBounds(range: Range): { from?: string; to?: string } {
  *
  * Il n'expire pas : les statistiques d'une periode close ne bougent
  * plus, et celles du jour se rafraichissent au rechargement de la
- * page. Mieux vaut un chiffre d'il y a dix minutes affiche
- * instantanement qu'un chiffre juste apres trois secondes d'attente —
- * surtout pour comparer deux periodes.
+ * page.
  */
 const cache = new Map<string, TeamStats>();
 

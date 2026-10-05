@@ -62,6 +62,13 @@ import {
 } from "./leads-data";
 import { displayAmount } from "@/lib/amount";
 import { clientFlags } from "@/lib/client-history";
+import {
+  moroccoDate,
+  moroccoDateShift,
+  moroccoDayEnd,
+  moroccoDayStart,
+  moroccoMonthStart,
+} from "@/lib/morocco-day";
 import { PlatformLogo, SourceLogo, platformLabel } from "./PlatformLogo";
 import { currentProfile } from "@/lib/session";
 import RowActionsMenu from "./RowActionsMenu";
@@ -373,36 +380,38 @@ export default function LeadsCommandesPage() {
     }
   }, [searchParams, router]);
 
-  // Bornes de la periode choisie, en heure locale. `null` = pas de borne.
+  /*
+   * Bornes de la periode choisie, a l'heure du Maroc.
+   *
+   * Elles se calculaient sur l'horloge du poste : un navigateur regle
+   * sur Paris ouvrait sa journee une heure avant Casablanca, et
+   * "Aujourd'hui" ramassait la derniere heure de la veille.
+   */
   function rangeBounds(): { from: Date | null; to: Date | null } {
-    const now = new Date();
-    const startOfDay = (d: Date) =>
-      new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    const endOfDay = (d: Date) =>
-      new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+    const today = moroccoDate();
+    const plage = (premier: string, dernier: string) => ({
+      from: moroccoDayStart(premier),
+      to: moroccoDayEnd(dernier),
+    });
 
     switch (activeRange) {
       case "Aujourd'hui":
-        return { from: startOfDay(now), to: endOfDay(now) };
+        return plage(today, today);
       case "Hier": {
-        const yesterday = new Date(now);
-        yesterday.setDate(now.getDate() - 1);
-        return { from: startOfDay(yesterday), to: endOfDay(yesterday) };
+        const hier = moroccoDateShift(today, -1);
+        return plage(hier, hier);
       }
-      case "7 derniers jours": {
+      case "7 derniers jours":
         // Aujourd'hui compris, donc six jours en arriere.
-        const from = new Date(now);
-        from.setDate(now.getDate() - 6);
-        return { from: startOfDay(from), to: endOfDay(now) };
-      }
+        return plage(moroccoDateShift(today, -6), today);
       case "Ce mois-ci":
-        return {
-          from: new Date(now.getFullYear(), now.getMonth(), 1),
-          to: endOfDay(now),
-        };
+        return plage(moroccoMonthStart(today), today);
       case "Personnalisee":
         return customRange
-          ? { from: startOfDay(customRange.start), to: endOfDay(customRange.end) }
+          ? plage(
+              moroccoDate(customRange.start),
+              moroccoDate(customRange.end)
+            )
           : { from: null, to: null };
       // "Maximum" couvre tout l'historique.
       default:

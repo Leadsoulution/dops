@@ -7,6 +7,8 @@
  * jusqu'a l'ecran.
  */
 
+import { moroccoDate, moroccoDateShift } from "@/lib/morocco-day";
+
 export type AdPlatform = "meta" | "tiktok";
 
 /** Les trois etages d'un compte publicitaire, du plus large au plus fin. */
@@ -69,10 +71,15 @@ export class AdApiError extends Error {
   }
 }
 
-/** Les sept derniers jours, bornes comprises, au format des deux API. */
+/**
+ * Les derniers jours, bornes comprises, au format des deux API.
+ *
+ * Les journees sont celles du Maroc, pas celles d'UTC. Le serveur
+ * tourne en UTC : passe minuit a Casablanca, il demandait encore les
+ * depenses de la veille, et celles du jour n'apparaissaient qu'apres
+ * une heure du matin.
+ */
 export function lastDays(count: number, today: Date = new Date()) {
-  const jour = (d: Date) => d.toISOString().slice(0, 10);
-  const debut = new Date(today);
-  debut.setUTCDate(debut.getUTCDate() - (count - 1));
-  return { since: jour(debut), until: jour(today) };
+  const fin = moroccoDate(today);
+  return { since: moroccoDateShift(fin, -(count - 1)), until: fin };
 }

@@ -3,6 +3,7 @@ import { getSupabaseServerClient } from "./server";
 import { fetchAll } from "./page";
 import { amountValue, roundToTen } from "@/lib/amount";
 import { SPEND_KEY, SPEND_SOURCE_KEY, sumMetrics } from "@/lib/ads/metrics";
+import { moroccoDate } from "@/lib/morocco-day";
 
 /**
  * Le rapprochement entre ce qui est depense et ce qui est vendu.
@@ -160,8 +161,14 @@ export async function getAdsOverview(
       let q = supabase
         .from("ad_insights_daily")
         .select("campaign_id,day,spend,currency,spend_mad,impressions,clicks,conversions,metrics,synced_at");
-      if (from) q = q.gte("day", from.slice(0, 10));
-      if (to) q = q.lte("day", to.slice(0, 10));
+      /*
+       * Les jours de depense sont des dates du calendrier, dans le
+       * fuseau du compte publicitaire — Casablanca. Decouper un
+       * instant ISO avec `slice(0, 10)` donnait la date UTC, donc la
+       * veille pour tout ce qui se passe entre minuit et une heure.
+       */
+      if (from) q = q.gte("day", moroccoDate(new Date(from)));
+      if (to) q = q.lte("day", moroccoDate(new Date(to)));
       if (platform) q = q.eq("platform", platform);
       return q;
     }),
