@@ -158,6 +158,10 @@ export async function listLeads(): Promise<Lead[]> {
   // modifiee (reecrite en fin de table) se retrouve affichee en dernier.
   // Lecture complete : une lecture simple s'arrete a mille lignes sans
   // le dire, et les commandes au-dela disparaitraient de la liste.
+  // Lancee avant la lecture des commandes, attendue apres : les deux
+  // requetes ne se doivent rien.
+  const campagnesPromise = nomsDesCampagnes();
+
   const data = await fetchAll<LeadRow>(() =>
     supabase
       .from("leads")
@@ -166,7 +170,13 @@ export async function listLeads(): Promise<Lead[]> {
       .order("id", { ascending: true })
   );
 
-  const campagnes = await nomsDesCampagnes();
+  /*
+   * Les noms de campagnes partent en meme temps que les commandes,
+   * pas apres. Attendre l'un puis l'autre ajoutait deux dixiemes de
+   * seconde a une page qui en prenait deja une et demie, pour une
+   * requete qui ne depend de rien.
+   */
+  const campagnes = await campagnesPromise;
   const leads = await withProductImages(data.map((r) => toLead(r, campagnes)));
   return withCityTariffs(leads);
 }

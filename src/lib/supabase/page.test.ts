@@ -28,7 +28,14 @@ describe("fetchAll", () => {
     const rows = await fetchAll<{ id: number }>(t.query);
     expect(rows).toHaveLength(1252);
     expect(rows[1251].id).toBe(1251);
-    expect(t.range).toHaveBeenCalledTimes(2);
+    /*
+     * Trois appels, pas deux : apres une premiere tranche pleine, la
+     * vague suivante en demande deux d'un coup. La troisieme revient
+     * vide, et c'est le prix assume de la lecture par vagues — une
+     * requete speculative contre six allers-retours economises sur
+     * les grandes tables.
+     */
+    expect(t.range).toHaveBeenCalledTimes(3);
   });
 
   it("ne perd rien quand le total tombe juste sur le plafond", async () => {
@@ -36,7 +43,7 @@ describe("fetchAll", () => {
     // demander une seconde pour savoir qu'il n'y a plus rien.
     const t = table(1000);
     expect(await fetchAll(t.query)).toHaveLength(1000);
-    expect(t.range).toHaveBeenCalledTimes(2);
+    expect(t.range).toHaveBeenCalledTimes(3);
   });
 
   it("rend une liste vide sur une table vide", async () => {
@@ -58,5 +65,27 @@ describe("fetchAll", () => {
       [1000, 1999],
       [2000, 2999],
     ]);
+  });
+});
+
+describe("lecture par vagues", () => {
+  it("ne lance qu'une requete sur une petite table", async () => {
+    // La montee en puissance ne doit rien couter a ce qui tient en
+    // une tranche : produits, villes, comptes.
+    const t = table(9);
+    await fetchAll(t.query);
+    expect(t.range).toHaveBeenCalledTimes(1);
+  });
+
+  it("lit neuf mille lignes en quatre vagues au lieu de dix attentes", async () => {
+    const t = table(9191);
+    const rows = await fetchAll<{ id: number }>(t.query);
+    expect(rows).toHaveLength(9191);
+    // L'ordre est preserve : les tranches reviennent dans l'ordre
+    // demande, pas dans l'ordre ou le reseau les rend.
+    expect(rows[0].id).toBe(0);
+    expect(rows[9190].id).toBe(9190);
+    // 1 + 2 + 4 + 8 tranches demandees, soit quatre attentes.
+    expect(t.range).toHaveBeenCalledTimes(15);
   });
 });

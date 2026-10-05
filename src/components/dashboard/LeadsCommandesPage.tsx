@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ShoppingCart,
@@ -451,7 +451,13 @@ export default function LeadsCommandesPage() {
   const uniqueValues = (pick: (lead: Lead) => string | undefined) =>
     [...new Set(rangedLeads.map(pick).filter((v): v is string => Boolean(v)))].sort();
 
-  const filterOptions = {
+  /*
+   * Les valeurs proposees par les filtres dependent des commandes de
+   * la periode, pas des filtres eux-memes : les recalculer a chaque
+   * clic parcourait huit fois la liste pour rien.
+   */
+  const filterOptions = useMemo(
+    () => ({
     produits: uniqueValues((l) => l.productName),
     sources: uniqueValues((l) => l.source),
     /*
@@ -476,7 +482,10 @@ export default function LeadsCommandesPage() {
     confirmation: uniqueValues((l) => l.status),
     livraison: uniqueValues((l) => l.deliveryStatus),
     paiement: uniqueValues((l) => l.paymentStatus),
-  };
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rangedLeads, isAdmin]
+  );
 
   // Un filtre vide ne restreint rien ; plusieurs valeurs dans un meme
   // filtre s'additionnent (OU), et les differents filtres se cumulent (ET).
@@ -525,7 +534,15 @@ export default function LeadsCommandesPage() {
    * non sur la page affichee : une commande de mars renseigne celle
    * d'aujourd'hui, et elle n'est pas forcement a l'ecran.
    */
-  const flags = clientFlags(leadsState);
+  /*
+   * L'anteriorite ne se recalcule que lorsque les commandes changent.
+   *
+   * Sans cette garde, chaque frappe dans la recherche et chaque clic
+   * sur un filtre refaisaient le regroupement des sept cent quatre-
+   * vingts commandes par numero de telephone — pour un resultat
+   * identique a chaque fois.
+   */
+  const flags = useMemo(() => clientFlags(leadsState), [leadsState]);
 
   const query = searchQuery.trim().toLowerCase();
   const visibleLeads = filteredLeads.filter(
