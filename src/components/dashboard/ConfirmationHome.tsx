@@ -225,8 +225,19 @@ export default function ConfirmationHome() {
 
   return (
     <>
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <PeriodFilter range={range} onChange={setRange} />
+        {/*
+          Les chiffres de la periode precedente restent a l'ecran
+          pendant le calcul. Sans ce mot, on les croit a jour ; avec
+          lui, on sait qu'ils vont bouger.
+        */}
+        {loading && stats && (
+          <span className="flex items-center gap-1.5 text-[12px] text-gray-400">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Recalcul...
+          </span>
+        )}
       </div>
 
       {error ? (
