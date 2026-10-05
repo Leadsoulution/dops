@@ -209,6 +209,9 @@ function LeadDate({ date }: { date: string }) {
 /** L'entree du filtre pour une origine que personne n'a renseignee. */
 const SANS_PLATEFORME = "Sans plateforme";
 
+/** L'entree du filtre pour une commande qu'aucune campagne n'explique. */
+const SANS_CAMPAGNE = "Sans campagne";
+
 export default function LeadsCommandesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -226,6 +229,7 @@ export default function LeadsCommandesPage() {
     produits: [] as string[],
     sources: [] as string[],
     platform: [] as string[],
+    campagne: [] as string[],
     agents: [] as string[],
     confirmation: [] as string[],
     livraison: [] as string[],
@@ -460,6 +464,14 @@ export default function LeadsCommandesPage() {
       ...uniqueValues((l) => platformLabel(l.utmSource) ?? undefined),
       SANS_PLATEFORME,
     ],
+    /*
+     * Les campagnes rencontrees, plus "Sans campagne". Reserve aux
+     * administrateurs : le nom d'une campagne dit combien elle coute a
+     * qui sait lire, et cela ne regarde pas l'equipe d'appel.
+     */
+    campagne: isAdmin
+      ? [...uniqueValues((l) => l.campaignName), SANS_CAMPAGNE]
+      : [],
     agents: uniqueValues((l) => assigneeName(l.lastModifiedBy)),
     confirmation: uniqueValues((l) => l.status),
     livraison: uniqueValues((l) => l.deliveryStatus),
@@ -476,6 +488,8 @@ export default function LeadsCommandesPage() {
       filters.platform.includes(
         platformLabel(lead.utmSource) ?? SANS_PLATEFORME
       )) &&
+    (filters.campagne.length === 0 ||
+      filters.campagne.includes(lead.campaignName ?? SANS_CAMPAGNE)) &&
     (filters.agents.length === 0 ||
       filters.agents.includes(assigneeName(lead.lastModifiedBy) ?? "")) &&
     (filters.confirmation.length === 0 ||
@@ -499,6 +513,7 @@ export default function LeadsCommandesPage() {
       livraison: [],
       paiement: [],
       platform: [],
+      campagne: [],
     });
     // Les pastilles gardent leur selection en interne : les remonter est le
     // seul moyen de les remettre a zero en meme temps que l'etat du parent.
@@ -1004,6 +1019,21 @@ export default function LeadsCommandesPage() {
           multi
           onMultiChange={(v) => setFilters((f) => ({ ...f, platform: v }))}
         />
+        {isAdmin && (
+          <SelectDropdown
+            key={`campagne-${filtersResetKey}`}
+            variant="chip"
+            icon={Megaphone}
+            panelTitle="Campagne"
+            pinnedLabel="Campagne"
+            allLabel="Toutes les campagnes"
+            options={filterOptions.campagne}
+            multi
+            searchable
+            searchPlaceholder="Rechercher une campagne..."
+            onMultiChange={(v) => setFilters((f) => ({ ...f, campagne: v }))}
+          />
+        )}
         <SelectDropdown
           key={`agents-${filtersResetKey}`}
           variant="chip"
@@ -1287,7 +1317,7 @@ export default function LeadsCommandesPage() {
                         nom dit ou est parti l'argent qui a amene ce
                         client.
                       */}
-                      {(lead.campaignName || lead.adName) && (
+                      {isAdmin && (lead.campaignName || lead.adName) && (
                         <span className="min-w-0">
                           <span
                             className="block max-w-[150px] truncate text-[11.5px] font-medium text-gray-700"

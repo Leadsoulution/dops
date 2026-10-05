@@ -1,13 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
   ChevronDown,
   ChevronRight,
   Columns3,
+  Loader2,
+  Save,
   Search,
+  Star,
+  Trash2,
 } from "lucide-react";
 import type { CampaignRow } from "@/lib/supabase/ads";
 import {
@@ -89,6 +93,56 @@ export default function AdsTable({
     cle: SPEND_SOURCE_KEY,
     desc: true,
   });
+
+  /*
+   * Les vues enregistrees, partagees par les administrateurs.
+   *
+   * Elles vivent sur le serveur : une vue posee par defaut doit
+   * s'ouvrir pareil sur le poste de chacun, sinon ce n'est pas une
+   * vue par defaut mais une preference locale.
+   */
+  const [vues, setVues] = useState<{ name: string; columns: string[] }[]>([]);
+  const [defaut, setDefaut] = useState<string | null>(null);
+  const [nomVue, setNomVue] = useState("");
+  const [enregistre, setEnregistre] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/ads/views")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        if (cancelled || !body) return;
+        setVues(body.views ?? []);
+        setDefaut(body.defaut ?? null);
+        // La vue par defaut s'applique a l'ouverture, une seule fois.
+        const choisie = (body.views ?? []).find(
+          (v: { name: string }) => v.name === body.defaut
+        );
+        if (choisie) setChoisies(choisie.columns);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function majVues(corps: Record<string, unknown>) {
+    setEnregistre(true);
+    try {
+      const res = await fetch("/api/ads/views", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(corps),
+      });
+      const body = await res.json();
+      if (res.ok) {
+        setVues(body.views ?? []);
+        setDefaut(body.defaut ?? null);
+      }
+    } finally {
+      setEnregistre(false);
+    }
+  }
 
   /*
    * Le total des resultats est pose dans chaque sac avant tout
@@ -326,6 +380,81 @@ export default function AdsTable({
                 {p.label}
               </button>
             ))}
+          </div>
+
+          {vues.length > 0 && (
+            <div className="mb-2 flex flex-wrap items-center gap-1.5">
+              <span className="text-[11px] font-semibold tracking-wide text-gray-400">
+                MES VUES
+              </span>
+              {vues.map((v) => (
+                <span
+                  key={v.name}
+                  className={`flex items-center gap-1 rounded-full border px-2 py-1 text-[11.5px] ${
+                    defaut === v.name
+                      ? "border-blue-500 bg-blue-50 text-blue-800"
+                      : "border-gray-300 bg-white text-gray-600"
+                  }`}
+                >
+                  <button
+                    onClick={() => setChoisies(v.columns)}
+                    className="font-medium hover:underline"
+                  >
+                    {v.name}
+                  </button>
+                  <button
+                    title={
+                      defaut === v.name
+                        ? "Vue par defaut pour tous les administrateurs"
+                        : "Definir par defaut pour tous les administrateurs"
+                    }
+                    onClick={() =>
+                      void majVues({
+                        defaut: defaut === v.name ? null : v.name,
+                      })
+                    }
+                    className="text-gray-400 hover:text-amber-500"
+                  >
+                    <Star
+                      className={`h-3 w-3 ${defaut === v.name ? "fill-amber-400 text-amber-500" : ""}`}
+                    />
+                  </button>
+                  <button
+                    title="Supprimer cette vue"
+                    onClick={() => void majVues({ remove: v.name })}
+                    className="text-gray-400 hover:text-red-600"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+            <input
+              value={nomVue}
+              onChange={(e) => setNomVue(e.target.value)}
+              placeholder="Nom de la vue a enregistrer..."
+              className="min-w-[180px] rounded-lg border border-gray-200 px-2.5 py-1 text-[11.5px] text-gray-700 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none"
+            />
+            <button
+              disabled={!nomVue.trim() || colonnes.length === 0 || enregistre}
+              onClick={() => {
+                void majVues({
+                  save: { name: nomVue.trim(), columns: choisies },
+                });
+                setNomVue("");
+              }}
+              className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1 text-[11.5px] font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-40"
+            >
+              {enregistre ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Save className="h-3 w-3" />
+              )}
+              Enregistrer ces {colonnes.length} colonnes
+            </button>
           </div>
 
           {/*

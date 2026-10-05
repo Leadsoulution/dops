@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { currentProfile } from "@/lib/session";
 import Image from "next/image";
 import {
   AlertCircle,
@@ -106,6 +107,22 @@ export default function OrderDetailsModal({
     };
   }, [lead.id]);
 
+  /*
+   * Qui regarde. Le nom d'une campagne dit a qui sait lire ce qu'elle
+   * coute : il reste entre administrateurs. Le serveur protege deja la
+   * section Advertising, c'est ici la meme regle.
+   */
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    currentProfile().then((profile) => {
+      if (!cancelled && profile) setIsAdmin(profile.role === "Admin");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const eventsLoading = loaded?.leadId !== lead.id;
   const events = loaded?.leadId === lead.id ? loaded.events : [];
 
@@ -172,9 +189,34 @@ export default function OrderDetailsModal({
                 </p>
               </div>
             </div>
-            <p className="font-mono text-[14px] font-semibold text-gray-900">
-              {displayAmount(lead.amount)}
-            </p>
+            <div className="shrink-0 text-right">
+              {/*
+                La campagne au-dessus du prix : c'est ce qui a paye ce
+                client. Reserve aux administrateurs — l'equipe d'appel
+                n'a pas a savoir combien coute un nom.
+              */}
+              {isAdmin && (lead.campaignName || lead.adName) && (
+                <p className="mb-0.5 max-w-[160px] text-[11px] leading-tight">
+                  <span
+                    className="block truncate font-semibold text-gray-700"
+                    title={lead.campaignName}
+                  >
+                    {lead.campaignName}
+                  </span>
+                  {lead.adName && lead.adName !== lead.campaignName && (
+                    <span
+                      className="block truncate text-gray-400"
+                      title={lead.adName}
+                    >
+                      {lead.adName}
+                    </span>
+                  )}
+                </p>
+              )}
+              <p className="font-mono text-[14px] font-semibold text-gray-900">
+                {displayAmount(lead.amount)}
+              </p>
+            </div>
           </div>
 
           <CallOutcomePanel

@@ -5,6 +5,7 @@ import {
   AlertCircle,
   Check,
   Eye,
+  Clock,
   Loader2,
   Megaphone,
   MousePointerClick,
@@ -161,6 +162,21 @@ export default function AdvertisingPage() {
     }
   }
 
+  /** Quand la derniere relevee a eu lieu, en toutes lettres. */
+  const dernier = (accounts ?? [])
+    .map((a) => a.lastSyncAt)
+    .filter((d): d is string => Boolean(d))
+    .sort()
+    .at(-1);
+  const releve = dernier
+    ? new Date(dernier).toLocaleString("fr-FR", {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
+
   const comptes = (accounts ?? []).filter((a) => a.platform === platform);
   const o = overview;
 
@@ -175,6 +191,19 @@ export default function AdvertisingPage() {
           <p className="text-[12.5px] text-gray-500">
             Vos campagnes Meta et TikTok, en lecture seule.
           </p>
+          {/*
+            L'heure du dernier relevee, parce que les chiffres sont une
+            photographie. Les journees closes correspondent au centime a
+            ce qu'annonce la plateforme ; celle d'aujourd'hui continue
+            de monter chez elle sans monter ici.
+          */}
+          {releve && (
+            <p className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-gray-400">
+              <Clock className="h-3 w-3" />
+              Releve {releve}. Aujourd&apos;hui et hier bougent encore chez la
+              plateforme : actualisez pour les mettre a jour.
+            </p>
+          )}
         </div>
         <button
           onClick={() => void sync()}
