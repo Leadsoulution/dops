@@ -52,7 +52,7 @@ type LeadRow = {
   last_modified_at: string | null;
 };
 
-function toLead(row: LeadRow): Lead {
+function toLead(row: LeadRow, campagnes?: Map<string, string>): Lead {
   return {
     id: row.id,
     reference: row.reference,
@@ -63,6 +63,8 @@ function toLead(row: LeadRow): Lead {
     phone: row.phone,
     source: (row.source ?? "nouveau") as LeadSource,
     utmSource: row.utm_source ?? undefined,
+    campaignName: campagnes?.get(row.utm_campaign ?? "") ?? undefined,
+    adName: campagnes?.get(row.utm_content ?? "") ?? undefined,
     utmMedium: row.utm_medium ?? undefined,
     utmCampaign: row.utm_campaign ?? undefined,
     utmContent: row.utm_content ?? undefined,
@@ -164,8 +166,29 @@ export async function listLeads(): Promise<Lead[]> {
       .order("id", { ascending: true })
   );
 
-  const leads = await withProductImages(data.map(toLead));
+  const campagnes = await nomsDesCampagnes();
+  const leads = await withProductImages(data.map((r) => toLead(r, campagnes)));
   return withCityTariffs(leads);
+}
+
+/**
+ * Le nom de chaque campagne et de chaque publicite, par identifiant.
+ *
+ * Les commandes ne portent que des identifiants numeriques, venus du
+ * lien publicitaire. "120249280533420752" ne dit rien a personne ;
+ * le nom de la campagne, si. La table peut etre vide — aucun compte
+ * publicitaire branche — et la colonne reste alors simplement vide.
+ */
+async function nomsDesCampagnes(): Promise<Map<string, string>> {
+  const supabase = getSupabaseServerClient();
+  const { data } = await supabase
+    .from("ad_campaigns")
+    .select("external_id,name");
+  return new Map(
+    ((data ?? []) as unknown as { external_id: string; name: string }[]).map(
+      (c) => [c.external_id, c.name]
+    )
+  );
 }
 
 /**
@@ -312,7 +335,7 @@ export async function updateLeads(
     .select(COLUMNS);
 
   if (error) throw new Error(error.message);
-  return (data as LeadRow[]).map(toLead);
+  return (data as LeadRow[]).map((r) => toLead(r));
 }
 
 export async function deleteLead(id: string): Promise<void> {

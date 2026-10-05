@@ -1279,7 +1279,33 @@ export default function LeadsCommandesPage() {
                     passer l'ignorance pour un renseignement.
                   */}
                   <td className="px-3 py-3">
-                    <PlatformLogo utmSource={lead.utmSource} />
+                    <div className="flex items-center gap-2">
+                      <PlatformLogo utmSource={lead.utmSource} />
+                      {/*
+                        Le nom de la campagne sous le logo : un
+                        identifiant a dix-huit chiffres ne dit rien, le
+                        nom dit ou est parti l'argent qui a amene ce
+                        client.
+                      */}
+                      {(lead.campaignName || lead.adName) && (
+                        <span className="min-w-0">
+                          <span
+                            className="block max-w-[150px] truncate text-[11.5px] font-medium text-gray-700"
+                            title={lead.campaignName}
+                          >
+                            {lead.campaignName}
+                          </span>
+                          {lead.adName && lead.adName !== lead.campaignName && (
+                            <span
+                              className="block max-w-[150px] truncate text-[10.5px] text-gray-400"
+                              title={lead.adName}
+                            >
+                              {lead.adName}
+                            </span>
+                          )}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-3 py-3">
                     {lead.source === "WooCommerce" ? (

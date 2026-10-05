@@ -114,6 +114,8 @@ type LeadRow = {
   amount: string | null;
   delivery_status_code: string | null;
   delivery_date: string | null;
+  utm_campaign: string | null;
+  utm_content: string | null;
 };
 
 /** Division qui rend 0 plutot que l'infini quand le diviseur manque. */
@@ -123,6 +125,22 @@ function ratio(numerator: number, denominator: number): number {
 
 /** Deux decimales : au-dela, un cout par clic ne veut plus rien dire. */
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Les comptes de commandes, prets a rejoindre le sac de mesures. */
+function commandesDe(c?: {
+  orders: number;
+  confirmed: number;
+  delivered: number;
+  revenue: number;
+}): Record<string, number> {
+  if (!c) return {};
+  return {
+    orders: c.orders,
+    orders_confirmed: c.confirmed,
+    orders_delivered: c.delivered,
+    revenue_delivered: round2(c.revenue),
+  };
+}
 
 export async function getAdsOverview(
   from?: string,
@@ -162,7 +180,7 @@ export async function getAdsOverview(
     fetchAll<LeadRow>(() => {
       let q = supabase
         .from("leads")
-        .select("created_at,status,amount,delivery_status_code,delivery_date");
+        .select("created_at,status,amount,delivery_status_code,delivery_date,utm_campaign,utm_content");
       if (from) q = q.gte("created_at", from);
       if (to) q = q.lte("created_at", to);
       return q;
@@ -178,6 +196,62 @@ export async function getAdsOverview(
   }
 
   const metaById = new Map(campaigns.map((c) => [c.id, c]));
+
+  /*
+   * Les commandes rattachees a ce qui les a amenees.
+   *
+   * Le lien passe par les parametres du lien publicitaire :
+   * `utm_content` porte l'identifiant de la publicite, `utm_campaign`
+   * celui de la campagne. Une commande qui connait sa publicite
+   * connait donc aussi son ensemble et sa campagne, en remontant
+   * l'arbre — alors qu'une commande qui ne connait que sa campagne
+   * s'arrete la. Compter la premiere aux trois etages et la seconde au
+   * seul etage du haut est ce qui permet de lire un taux de livraison
+   * par ensemble sans inventer de rattachement.
+   */
+  const parExterne = new Map(campaigns.map((c) => [c.external_id, c]));
+  const commandes = new Map<
+    string,
+    { orders: number; confirmed: number; delivered: number; revenue: number }
+  >();
+
+  const compte = (id: string, lead: LeadRow) => {
+    const e =
+      commandes.get(id) ??
+      { orders: 0, confirmed: 0, delivered: 0, revenue: 0 };
+    e.orders += 1;
+    if (CONFIRMED.has(lead.status)) e.confirmed += 1;
+    if (lead.delivery_status_code === DELIVERED) {
+      e.delivered += 1;
+      e.revenue += roundToTen(amountValue(lead.amount ?? undefined) ?? 0);
+    }
+    commandes.set(id, e);
+  };
+
+  for (const lead of leads) {
+    // La publicite d'abord : c'est le rattachement le plus precis, et
+    // il renseigne les trois etages d'un coup.
+    const pub = lead.utm_content ? parExterne.get(lead.utm_content) : undefined;
+    if (pub) {
+      compte(pub.id, lead);
+      const ensemble = pub.parent_external_id
+        ? parExterne.get(pub.parent_external_id)
+        : undefined;
+      if (ensemble) {
+        compte(ensemble.id, lead);
+        const campagne = ensemble.parent_external_id
+          ? parExterne.get(ensemble.parent_external_id)
+          : undefined;
+        if (campagne) compte(campagne.id, lead);
+      }
+      continue;
+    }
+    const campagne = lead.utm_campaign
+      ? parExterne.get(lead.utm_campaign)
+      : undefined;
+    if (campagne) compte(campagne.id, lead);
+  }
+
   const rows: CampaignRow[] = [];
 
   for (const [campaignId, lignes] of parCampagne) {
@@ -218,6 +292,7 @@ export async function getAdsOverview(
         [SPEND_SOURCE_KEY]: round2(
           lignes.reduce((t, l) => t + Number(l.spend ?? 0), 0)
         ),
+        ...commandesDe(commandes.get(meta.id)),
       },
     });
   }

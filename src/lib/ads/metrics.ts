@@ -154,6 +154,63 @@ export const METRICS: Metric[] = [
 ];
 
 /**
+ * Les commandes de la boutique, rattachees a ce qui les a amenees.
+ *
+ * Meta compte ce que son pixel a vu ; nous comptons ce que le livreur
+ * a remis. Entre les deux il y a le telephone qui ne repond pas et le
+ * colis qui revient — et c'est tout l'ecart entre une campagne qui
+ * parait bonne et une campagne qui paie.
+ */
+export const ORDER_METRICS: Metric[] = [
+  { key: "orders", label: "Commandes", kind: "sum", format: "entier" },
+  {
+    key: "orders_confirmed",
+    label: "Confirmees",
+    kind: "sum",
+    format: "entier",
+  },
+  {
+    key: "confirm_rate",
+    label: "Taux de confirmation",
+    kind: "ratio",
+    format: "percent",
+    of: { num: "orders_confirmed", den: "orders", scale: 100 },
+  },
+  { key: "orders_delivered", label: "Livrees", kind: "sum", format: "entier" },
+  {
+    key: "delivery_rate",
+    label: "Taux de livraison",
+    kind: "ratio",
+    format: "percent",
+    of: { num: "orders_delivered", den: "orders_confirmed", scale: 100 },
+  },
+  {
+    key: "cost_per_delivered",
+    label: "Cout par livree",
+    kind: "ratio",
+    format: "money",
+    of: { num: SPEND_KEY, den: "orders_delivered" },
+    hint:
+      "La depense divisee par les commandes reellement remises. C'est le " +
+      "seul cout qui compte en paiement a la livraison.",
+  },
+  {
+    key: "revenue_delivered",
+    label: "CA livre",
+    kind: "sum",
+    format: "money",
+  },
+  {
+    key: "roas_delivered",
+    label: "ROAS livre",
+    kind: "ratio",
+    format: "decimal",
+    of: { num: "revenue_delivered", den: SPEND_KEY },
+    hint: "Chiffre d'affaires encaisse pour un dirham depense.",
+  },
+];
+
+/**
  * Les deux colonnes de resultat.
  *
  * Elles ne se calculent pas depuis une cle fixe : leur valeur est la
@@ -349,8 +406,10 @@ export function availableMetrics(
           : m
       )
     : METRICS;
+  const aDesCommandes = bags.some((b) => (b?.orders ?? 0) > 0);
   return [
     ...(aDesResultats ? RESULT_METRICS : []),
+    ...(aDesCommandes ? ORDER_METRICS : []),
     ...base,
     ...actions.map(actionMetric),
     ...actions.map(actionCostMetric),
@@ -405,6 +464,21 @@ export const PRESETS: { label: string; columns: string[] }[] = [
       "inline_link_click_ctr",
       "action:landing_page_view",
       "cost:landing_page_view",
+    ],
+  },
+  {
+    label: "Rentabilite",
+    columns: [
+      SPEND_SOURCE_KEY,
+      SPEND_KEY,
+      "orders",
+      "orders_confirmed",
+      "confirm_rate",
+      "orders_delivered",
+      "delivery_rate",
+      "cost_per_delivered",
+      "revenue_delivered",
+      "roas_delivered",
     ],
   },
   { label: "Performance", columns: DEFAULT_COLUMNS },

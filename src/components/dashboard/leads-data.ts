@@ -66,6 +66,10 @@ export type Lead = {
    */
   utmSource?: string;
   utmMedium?: string;
+  /** Nom de la campagne qui a amene la commande, quand on le connait. */
+  campaignName?: string;
+  /** Nom de la publicite, plus precis encore que la campagne. */
+  adName?: string;
   /** Identifiant de campagne du gestionnaire de publicites. */
   utmCampaign?: string;
   utmContent?: string;
