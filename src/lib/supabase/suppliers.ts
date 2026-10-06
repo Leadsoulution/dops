@@ -591,3 +591,58 @@ export async function createArrival(
     throw new Error(error.message);
   }
 }
+
+/**
+ * Supprime un fournisseur, s'il n'a rien laisse derriere lui.
+ *
+ * Une fiche creee par erreur se retire sans histoire. Un fournisseur
+ * qui a livre, lui, explique le cout d'une marchandise deja vendue :
+ * l'effacer rendrait des profits passes inexplicables, et la base le
+ * refuse de toute facon — les cles etrangeres sont en `restrict`.
+ *
+ * On verifie donc avant, pour pouvoir le dire en francais plutot que
+ * de renvoyer une erreur de contrainte a quelqu'un qui voulait juste
+ * faire le menage.
+ */
+export async function deleteSupplier(id: string): Promise<void> {
+  const supabase = getSupabaseServerClient();
+
+  const [achats, arrivages, reglements] = await Promise.all([
+    supabase
+      .from("supplier_purchases")
+      .select("id", { count: "exact", head: true })
+      .eq("supplier_id", id),
+    supabase
+      .from("supplier_arrivals")
+      .select("id", { count: "exact", head: true })
+      .eq("supplier_id", id),
+    supabase
+      .from("supplier_payments")
+      .select("id", { count: "exact", head: true })
+      .eq("supplier_id", id),
+  ]);
+
+  const liens: string[] = [];
+  if ((arrivages.count ?? 0) > 0) {
+    liens.push(`${arrivages.count} arrivage${arrivages.count! > 1 ? "s" : ""}`);
+  }
+  if ((achats.count ?? 0) > 0) {
+    liens.push(`${achats.count} ligne${achats.count! > 1 ? "s" : ""} d'achat`);
+  }
+  if ((reglements.count ?? 0) > 0) {
+    liens.push(
+      `${reglements.count} reglement${reglements.count! > 1 ? "s" : ""}`
+    );
+  }
+
+  if (liens.length > 0) {
+    throw new Error(
+      `Ce fournisseur porte ${liens.join(", ")}. Ils expliquent le cout de ` +
+        `marchandise deja vendue et ne peuvent pas disparaitre. ` +
+        `Desactivez-le plutot : il sortira de la liste sans effacer son passe.`
+    );
+  }
+
+  const { error } = await supabase.from("suppliers").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}

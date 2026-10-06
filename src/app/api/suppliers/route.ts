@@ -3,6 +3,7 @@ import { getSessionProfile } from "@/lib/supabase/auth";
 import { isSupabaseServerConfigured } from "@/lib/supabase/server";
 import {
   createArrival,
+  deleteSupplier,
   createPayment,
   createPurchase,
   createSupplier,
@@ -148,6 +149,30 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Erreur inattendue." },
       { status: 500 }
+    );
+  }
+}
+
+/**
+ * Supprime un fournisseur sans historique. Avec historique, la couche
+ * de donnees refuse et explique pourquoi.
+ */
+export async function DELETE(request: NextRequest) {
+  const garde = await admin();
+  if ("error" in garde) {
+    return NextResponse.json({ error: garde.error }, { status: garde.status });
+  }
+  try {
+    const id = new URL(request.url).searchParams.get("id");
+    if (!id) {
+      return NextResponse.json({ error: "Fournisseur manquant." }, { status: 400 });
+    }
+    await deleteSupplier(id);
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Erreur inattendue." },
+      { status: 400 }
     );
   }
 }

@@ -15,6 +15,8 @@ import {
   AlertCircle,
   Phone,
   Power,
+  Trash2,
+  X,
   Pencil,
   Plus,
   Search,
@@ -23,6 +25,7 @@ import {
 } from "lucide-react";
 import SelectDropdown from "./SelectDropdown";
 import CreateFournisseurModal from "./CreateFournisseurModal";
+import ConfirmDialog from "./ConfirmDialog";
 import SupplierDetailModal from "./SupplierDetailModal";
 import type { Supplier } from "@/lib/supabase/suppliers";
 
@@ -32,6 +35,33 @@ export default function FournisseursPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [aSupprimer, setASupprimer] = useState<Supplier | null>(null);
+  const [suppression, setSuppression] = useState(false);
+
+  /**
+   * Supprime un fournisseur sans historique.
+   *
+   * Le serveur refuse ceux qui ont livre et dit pourquoi : son message
+   * remonte tel quel, parce qu'il nomme ce qui bloque.
+   */
+  async function supprimer(f: Supplier) {
+    setSuppression(true);
+    setErreur(null);
+    try {
+      const res = await fetch(`/api/suppliers?id=${encodeURIComponent(f.id)}`, {
+        method: "DELETE",
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Suppression refusee.");
+      setASupprimer(null);
+      await recharger();
+    } catch (err) {
+      setErreur(err instanceof Error ? err.message : "Erreur inattendue.");
+      setASupprimer(null);
+    } finally {
+      setSuppression(false);
+    }
+  }
 
   /** Relit la liste depuis la base, totaux compris. */
   async function recharger() {
@@ -248,6 +278,25 @@ export default function FournisseursPage() {
           </p>
         </div>
 
+        {/*
+          Le refus du serveur s'affiche ici, au-dessus de la liste :
+          dans l'etat vide il serait invisible des qu'il y a un
+          fournisseur, et c'est justement quand il y en a qu'une
+          suppression peut etre refusee.
+        */}
+        {erreur && (
+          <p className="mx-5 mt-4 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-[12.5px] text-amber-900">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span className="min-w-0">{erreur}</span>
+            <button
+              onClick={() => setErreur(null)}
+              className="ml-auto shrink-0 text-amber-700 hover:text-amber-900"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </p>
+        )}
+
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-left">
             <thead>
@@ -410,6 +459,16 @@ export default function FournisseursPage() {
                             <Power className="h-3.5 w-3.5 text-gray-400" />
                             {supplier.isActive ? "Desactiver" : "Reactiver"}
                           </button>
+                          <button
+                            onClick={() => {
+                              setASupprimer(supplier);
+                              setOpenMenuId(null);
+                            }}
+                            className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Supprimer
+                          </button>
                         </div>
                       </div>
                     )}
@@ -479,6 +538,27 @@ export default function FournisseursPage() {
           onSaved={() => void recharger()}
         />
       )}
+      {aSupprimer && (
+        <ConfirmDialog
+          title="Supprimer ce fournisseur ?"
+          message={
+            <>
+              <span className="font-medium">{aSupprimer.name}</span> sera
+              efface definitivement.
+              <br />
+              S&apos;il a deja livre, la suppression sera refusee : ses
+              arrivages expliquent le cout de marchandise deja vendue.
+              Desactivez-le dans ce cas.
+            </>
+          }
+          confirmLabel="Supprimer"
+          danger
+          pending={suppression}
+          onConfirm={() => void supprimer(aSupprimer)}
+          onCancel={() => setASupprimer(null)}
+        />
+      )}
+
       {detailSupplier && (
         <SupplierDetailModal
           supplier={detailSupplier}
