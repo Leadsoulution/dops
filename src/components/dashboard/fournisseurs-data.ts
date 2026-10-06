@@ -11,77 +11,16 @@ export type Supplier = {
   dueDate: string;
 };
 
-export const suppliers: Supplier[] = [
-  {
-    id: "atlas-tech-distribution",
-    name: "Atlas Tech Distribution",
-    contactName: "Youssef Benkirane",
-    phone: "+212661245780",
-    email: "contact@atlastech.ma",
-    productsCount: 3,
-    unitsSupplied: 96000,
-    paid: 26185200,
-    balanceDue: 1594800,
-    dueDate: "09 sept. 2026",
-  },
-  {
-    id: "sahara-beauty-labs",
-    name: "Sahara Beauty Labs",
-    contactName: "Raja El Amrani",
-    phone: "+212662104533",
-    email: "orders@saharabeauty.ma",
-    productsCount: 2,
-    unitsSupplied: 68000,
-    paid: 7211920,
-    balanceDue: 486080,
-    dueDate: "09 sept. 2026",
-  },
-  {
-    id: "casa-home-textile",
-    name: "Casa Home Textile",
-    contactName: "Soukaina Kabbaj",
-    phone: "+212663882419",
-    email: "sourcing@casahometextile.ma",
-    productsCount: 3,
-    unitsSupplied: 58000,
-    paid: 10554800,
-    balanceDue: 625200,
-    dueDate: "09 sept. 2026",
-  },
-  {
-    id: "marrakech-craft-studio",
-    name: "Marrakech Craft Studio",
-    contactName: "Amina Bensalem",
-    phone: "+212650338711",
-    email: "commercial@marrakechcraft.ma",
-    productsCount: 2,
-    unitsSupplied: 39000,
-    paid: 4987400,
-    balanceDue: 282600,
-    dueDate: "09 sept. 2026",
-  },
-  {
-    id: "rif-logistics-supply",
-    name: "Rif Logistics Supply",
-    contactName: "Omar Tazi",
-    phone: "+212539801234",
-    email: "pro@riflogistics.ma",
-    productsCount: 1,
-    unitsSupplied: 18000,
-    paid: 2350400,
-    balanceDue: 129600,
-    dueDate: "09 sept. 2026",
-  },
-  {
-    id: "maghreb-care-labs",
-    name: "Maghreb Care Labs",
-    contactName: "Nora El Idrissi",
-    phone: "+212661902744",
-    email: "sales@maghrebcare.ma",
-    productsCount: 1,
-    unitsSupplied: 34000,
-    paid: 4602640,
-    balanceDue: 273360,
-    dueDate: "09 sept. 2026",
-  },
-];
+/**
+ * Aucun fournisseur.
+ *
+ * Les sept qui figuraient ici — Atlas Tech Distribution et les
+ * autres — etaient des exemples ecrits a la main, jamais enregistres
+ * nulle part. Ils ont ete retires sur demande.
+ *
+ * La liste reste vide tant qu'aucune table ne les porte : ce que l'on
+ * ajoute depuis l'ecran vit dans la memoire du navigateur et disparait
+ * au rechargement. Le jour ou les fournisseurs doivent durer, il
+ * faudra une table, comme pour les charges.
+ */
+export const suppliers: Supplier[] = [];

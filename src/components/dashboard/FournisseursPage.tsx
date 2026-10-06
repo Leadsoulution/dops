@@ -221,6 +221,28 @@ export default function FournisseursPage() {
               </tr>
             </thead>
             <tbody>
+              {/*
+                Un tableau vide sans un mot se lit comme une panne.
+                Celui-ci dit pourquoi il est vide, et ce qu'il advient
+                de ce qu'on y ajoute.
+              */}
+              {visibleSuppliers.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="px-5 py-16 text-center">
+                    <p className="text-[13px] text-gray-500">
+                      {query
+                        ? "Aucun fournisseur ne correspond a cette recherche."
+                        : "Aucun fournisseur enregistre."}
+                    </p>
+                    {!query && (
+                      <p className="mx-auto mt-1 max-w-md text-[12px] text-gray-400">
+                        Cette page n&apos;a pas encore de table en base : un
+                        fournisseur ajoute ici disparait au rechargement.
+                      </p>
+                    )}
+                  </td>
+                </tr>
+              )}
               {visibleSuppliers.map((supplier) => (
                 <tr
                   key={supplier.id}
