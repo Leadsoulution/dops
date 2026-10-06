@@ -16,10 +16,17 @@ import { getSupabaseServerClient } from "./server";
 export type Supplier = {
   id: string;
   name: string;
+  /** Ce qu'il fournit : bijoux, textile, emballage. */
+  category?: string;
   contactName?: string;
   phone?: string;
   email?: string;
   city?: string;
+  address?: string;
+  /** Identifiant commun de l'entreprise, pour les factures. */
+  ice?: string;
+  /** Releve d'identite bancaire, pour les virements. */
+  rib?: string;
   note?: string;
   isActive: boolean;
   /** Nombre de produits distincts achetes chez lui. */
@@ -75,10 +82,14 @@ export function toMad(amount: number, rate: number): number {
 type SupplierRow = {
   id: string;
   name: string;
+  category: string | null;
   contact_name: string | null;
   phone: string | null;
   email: string | null;
   city: string | null;
+  address: string | null;
+  ice: string | null;
+  rib: string | null;
   note: string | null;
   is_active: boolean;
 };
@@ -123,7 +134,7 @@ export async function listSuppliers(): Promise<Supplier[]> {
   const [f, a, r] = await Promise.all([
     supabase
       .from("suppliers")
-      .select("id,name,contact_name,phone,email,city,note,is_active")
+      .select("id,name,category,contact_name,phone,email,city,address,ice,rib,note,is_active")
       .order("name"),
     supabase
       .from("supplier_purchases")
@@ -170,10 +181,14 @@ export async function listSuppliers(): Promise<Supplier[]> {
     return {
       id: row.id,
       name: row.name,
+      category: row.category ?? undefined,
       contactName: row.contact_name ?? undefined,
       phone: row.phone ?? undefined,
       email: row.email ?? undefined,
       city: row.city ?? undefined,
+      address: row.address ?? undefined,
+      ice: row.ice ?? undefined,
+      rib: row.rib ?? undefined,
       note: row.note ?? undefined,
       isActive: row.is_active,
       productsCount: e?.produits.size ?? 0,
@@ -193,6 +208,10 @@ export async function createSupplier(
   const supabase = getSupabaseServerClient();
   const { error } = await supabase.from("suppliers").insert({
     name: (input.name ?? "").trim(),
+    category: input.category?.trim() || null,
+    address: input.address?.trim() || null,
+    ice: input.ice?.trim() || null,
+    rib: input.rib?.trim() || null,
     contact_name: input.contactName?.trim() || null,
     phone: input.phone?.trim() || null,
     email: input.email?.trim() || null,
@@ -213,6 +232,10 @@ export async function updateSupplier(
     .from("suppliers")
     .update({
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+      category: input.category?.trim() || null,
+      address: input.address?.trim() || null,
+      ice: input.ice?.trim() || null,
+      rib: input.rib?.trim() || null,
       contact_name: input.contactName?.trim() || null,
       phone: input.phone?.trim() || null,
       email: input.email?.trim() || null,
@@ -401,4 +424,170 @@ export async function weightedCosts(): Promise<Map<string, number>> {
     }
   }
   return moyennes;
+}
+
+/**
+ * Un arrivage : une date, et les produits recus ce jour-la.
+ *
+ * L'en-tete porte la date et la reference, les lignes portent les
+ * produits. Sans en-tete, deux arrivages du meme fournisseur le meme
+ * jour seraient impossibles a distinguer.
+ *
+ * Le total ne se saisit pas, il s'additionne. Un total ecrit a la main
+ * qui ne correspond pas a ses lignes est un total faux qu'on decouvre
+ * six mois plus tard.
+ */
+export type ArrivalLine = {
+  productId: string;
+  productName?: string;
+  quantity: number;
+  unitCost: number;
+  totalMad: number;
+};
+
+export type Arrival = {
+  id: string;
+  supplierId: string;
+  arrivedAt: string;
+  reference?: string;
+  note?: string;
+  lines: ArrivalLine[];
+  /** Somme des lignes, en dirhams. */
+  totalMad: number;
+  units: number;
+};
+
+export async function listArrivals(supplierId?: string): Promise<Arrival[]> {
+  const supabase = getSupabaseServerClient();
+
+  let entetes = supabase
+    .from("supplier_arrivals")
+    .select("id,supplier_id,arrived_at,reference,note")
+    .order("arrived_at", { ascending: false });
+  if (supplierId) entetes = entetes.eq("supplier_id", supplierId);
+
+  const [{ data: têtes, error }, lignes, produits] = await Promise.all([
+    entetes,
+    supplierId
+      ? supabase
+          .from("supplier_purchases")
+          .select("arrival_id,product_id,quantity,unit_cost,total_mad")
+          .eq("supplier_id", supplierId)
+      : supabase
+          .from("supplier_purchases")
+          .select("arrival_id,product_id,quantity,unit_cost,total_mad"),
+    supabase.from("products").select("id,name"),
+  ]);
+  if (error) throw new Error(error.message);
+
+  const noms = new Map(
+    ((produits.data ?? []) as { id: string; name: string }[]).map((p) => [
+      p.id,
+      p.name,
+    ])
+  );
+
+  const parArrivage = new Map<string, ArrivalLine[]>();
+  for (const l of (lignes.data ?? []) as unknown as {
+    arrival_id: string | null;
+    product_id: string;
+    quantity: number;
+    unit_cost: string | number;
+    total_mad: string | number;
+  }[]) {
+    if (!l.arrival_id) continue;
+    const liste = parArrivage.get(l.arrival_id) ?? [];
+    liste.push({
+      productId: l.product_id,
+      productName: noms.get(l.product_id),
+      quantity: l.quantity,
+      unitCost: nombre(l.unit_cost),
+      totalMad: nombre(l.total_mad),
+    });
+    parArrivage.set(l.arrival_id, liste);
+  }
+
+  return ((têtes ?? []) as unknown as {
+    id: string;
+    supplier_id: string;
+    arrived_at: string;
+    reference: string | null;
+    note: string | null;
+  }[]).map((t) => {
+    const lines = parArrivage.get(t.id) ?? [];
+    return {
+      id: t.id,
+      supplierId: t.supplier_id,
+      arrivedAt: t.arrived_at,
+      reference: t.reference ?? undefined,
+      note: t.note ?? undefined,
+      lines,
+      totalMad:
+        Math.round(lines.reduce((s, l) => s + l.totalMad, 0) * 100) / 100,
+      units: lines.reduce((s, l) => s + l.quantity, 0),
+    };
+  });
+}
+
+/**
+ * Enregistre un arrivage et ses lignes.
+ *
+ * L'en-tete part d'abord, puisque les lignes le referencent. Si leur
+ * ecriture echoue, l'en-tete est retire : un arrivage sans ligne
+ * n'apprend rien et viendrait polluer la liste. C'est le seul endroit
+ * ou ce module efface quelque chose, et il n'efface que ce qu'il
+ * venait de creer.
+ *
+ * La quantite en stock des produits n'est pas touchee : l'arrivage
+ * renseigne le cout et le solde du fournisseur, l'inventaire se gere
+ * ailleurs.
+ */
+export async function createArrival(
+  input: {
+    supplierId: string;
+    arrivedAt: string;
+    reference?: string;
+    note?: string;
+    lines: { productId: string; quantity: number; unitCost: number }[];
+  },
+  userId?: string
+): Promise<void> {
+  const supabase = getSupabaseServerClient();
+
+  const { data: tete, error: erreurTete } = await supabase
+    .from("supplier_arrivals")
+    .insert({
+      supplier_id: input.supplierId,
+      arrived_at: input.arrivedAt,
+      reference: input.reference?.trim() || null,
+      note: input.note?.trim() || null,
+      ...(userId ? { created_by: userId } : {}),
+    })
+    .select("id")
+    .single();
+  if (erreurTete) throw new Error(erreurTete.message);
+
+  const arrivalId = (tete as unknown as { id: string }).id;
+
+  const { error } = await supabase.from("supplier_purchases").insert(
+    input.lines.map((l) => ({
+      supplier_id: input.supplierId,
+      arrival_id: arrivalId,
+      product_id: l.productId,
+      quantity: l.quantity,
+      unit_cost: l.unitCost,
+      currency: "MAD",
+      exchange_rate: 1,
+      unit_cost_mad: l.unitCost,
+      total_mad: Math.round(l.unitCost * l.quantity * 100) / 100,
+      purchased_at: input.arrivedAt,
+      invoice_ref: input.reference?.trim() || null,
+      ...(userId ? { created_by: userId } : {}),
+    }))
+  );
+
+  if (error) {
+    await supabase.from("supplier_arrivals").delete().eq("id", arrivalId);
+    throw new Error(error.message);
+  }
 }

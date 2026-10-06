@@ -483,6 +483,7 @@ export default function FournisseursPage() {
         <SupplierDetailModal
           supplier={detailSupplier}
           onClose={() => setDetailSupplier(null)}
+          onChanged={() => void recharger()}
         />
       )}
     </div>

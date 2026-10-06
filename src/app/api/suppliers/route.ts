@@ -2,9 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSessionProfile } from "@/lib/supabase/auth";
 import { isSupabaseServerConfigured } from "@/lib/supabase/server";
 import {
+  createArrival,
   createPayment,
   createPurchase,
   createSupplier,
+  listArrivals,
   listPayments,
   listPurchases,
   listSuppliers,
@@ -37,12 +39,13 @@ export async function GET(request: NextRequest) {
   }
   try {
     const id = new URL(request.url).searchParams.get("supplier") ?? undefined;
-    const [suppliers, purchases, payments] = await Promise.all([
+    const [suppliers, purchases, payments, arrivals] = await Promise.all([
       listSuppliers(),
       listPurchases(id),
       listPayments(id),
+      listArrivals(id),
     ]);
-    return NextResponse.json({ suppliers, purchases, payments });
+    return NextResponse.json({ suppliers, purchases, payments, arrivals });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Erreur inattendue." },
@@ -74,6 +77,30 @@ export async function POST(request: NextRequest) {
         );
       }
       await createPurchase(body, id);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (body.kind === "arrival") {
+      const lignes = Array.isArray(body.lines) ? body.lines : [];
+      if (!body.supplierId || !body.arrivedAt) {
+        return NextResponse.json(
+          { error: "Fournisseur et date sont requis." },
+          { status: 400 }
+        );
+      }
+      // Un arrivage sans ligne n'apprend rien : il encombrerait la
+      // liste et fausserait le compte des arrivages.
+      const propres = lignes.filter(
+        (l: { productId?: string; quantity?: number }) =>
+          l.productId && Number(l.quantity) > 0
+      );
+      if (propres.length === 0) {
+        return NextResponse.json(
+          { error: "Cochez au moins un produit et indiquez sa quantite." },
+          { status: 400 }
+        );
+      }
+      await createArrival({ ...body, lines: propres }, id);
       return NextResponse.json({ ok: true });
     }
 

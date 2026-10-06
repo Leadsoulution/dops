@@ -21,6 +21,10 @@ export default function CreateFournisseurModal({
   onSaved: () => void;
 }) {
   const [name, setName] = useState("");
+  const [category, setCategory] = useState("");
+  const [address, setAddress] = useState("");
+  const [ice, setIce] = useState("");
+  const [rib, setRib] = useState("");
   const [contactName, setContactName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -36,7 +40,18 @@ export default function CreateFournisseurModal({
       const res = await fetch("/api/suppliers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, contactName, phone, email, city, note }),
+        body: JSON.stringify({
+          name,
+          category,
+          contactName,
+          phone,
+          address,
+          ice,
+          rib,
+          email,
+          city,
+          note,
+        }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Creation refusee.");
@@ -90,6 +105,17 @@ export default function CreateFournisseurModal({
                 className={champStyle}
               />
             </Champ>
+            <Champ label="Categorie">
+              <input
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="Ex: Bijoux, Textile, Emballage"
+                className={champStyle}
+              />
+            </Champ>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Champ label="Nom du contact">
               <input
                 value={contactName}
@@ -98,9 +124,6 @@ export default function CreateFournisseurModal({
                 className={champStyle}
               />
             </Champ>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Champ label="Telephone">
               <input
                 value={phone}
@@ -109,6 +132,9 @@ export default function CreateFournisseurModal({
                 className={champStyle}
               />
             </Champ>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Champ label="Email">
               <input
                 type="email"
@@ -118,16 +144,43 @@ export default function CreateFournisseurModal({
                 className={champStyle}
               />
             </Champ>
+            <Champ label="Ville">
+              <input
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder="Casablanca"
+                className={champStyle}
+              />
+            </Champ>
           </div>
 
-          <Champ label="Ville">
+          <Champ label="Adresse">
             <input
-              value={city}
-              onChange={(e) => setCity(e.target.value)}
-              placeholder="Casablanca"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Bd Mohammed V, quartier industriel"
               className={champStyle}
             />
           </Champ>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Champ label="ICE">
+              <input
+                value={ice}
+                onChange={(e) => setIce(e.target.value)}
+                placeholder="001234567000089"
+                className={`${champStyle} font-mono`}
+              />
+            </Champ>
+            <Champ label="RIB">
+              <input
+                value={rib}
+                onChange={(e) => setRib(e.target.value)}
+                placeholder="230 810 1234567890123456 78"
+                className={`${champStyle} font-mono`}
+              />
+            </Champ>
+          </div>
 
           <Champ label="Note">
             <textarea
