@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Building2,
   ChevronsLeft,
@@ -11,23 +11,63 @@ import {
   Eye,
   MoreVertical,
   Package2,
+  Loader2,
+  AlertCircle,
   Phone,
+  Power,
   Pencil,
   Plus,
   Search,
   SlidersHorizontal,
-  Trash2,
   TrendingUp,
 } from "lucide-react";
 import SelectDropdown from "./SelectDropdown";
 import CreateFournisseurModal from "./CreateFournisseurModal";
 import SupplierDetailModal from "./SupplierDetailModal";
-import { suppliers as initialSuppliers, type Supplier } from "./fournisseurs-data";
+import type { Supplier } from "@/lib/supabase/suppliers";
 
 const rowsPerPageOptions = ["10", "25", "50"];
 
 export default function FournisseursPage() {
-  const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [chargement, setChargement] = useState(true);
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  /** Relit la liste depuis la base, totaux compris. */
+  async function recharger() {
+    try {
+      const body = await fetch("/api/suppliers").then((r) => r.json());
+      if (body.error) setErreur(body.error);
+      else {
+        setSuppliers(body.suppliers as Supplier[]);
+        setErreur(null);
+      }
+    } catch {
+      setErreur("Fournisseurs indisponibles.");
+    } finally {
+      setChargement(false);
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/suppliers")
+      .then((r) => r.json())
+      .then((body) => {
+        if (cancelled) return;
+        if (body.error) setErreur(body.error);
+        else setSuppliers(body.suppliers as Supplier[]);
+      })
+      .catch(() => {
+        if (!cancelled) setErreur("Fournisseurs indisponibles.");
+      })
+      .finally(() => {
+        if (!cancelled) setChargement(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [searchQuery, setSearchQuery] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -40,9 +80,11 @@ export default function FournisseursPage() {
     ? suppliers.filter(
         (s) =>
           s.name.toLowerCase().includes(query) ||
-          s.contactName.toLowerCase().includes(query) ||
-          s.phone.includes(query) ||
-          s.email.toLowerCase().includes(query)
+          // Contact, telephone et courriel sont facultatifs : un
+          // fournisseur peut n'avoir qu'un nom.
+          (s.contactName ?? "").toLowerCase().includes(query) ||
+          (s.phone ?? "").includes(query) ||
+          (s.email ?? "").toLowerCase().includes(query)
       )
     : suppliers;
 
@@ -229,16 +271,31 @@ export default function FournisseursPage() {
               {visibleSuppliers.length === 0 && (
                 <tr>
                   <td colSpan={9} className="px-5 py-16 text-center">
-                    <p className="text-[13px] text-gray-500">
-                      {query
-                        ? "Aucun fournisseur ne correspond a cette recherche."
-                        : "Aucun fournisseur enregistre."}
-                    </p>
-                    {!query && (
-                      <p className="mx-auto mt-1 max-w-md text-[12px] text-gray-400">
-                        Cette page n&apos;a pas encore de table en base : un
-                        fournisseur ajoute ici disparait au rechargement.
+                    {chargement ? (
+                      <p className="flex items-center justify-center gap-2 text-[13px] text-gray-500">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Lecture des fournisseurs...
                       </p>
+                    ) : erreur ? (
+                      <p className="flex items-center justify-center gap-2 text-[13px] text-red-600">
+                        <AlertCircle className="h-4 w-4" />
+                        {erreur}
+                      </p>
+                    ) : (
+                      <>
+                        <p className="text-[13px] text-gray-500">
+                          {query
+                            ? "Aucun fournisseur ne correspond a cette recherche."
+                            : "Aucun fournisseur enregistre."}
+                        </p>
+                        {!query && (
+                          <p className="mx-auto mt-1 max-w-md text-[12px] text-gray-400">
+                            Ajoutez-en un, puis saisissez ses achats depuis sa
+                            fiche : ce sont eux qui donnent le cout de la
+                            marchandise.
+                          </p>
+                        )}
+                      </>
                     )}
                   </td>
                 </tr>
@@ -281,7 +338,7 @@ export default function FournisseursPage() {
                     {supplier.balanceDue.toLocaleString("fr-FR")} MAD
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 font-mono text-gray-500">
-                    {supplier.dueDate}
+                    {supplier.lastPurchaseAt ?? "—"}
                   </td>
                   <td
                     className="relative px-3 py-3"
@@ -328,15 +385,30 @@ export default function FournisseursPage() {
                         <div className="mt-1 border-t border-gray-100 pt-1">
                           <button
                             onClick={() => {
-                              setSuppliers((prev) =>
-                                prev.filter((s) => s.id !== supplier.id)
-                              );
+                              /*
+                               * Desactiver, pas supprimer. Ses achats
+                               * expliquent le cout de marchandise deja
+                               * vendue : les effacer rendrait des
+                               * profits passes inexplicables, et la
+                               * base refuse de toute facon d'effacer
+                               * un fournisseur qui en porte.
+                               */
+                              void fetch("/api/suppliers", {
+                                method: "PATCH",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({
+                                  id: supplier.id,
+                                  isActive: !supplier.isActive,
+                                }),
+                              }).then(() => recharger());
                               setOpenMenuId(null);
                             }}
-                            className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-red-600 hover:bg-red-50"
+                            className="flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-[13px] text-gray-700 hover:bg-gray-50"
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            Supprimer
+                            <Power className="h-3.5 w-3.5 text-gray-400" />
+                            {supplier.isActive ? "Desactiver" : "Reactiver"}
                           </button>
                         </div>
                       </div>
@@ -402,7 +474,10 @@ export default function FournisseursPage() {
       </div>
 
       {createOpen && (
-        <CreateFournisseurModal onClose={() => setCreateOpen(false)} />
+        <CreateFournisseurModal
+          onClose={() => setCreateOpen(false)}
+          onSaved={() => void recharger()}
+        />
       )}
       {detailSupplier && (
         <SupplierDetailModal

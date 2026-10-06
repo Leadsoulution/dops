@@ -1,7 +1,7 @@
 "use client";
 
 import { Building2, Mail, Phone, X } from "lucide-react";
-import type { Supplier } from "./fournisseurs-data";
+import type { Supplier } from "@/lib/supabase/suppliers";
 
 export default function SupplierDetailModal({
   supplier,
@@ -75,7 +75,7 @@ export default function SupplierDetailModal({
           </div>
 
           <p className="text-[11.5px] text-gray-400">
-            Echeance : <span className="font-mono">{supplier.dueDate}</span>
+            Dernier achat : <span className="font-mono">{supplier.lastPurchaseAt ?? "aucun"}</span>
           </p>
         </div>
 
