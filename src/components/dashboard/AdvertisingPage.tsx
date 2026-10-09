@@ -49,6 +49,10 @@ const PLATEFORMES = [
 type Platform = "meta" | "tiktok";
 
 const nf = new Intl.NumberFormat("fr-FR");
+
+/** Division qui rend 0 plutot que l'infini quand le diviseur manque. */
+const parUnite = (total: number, n: number) => (n > 0 ? total / n : 0);
+const parMille = (total: number, n: number) => (n > 0 ? (total / n) * 1000 : 0);
 const nf2 = new Intl.NumberFormat("fr-FR", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
@@ -293,15 +297,25 @@ export default function AdvertisingPage() {
                 tone="blue"
                 icon={<Wallet className="h-4 w-4" />}
                 title="DEPENSE"
-                value={`${nf2.format(o.spendMad)} DH`}
-                note="Convertie en dirhams au taux enregistre."
+                value={`${nf2.format(depenseSource)} ${devise}`}
+                equivalent={`${nf2.format(o.spendMad)} DH`}
+                note="Telle que la plateforme la facture."
               />
               <Kpi
                 tone="gray"
                 icon={<Eye className="h-4 w-4" />}
                 title="IMPRESSIONS"
                 value={nf.format(o.impressions)}
-                note={`CPM ${nf2.format(o.cpm)} DH`}
+                note={
+                  <>
+                    CPM {nf2.format(parMille(depenseSource, o.impressions))}{" "}
+                    {devise}
+                    <span className="text-gray-400">
+                      {" "}
+                      = {nf2.format(o.cpm)} DH
+                    </span>
+                  </>
+                }
               />
               <Kpi
                 tone="violet"
@@ -312,7 +326,17 @@ export default function AdvertisingPage() {
                     ? `${nf2.format(depenseSource / resultats)} ${devise}`
                     : "—"
                 }
-                note={`CTR ${nf2.format(o.ctr)} % - CPC ${nf2.format(o.cpc)} DH`}
+                equivalent={
+                  resultats > 0
+                    ? `${nf2.format(o.spendMad / resultats)} DH`
+                    : undefined
+                }
+                note={
+                  <>
+                    CTR {nf2.format(o.ctr)} % - CPC{" "}
+                    {nf2.format(parUnite(depenseSource, o.clicks))} {devise}
+                  </>
+                }
               />
               <Kpi
                 tone="emerald"
@@ -354,12 +378,21 @@ function Kpi({
   icon,
   title,
   value,
+  equivalent,
   note,
 }: {
   tone: keyof typeof TONES;
   icon: React.ReactNode;
   title: string;
   value: string;
+  /**
+   * Le meme montant en dirhams, sous celui de la devise du compte.
+   *
+   * Le grand chiffre se compare au gestionnaire de publicites, le
+   * petit se compare au reste de l'application. Les deux servent, et
+   * n'afficher que l'un obligeait a convertir de tete.
+   */
+  equivalent?: string;
   note: React.ReactNode;
 }) {
   const style = TONES[tone];
@@ -372,6 +405,11 @@ function Kpi({
         {title}
       </p>
       <p className="font-mono text-[28px] font-semibold text-gray-900">{value}</p>
+      {equivalent && (
+        <p className="-mt-0.5 font-mono text-[12px] text-gray-400">
+          = {equivalent}
+        </p>
+      )}
       <p className="text-[12px] text-gray-500">{note}</p>
     </section>
   );
