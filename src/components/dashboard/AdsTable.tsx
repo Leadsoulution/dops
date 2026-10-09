@@ -51,7 +51,12 @@ const NIVEAUX = [
   { key: "ad" as const, label: "Publicites" },
 ];
 
-const STATUTS = ["Tous", "Actifs", "En pause", "Archives"];
+/*
+ * "Archives" a disparu des filtres : les campagnes archivees ne sont
+ * plus relevees ni comptees, et un filtre qui ne peut jamais rien
+ * ramener fait douter de celui d'a cote.
+ */
+const STATUTS = ["Tous", "Actifs", "En pause"];
 
 /** Un statut de campagne, dit comme la plateforme le dit. */
 function statusStyle(status?: string): string {
@@ -72,8 +77,7 @@ function matchStatut(filtre: string, status?: string): boolean {
   if (filtre === "Tous") return true;
   const s = (status ?? "").toUpperCase();
   if (filtre === "Actifs") return s.includes("ACTIVE") || s.includes("ENABLE");
-  if (filtre === "En pause") return s.includes("PAUSE") || s.includes("DISABLE");
-  return s.includes("ARCHIVE") || s.includes("DELETE");
+  return s.includes("PAUSE") || s.includes("DISABLE");
 }
 
 export default function AdsTable({

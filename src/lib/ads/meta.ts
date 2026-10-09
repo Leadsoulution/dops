@@ -137,15 +137,19 @@ export async function getCampaigns(
   }>(`/${accountPath(externalId)}/campaigns`, token, {
     fields: "id,name,status,objective,start_time,stop_time",
     /*
-     * Les campagnes archivees restent demandees : leurs depenses
-     * passees figurent dans les releves, et les ecarter ici laisserait
-     * des lignes orphelines dans le journal.
+     * Actives et en pause, rien d'autre.
      *
-     * "DELETED" en revanche a ete retire. Meta le refuse dans ce
-     * filtre et repond "Invalid parameter", ce qui faisait echouer
-     * tout le relevee avant meme d'arriver aux depenses.
+     * Les archivees etaient demandees pour ne pas perdre leurs
+     * depenses passees. Mais elles comptaient aussi leurs resultats,
+     * d'une autre nature : des campagnes d'engagement archivees
+     * ajoutaient quatre-vingt-onze interactions aux cent quarante-six
+     * achats, et le total ne correspondait plus a rien de lisible
+     * dans le gestionnaire de publicites, qui les masque par defaut.
+     *
+     * "DELETED" n'y figure pas davantage : Meta le refuse dans ce
+     * filtre et repond "Invalid parameter".
      */
-    effective_status: '["ACTIVE","PAUSED","ARCHIVED"]',
+    effective_status: '["ACTIVE","PAUSED"]',
   });
 
   return rows.map((c) => ({
@@ -179,7 +183,7 @@ export async function getAdSets(
     end_time?: string;
   }>(`/${accountPath(externalId)}/adsets`, token, {
     fields: "id,name,status,campaign_id,start_time,end_time",
-    effective_status: '["ACTIVE","PAUSED","ARCHIVED"]',
+    effective_status: '["ACTIVE","PAUSED"]',
   });
 
   return rows.map((a) => ({
@@ -206,7 +210,7 @@ export async function getAds(
     created_time?: string;
   }>(`/${accountPath(externalId)}/ads`, token, {
     fields: "id,name,status,adset_id,created_time",
-    effective_status: '["ACTIVE","PAUSED","ARCHIVED"]',
+    effective_status: '["ACTIVE","PAUSED"]',
   });
 
   return rows.map((a) => ({

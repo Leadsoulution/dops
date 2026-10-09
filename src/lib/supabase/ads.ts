@@ -119,6 +119,18 @@ type LeadRow = {
   utm_content: string | null;
 };
 
+/**
+ * Une campagne, un ensemble ou une publicite mis de cote.
+ *
+ * Les deux plateformes n'ecrivent pas ce statut pareil, et TikTok le
+ * formule encore autrement : on cherche le mot plutot qu'une valeur
+ * exacte.
+ */
+function estArchivee(status: string | null): boolean {
+  const s = (status ?? "").toUpperCase();
+  return s.includes("ARCHIVE") || s.includes("DELETE");
+}
+
 /** Division qui rend 0 plutot que l'infini quand le diviseur manque. */
 function ratio(numerator: number, denominator: number): number {
   return denominator > 0 ? numerator / denominator : 0;
@@ -202,7 +214,18 @@ export async function getAdsOverview(
     else parCampagne.set(row.campaign_id, [row]);
   }
 
-  const metaById = new Map(campaigns.map((c) => [c.id, c]));
+  /*
+   * Les archivees sortent des comptes.
+   *
+   * Elles restent en base — leurs lignes expliquent des depenses qui
+   * ont bien eu lieu — mais elles ne pesent plus sur aucun total. Le
+   * gestionnaire de publicites les masque par defaut, et leurs
+   * resultats sont souvent d'une autre nature : melanger des
+   * interactions archivees a des achats en cours donnait un total
+   * qui ne correspondait a rien.
+   */
+  const vivantes = campaigns.filter((c) => !estArchivee(c.status));
+  const metaById = new Map(vivantes.map((c) => [c.id, c]));
 
   /*
    * Les commandes rattachees a ce qui les a amenees.
@@ -216,7 +239,7 @@ export async function getAdsOverview(
    * seul etage du haut est ce qui permet de lire un taux de livraison
    * par ensemble sans inventer de rattachement.
    */
-  const parExterne = new Map(campaigns.map((c) => [c.external_id, c]));
+  const parExterne = new Map(vivantes.map((c) => [c.external_id, c]));
   const commandes = new Map<
     string,
     { orders: number; confirmed: number; delivered: number; revenue: number }

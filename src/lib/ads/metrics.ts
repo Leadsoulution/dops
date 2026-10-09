@@ -278,6 +278,27 @@ export function resultTotal(bag: MetricBag): number {
   return resultKeys(bag).reduce((t, k) => t + (bag[k] ?? 0), 0);
 }
 
+/**
+ * Le detail des resultats, indicateur par indicateur.
+ *
+ * Un achat et une interaction avec une publication ne sont pas la
+ * meme grandeur. Leur somme est celle que Meta affiche lui-meme, mais
+ * elle ne veut rien dire tant qu'on ne sait pas de quoi elle est
+ * faite : 237 "resultats" dont 146 achats et 91 interactions ne se
+ * compare a aucun chiffre du gestionnaire de publicites, qui n'y
+ * montre que les campagnes non archivees.
+ */
+export function resultBreakdown(
+  bag: MetricBag
+): { label: string; value: number }[] {
+  return resultKeys(bag)
+    .map((k) => ({
+      label: actionLabel(k.slice(RESULT_PREFIX.length)),
+      value: bag[k] ?? 0,
+    }))
+    .sort((a, b) => b.value - a.value);
+}
+
 /** De quoi sont faits ces resultats, pour le dire sous le chiffre. */
 export function resultLabel(bag: MetricBag): string {
   const cles = resultKeys(bag);

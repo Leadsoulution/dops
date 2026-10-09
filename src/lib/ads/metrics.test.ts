@@ -5,6 +5,7 @@ import {
   RESULTS_KEY,
   RESULT_METRICS,
   SPEND_KEY,
+  resultBreakdown,
   resultLabel,
   resultTotal,
   withResultTotal,
@@ -170,5 +171,34 @@ describe("resultats", () => {
     expect(
       availableMetrics([{ "result:purchase": 1 }]).map((m) => m.key)
     ).toContain(RESULTS_KEY);
+  });
+});
+
+describe("resultBreakdown", () => {
+  it("detaille chaque indicateur, du plus gros au plus petit", () => {
+    expect(
+      resultBreakdown({
+        "result:post_engagement": 91,
+        "result:offsite_conversion.fb_pixel_purchase": 146,
+      })
+    ).toEqual([
+      { label: "Achats (pixel)", value: 146 },
+      { label: "Interactions avec la publication", value: 91 },
+    ]);
+  });
+
+  it("rend une liste vide quand il n'y a aucun resultat", () => {
+    expect(resultBreakdown({ clicks: 12 })).toEqual([]);
+  });
+
+  it("permet de retrouver le total a partir du detail", () => {
+    // C'est tout l'interet : 237 ne se compare a rien, 146 achats se
+    // compare aux 145 du gestionnaire de publicites.
+    const sac = {
+      "result:offsite_conversion.fb_pixel_purchase": 146,
+      "result:post_engagement": 91,
+    };
+    const somme = resultBreakdown(sac).reduce((s, d) => s + d.value, 0);
+    expect(somme).toBe(resultTotal(sac));
   });
 });

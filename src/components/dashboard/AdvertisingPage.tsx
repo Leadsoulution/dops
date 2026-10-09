@@ -20,6 +20,7 @@ import AdsTable from "./AdsTable";
 import {
   RESULTS_KEY,
   SPEND_SOURCE_KEY,
+  resultBreakdown,
   resultLabel,
   sumMetrics,
   withResultTotal,
@@ -203,6 +204,13 @@ export default function AdvertisingPage() {
   const depenseSource = totaux[SPEND_SOURCE_KEY] ?? 0;
   const devise = overview?.currency ?? "MAD";
   const indicateur = resultLabel(totaux) || "Selon l'objectif de chaque campagne";
+  /*
+   * Le detail par indicateur. Sans lui, un total de 237 melant 146
+   * achats et 91 interactions ne se rapproche d'aucun chiffre du
+   * gestionnaire de publicites, qui n'affiche par defaut ni les
+   * campagnes archivees ni les objectifs d'une autre nature.
+   */
+  const detailResultats = resultBreakdown(totaux);
 
   /** La premiere et la derniere journee dont on detient les chiffres. */
   const jours = (overview?.daily ?? []).map((d) => d.day).sort();
@@ -371,9 +379,22 @@ export default function AdvertisingPage() {
                 title="RESULTATS"
                 value={nf.format(resultats)}
                 note={
-                  resultats > 0
-                    ? indicateur
-                    : "Ce que les campagnes optimisent : achat, interaction, visite."
+                  detailResultats.length === 0 ? (
+                    "Ce que les campagnes optimisent : achat, interaction, visite."
+                  ) : detailResultats.length === 1 ? (
+                    indicateur
+                  ) : (
+                    <span className="flex flex-col">
+                      {detailResultats.map((d) => (
+                        <span key={d.label}>
+                          <span className="font-mono text-gray-700">
+                            {nf.format(d.value)}
+                          </span>{" "}
+                          {d.label.toLowerCase()}
+                        </span>
+                      ))}
+                    </span>
+                  )
                 }
               />
             </div>
