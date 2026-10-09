@@ -204,6 +204,18 @@ export default function AdvertisingPage() {
   const devise = overview?.currency ?? "MAD";
   const indicateur = resultLabel(totaux) || "Selon l'objectif de chaque campagne";
 
+  /** La premiere et la derniere journee dont on detient les chiffres. */
+  const jours = (overview?.daily ?? []).map((d) => d.day).sort();
+  const enDate = (iso: string) =>
+    new Date(`${iso}T12:00:00Z`).toLocaleDateString("fr-FR", {
+      day: "numeric",
+      month: "short",
+    });
+  const couverture =
+    jours.length > 0
+      ? { du: enDate(jours[0]), au: enDate(jours.at(-1)!) }
+      : null;
+
   const comptes = (accounts ?? []).filter((a) => a.platform === platform);
   const o = overview;
 
@@ -225,10 +237,25 @@ export default function AdvertisingPage() {
             de monter chez elle sans monter ici.
           */}
           {releve && (
-            <p className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-gray-400">
+            <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[11.5px] text-gray-400">
               <Clock className="h-3 w-3" />
-              Releve {releve}. Aujourd&apos;hui et hier bougent encore chez la
-              plateforme : actualisez pour les mettre a jour.
+              <span>Releve {releve}.</span>
+              {/*
+                La periode reellement couverte, dite en clair.
+                Comparer ces chiffres a ceux du gestionnaire de
+                publicites n'a de sens que sur la meme periode, et
+                "Maximum" ici veut dire "tout ce qui a ete releve",
+                pas "toute la vie du compte".
+              */}
+              {couverture && (
+                <span className="text-gray-500">
+                  Donnees du {couverture.du} au {couverture.au}.
+                </span>
+              )}
+              <span>
+                Aujourd&apos;hui et hier bougent encore chez la plateforme :
+                actualisez pour les mettre a jour.
+              </span>
             </p>
           )}
         </div>
