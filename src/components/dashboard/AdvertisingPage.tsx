@@ -17,6 +17,13 @@ import {
 } from "lucide-react";
 import PeriodFilter from "./PeriodFilter";
 import AdsTable from "./AdsTable";
+import {
+  RESULTS_KEY,
+  SPEND_SOURCE_KEY,
+  resultLabel,
+  sumMetrics,
+  withResultTotal,
+} from "@/lib/ads/metrics";
 import { periodBounds, type Range } from "./useTeamStats";
 import type { AdsOverview } from "@/lib/supabase/ads";
 import type { AdAccountView } from "@/lib/supabase/ad-accounts";
@@ -177,6 +184,22 @@ export default function AdvertisingPage() {
       })
     : null;
 
+  /*
+   * Les resultats et la depense d'origine, additionnes sur les
+   * campagnes seules.
+   *
+   * Les trois etages decrivent le meme argent et les memes resultats
+   * vus de trois hauteurs : sommer les trois les compterait en triple.
+   */
+  const racines = (overview?.campaigns ?? []).filter(
+    (c) => c.level === "campaign"
+  );
+  const totaux = withResultTotal(sumMetrics(racines.map((c) => c.metrics)));
+  const resultats = totaux[RESULTS_KEY] ?? 0;
+  const depenseSource = totaux[SPEND_SOURCE_KEY] ?? 0;
+  const devise = overview?.currency ?? "MAD";
+  const indicateur = resultLabel(totaux) || "Selon l'objectif de chaque campagne";
+
   const comptes = (accounts ?? []).filter((a) => a.platform === platform);
   const o = overview;
 
@@ -283,19 +306,23 @@ export default function AdvertisingPage() {
               <Kpi
                 tone="violet"
                 icon={<MousePointerClick className="h-4 w-4" />}
-                title="CLICS"
-                value={nf.format(o.clicks)}
+                title="COUT PAR RESULTAT"
+                value={
+                  resultats > 0
+                    ? `${nf2.format(depenseSource / resultats)} ${devise}`
+                    : "—"
+                }
                 note={`CTR ${nf2.format(o.ctr)} % - CPC ${nf2.format(o.cpc)} DH`}
               />
               <Kpi
                 tone="emerald"
                 icon={<Target className="h-4 w-4" />}
-                title="CONVERSIONS"
-                value={nf.format(o.conversions)}
+                title="RESULTATS"
+                value={nf.format(resultats)}
                 note={
-                  o.conversions > 0
-                    ? `${nf2.format(o.spendMad / o.conversions)} DH par conversion`
-                    : "Telles que la plateforme les compte."
+                  resultats > 0
+                    ? indicateur
+                    : "Ce que les campagnes optimisent : achat, interaction, visite."
                 }
               />
             </div>

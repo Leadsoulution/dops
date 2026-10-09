@@ -135,10 +135,27 @@ describe("resultats", () => {
   });
 
   it("pose le total sous une cle fixe, pour le cout par resultat", () => {
-    const sac = withResultTotal({ "result:purchase": 4, spend_mad: 200 });
+    // Le cout se calcule sur la depense d'origine, pas sur sa
+    // conversion : c'est ce chiffre qu'on compare au gestionnaire de
+    // publicites, et des dirhams a cote de dollars ne se comparent pas.
+    const sac = withResultTotal({ "result:purchase": 4, spend_src: 200 });
     expect(sac[RESULTS_KEY]).toBe(4);
     const cout = RESULT_METRICS.find((m) => m.key === COST_PER_RESULT_KEY)!;
     expect(metricValue(cout, sac)).toBe(50);
+  });
+
+  it("exprime le cout par resultat dans la devise du compte", () => {
+    const cout = availableMetrics([{ "result:purchase": 1 }], "CAD").find(
+      (m) => m.key === COST_PER_RESULT_KEY
+    )!;
+    expect(formatMetric(cout, 12.5)).toBe("12,50 CAD");
+  });
+
+  it("retombe sur le dirham quand la devise est inconnue", () => {
+    const cout = availableMetrics([{ "result:purchase": 1 }]).find(
+      (m) => m.key === COST_PER_RESULT_KEY
+    )!;
+    expect(formatMetric(cout, 12.5)).toBe("12,50 DH");
   });
 
   it("laisse le sac intact quand il n'y a pas de resultat", () => {

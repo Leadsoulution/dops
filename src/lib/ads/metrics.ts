@@ -26,6 +26,14 @@ export type Metric = {
   format: MetricFormat;
   /** Pour un rapport : numerateur, denominateur, et facteur d'echelle. */
   of?: { num: string; den: string; scale?: number };
+  /**
+   * Unite affichee apres un montant. "DH" par defaut.
+   *
+   * Un cout exprime dans la devise du compte doit porter cette
+   * devise : lire "0,30 DH" sous une depense de 11,43 CAD invite a
+   * comparer deux nombres qui ne sont pas dans la meme monnaie.
+   */
+  unit?: string;
   /** Mise en garde affichee en infobulle. */
   hint?: string;
 };
@@ -235,7 +243,12 @@ export const RESULT_METRICS: Metric[] = [
     label: "Cout par resultat",
     kind: "ratio",
     format: "money",
-    of: { num: SPEND_KEY, den: RESULTS_KEY },
+    /*
+     * Dans la devise du compte, comme la depense a cote.
+     * C'est ce chiffre qu'on compare a celui du gestionnaire de
+     * publicites, et le convertir en dirhams le rendait incomparable.
+     */
+    of: { num: SPEND_SOURCE_KEY, den: RESULTS_KEY },
   },
 ];
 
@@ -371,7 +384,7 @@ const nf2 = new Intl.NumberFormat("fr-FR", {
 export function formatMetric(metric: Metric, value: number): string {
   switch (metric.format) {
     case "money":
-      return `${nf2.format(value)} DH`;
+      return `${nf2.format(value)} ${metric.unit ?? "DH"}`;
     case "percent":
       return `${nf2.format(value)} %`;
     case "decimal":
@@ -406,9 +419,14 @@ export function availableMetrics(
           : m
       )
     : METRICS;
+  const resultats = currency
+    ? RESULT_METRICS.map((m) =>
+        m.key === COST_PER_RESULT_KEY ? { ...m, unit: currency } : m
+      )
+    : RESULT_METRICS;
   const aDesCommandes = bags.some((b) => (b?.orders ?? 0) > 0);
   return [
-    ...(aDesResultats ? RESULT_METRICS : []),
+    ...(aDesResultats ? resultats : []),
     ...(aDesCommandes ? ORDER_METRICS : []),
     ...base,
     ...actions.map(actionMetric),
