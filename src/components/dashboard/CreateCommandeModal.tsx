@@ -22,6 +22,7 @@ import {
 import { agents, moroccanCities, type Lead } from "./leads-data";
 import SelectDropdown from "./SelectDropdown";
 import { stockTotal, PRIX_UNITAIRE_MANUEL } from "@/lib/stock-total";
+import { orderFields, type OrderLine } from "@/lib/order-lines";
 
 const products = [
   {
@@ -88,7 +89,15 @@ export default function CreateCommandeModal({
   const [client, setClient] = useState("");
   const [phone, setPhone] = useState("");
   const [reference, setReference] = useState("");
-  const [total, setTotal] = useState("0");
+  /**
+   * Le total ecrit a la main, s'il y en a un.
+   *
+   * Nul tant que personne n'y a touche : le total suit alors la
+   * selection. Des que l'agent ecrit un montant, c'est celui-la qui
+   * tient — il vient d'etre annonce au client au telephone, et une
+   * selection corrigee ensuite ne doit pas l'effacer en silence.
+   */
+  const [totalSaisi, setTotalSaisi] = useState<string | null>(null);
   const [ville, setVille] = useState("");
   // Toutes les villes du dictionnaire, pas seulement les grandes : une
   // commande peut partir a Mireleft comme a Casablanca.
@@ -148,29 +157,30 @@ export default function CreateCommandeModal({
   }
 
   /**
-   * Change la quantite d'un article, et recalcule le total.
+   * Change la quantite d'un article.
    *
-   * Le total se recalcule a chaque changement de selection, y compris
-   * quand on retire un article : c'est ce que l'on attend d'un panier.
-   * Un montant saisi a la main tient jusqu'a la selection suivante,
-   * apres quoi il repart du prix catalogue — mieux vaut un chiffre juste
-   * qu'un chiffre ancien qu'on aurait oublie d'avoir modifie.
-   *
-   * Un article sans prix au catalogue compte pour zero : il vaut mieux
-   * un total incomplet, visiblement faux, qu'un total invente.
+   * La mise a jour part de l'etat courant et non de celui qu'avait ce
+   * rendu : quatre cases cochees coup sur coup tombaient autrement dans
+   * le meme lot, et seule la derniere survivait — le client avait
+   * demande quatre produits, le transporteur en recevait deux.
    */
   function setStockQuantity(ref: string, quantity: number) {
-    const next = { ...stockQuantities };
-    if (quantity <= 0) delete next[ref];
-    else next[ref] = quantity;
-    setStockQuantities(next);
-
-    setTotal(String(stockTotal(next, stockItems, PRIX_UNITAIRE_MANUEL)));
+    setStockQuantities((prev) => {
+      const next = { ...prev };
+      if (quantity <= 0) delete next[ref];
+      else next[ref] = quantity;
+      return next;
+    });
   }
 
   /** Cocher pose une unite, decocher retire l'article. */
   function toggleStock(item: StockItem) {
-    setStockQuantity(item.ref, (stockQuantities[item.ref] ?? 0) > 0 ? 0 : 1);
+    setStockQuantities((prev) => {
+      const next = { ...prev };
+      if ((prev[item.ref] ?? 0) > 0) delete next[item.ref];
+      else next[item.ref] = 1;
+      return next;
+    });
   }
 
   const selectedStock = Object.entries(stockQuantities);
@@ -181,6 +191,17 @@ export default function CreateCommandeModal({
           item.ref.toLowerCase().includes(productQuery.trim().toLowerCase())
       )
     : stockItems;
+
+  /**
+   * Le total de la commande : celui qui a ete ecrit, sinon celui que la
+   * selection donne. Un article sans prix au catalogue compte pour zero
+   * — mieux vaut un total incomplet, visiblement faux, qu'un total
+   * invente.
+   */
+  const totalAuto = String(
+    stockTotal(stockQuantities, stockItems, PRIX_UNITAIRE_MANUEL)
+  );
+  const total = totalSaisi ?? totalAuto;
 
   function toggleProduct(id: string) {
     setSelected((prev) =>
@@ -199,6 +220,24 @@ export default function CreateCommandeModal({
     const value = Number.parseFloat(p.price.replace(/[^\d.]/g, ""));
     return sum + (Number.isFinite(value) ? value : 0);
   }, 0);
+
+  /**
+   * Les articles de la commande, un par un.
+   *
+   * Nom, quantite et code article sortent d'une seule liste, puis d'un
+   * seul calcul : les trois champs enregistres ne peuvent plus se
+   * contredire, et une commande de quatre produits se relit comme
+   * quatre produits.
+   */
+  const lignes: OrderLine[] =
+    parcelType === "stock"
+      ? selectedStock.map(([ref, qty]) => ({
+          ref,
+          qty,
+          name: stockItems.find((i) => i.ref === ref)?.name ?? ref,
+        }))
+      : selectedProducts.map((p) => ({ name: p.name, qty: 1 }));
+  const champs = orderFields(lignes);
 
   async function submit() {
     if (!client.trim() || !phone.trim()) {
@@ -222,28 +261,15 @@ export default function CreateCommandeModal({
           reference: reference.trim() || generateReference(),
           client: client.trim(),
           phone: phone.trim(),
-          productName:
-            parcelType === "stock"
-              ? selectedStock
-                  .map(([ref]) => stockItems.find((i) => i.ref === ref)?.name ?? ref)
-                  .join(", ")
-              : selectedProducts.map((p) => p.name).join(", "),
+          productName: champs.productName,
           productLabel:
             parcelType === "stock"
               ? "STOCK"
               : (selectedProducts[0]?.name.slice(0, 4).toUpperCase() ?? ""),
-          itemCount:
-            parcelType === "stock"
-              ? selectedStock.reduce((sum, [, qty]) => sum + qty, 0) || undefined
-              : selectedProducts.length > 1
-              ? selectedProducts.length
-              : undefined,
-          parcelType,
+          itemCount: champs.itemCount || undefined,
+          parcelType: champs.parcelType,
           // Format attendu par ForceLog pour prelever dans son depot.
-          stockItems:
-            parcelType === "stock"
-              ? selectedStock.map(([ref, qty]) => `${ref}:${qty}`).join(",")
-              : undefined,
+          stockItems: champs.stockItems ?? undefined,
           amount: `${total.replace(/[^\d.]/g, "") || "0"} MAD`,
           ville: ville || undefined,
           adresse: adresse.trim() || undefined,
@@ -680,10 +706,20 @@ export default function CreateCommandeModal({
                   <input
                     type="text"
                     value={total}
-                    onChange={(e) => setTotal(e.target.value)}
+                    onChange={(e) => setTotalSaisi(e.target.value)}
                     className="w-20 rounded-md border border-gray-200 px-2 py-1 font-mono text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
                   />
                   <span className="text-[13px] text-gray-500">MAD</span>
+                  {totalSaisi !== null && totalSaisi.trim() !== totalAuto && (
+                    <button
+                      type="button"
+                      onClick={() => setTotalSaisi(null)}
+                      title="Reprendre le total de la selection"
+                      className="rounded-md px-1.5 py-1 text-[11.5px] font-medium text-blue-600 hover:bg-blue-50"
+                    >
+                      = {totalAuto}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -694,7 +730,7 @@ export default function CreateCommandeModal({
                 <span className="font-mono text-gray-600">
                   {PRIX_UNITAIRE_MANUEL} MAD
                 </span>{" "}
-                par article. Le total reste modifiable.
+                par article. Un total ecrit a la main est conserve.
               </p>
             )}
           </div>

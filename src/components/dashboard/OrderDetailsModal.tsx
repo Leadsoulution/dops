@@ -41,6 +41,7 @@ import {
   type LeadStatus,
 } from "./leads-data";
 import { displayAmount } from "@/lib/amount";
+import { orderLines } from "@/lib/order-lines";
 import { whatsappAppChat, whatsappNumber } from "@/lib/whatsapp";
 import { openWhatsapp } from "@/lib/open-outside";
 import { trackingUrl } from "@/lib/forcelog/tracking-steps";
@@ -71,6 +72,17 @@ export default function OrderDetailsModal({
 }) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>(tabs[0]);
   const [lienCopie, setLienCopie] = useState(false);
+
+  /*
+   * Les articles de la commande, un par un.
+   *
+   * "2 x 300 MAD" se lisait comme six cents dirhams alors que la
+   * commande en vaut trois cents : le compte d'articles n'est pas une
+   * quantite d'un seul produit des que la commande en contient
+   * plusieurs. Chaque article a donc sa ligne, et le total n'est annonce
+   * qu'une fois.
+   */
+  const lignes = orderLines(lead);
 
   function copierLien(url: string) {
     void navigator.clipboard.writeText(url).then(() => {
@@ -179,14 +191,42 @@ export default function OrderDetailsModal({
                 </div>
               )}
               <div className="min-w-0">
-                <p className="text-[13px] font-medium text-gray-800">
-                  {lead.productName}
-                </p>
-                <p className="text-[12px] text-gray-500">
-                  <span className="font-mono">
-                    {lead.itemCount ?? 1} x {displayAmount(lead.amount)}
-                  </span>
-                </p>
+                {lignes.length > 1 ? (
+                  <>
+                    <ul className="space-y-0.5">
+                      {lignes.map((ligne, i) => (
+                        <li
+                          key={`${ligne.ref ?? ligne.name}-${i}`}
+                          className="truncate text-[13px] font-medium text-gray-800"
+                        >
+                          {ligne.name}
+                          {ligne.qty > 1 && (
+                            <span className="ml-1.5 font-mono text-[12px] text-gray-400">
+                              x{ligne.qty}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-0.5 text-[12px] text-gray-500">
+                      {lignes.length} produits &middot; total{" "}
+                      <span className="font-mono">
+                        {displayAmount(lead.amount)}
+                      </span>
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[13px] font-medium text-gray-800">
+                      {lead.productName}
+                    </p>
+                    <p className="text-[12px] text-gray-500">
+                      <span className="font-mono">
+                        {lead.itemCount ?? 1} x {displayAmount(lead.amount)}
+                      </span>
+                    </p>
+                  </>
+                )}
               </div>
             </div>
             <div className="shrink-0 text-right">

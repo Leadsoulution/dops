@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { mapOrderToParcel } from "./mapping";
+import { resolveParcelType } from "./parcel-type";
+import { orderFields, orderLines } from "@/lib/order-lines";
 
 describe("mapOrderToParcel", () => {
   it("maps the core order fields to ForceLog's AddParcel shape", () => {
@@ -122,5 +124,80 @@ describe("mapOrderToParcel", () => {
     // une ligne de commentaire vide sur le bordereau.
     expect("COMMENT" in sans).toBe(false);
     expect("COMMENT" in vide).toBe(false);
+  });
+});
+
+describe("une commande de plusieurs produits, de bout en bout", () => {
+  /*
+   * Le trajet complet d'une commande saisie a la main : quatre produits
+   * coches, un total ecrit par l'agent, et ce que le transporteur en
+   * recoit. C'est le chemin qui se cassait — les quatre articles
+   * arrivaient comme un seul, en quatre exemplaires.
+   */
+  const CATALOGUE = [
+    { name: "Collier A", forcelogRef: "R1", defaultParcelType: "stock" as const },
+    { name: "Collier B", forcelogRef: "R2", defaultParcelType: "stock" as const },
+    { name: "Collier C", forcelogRef: "R3", defaultParcelType: "stock" as const },
+    { name: "Collier D", forcelogRef: "R4", defaultParcelType: "stock" as const },
+  ];
+
+  const champs = orderFields([
+    { name: "Collier A", qty: 1, ref: "R1" },
+    { name: "Collier B", qty: 2, ref: "R2" },
+    { name: "Collier C", qty: 1, ref: "R3" },
+    { name: "Collier D", qty: 1, ref: "R4" },
+  ]);
+
+  it("garde les quatre references et leurs quantites", () => {
+    expect(champs.stockItems).toBe("R1:1,R2:2,R3:1,R4:1");
+    expect(champs.itemCount).toBe(5);
+  });
+
+  it("ne les ramene pas a un seul article avant l'envoi", () => {
+    const choix = resolveParcelType(
+      {
+        productName: champs.productName,
+        itemCount: champs.itemCount,
+        parcelType: champs.parcelType,
+        stockItems: champs.stockItems ?? undefined,
+      },
+      CATALOGUE
+    );
+    expect(choix).toEqual({
+      parcelType: "stock",
+      stockItems: "R1:1,R2:2,R3:1,R4:1",
+    });
+  });
+
+  it("envoie au transporteur les quatre produits et le montant ecrit", () => {
+    const parcel = mapOrderToParcel({
+      reference: "MO-TEST-1013",
+      client: "Farida",
+      phone: "0600000000",
+      ville: "Rabat",
+      amount: "300 MAD",
+      productName: champs.productName,
+      parcelType: champs.parcelType,
+      stockItems: champs.stockItems ?? undefined,
+    });
+    expect(parcel.STOCK).toBe("R1:1,R2:2,R3:1,R4:1");
+    expect(parcel.PRODUCT_NATURE).toBe(
+      "Collier A, Collier B, Collier C, Collier D"
+    );
+    expect(parcel.COD).toBe(300);
+  });
+
+  it("relit la commande enregistree comme quatre produits", () => {
+    const lignes = orderLines({
+      productName: champs.productName,
+      itemCount: champs.itemCount,
+      stockItems: champs.stockItems ?? undefined,
+    });
+    expect(lignes.map((l) => `${l.name} x${l.qty}`)).toEqual([
+      "Collier A x1",
+      "Collier B x2",
+      "Collier C x1",
+      "Collier D x1",
+    ]);
   });
 });

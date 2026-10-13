@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
   ChevronDown,
@@ -14,15 +14,44 @@ import {
 } from "lucide-react";
 import SelectDropdown from "./SelectDropdown";
 import { moroccanCities, type Lead } from "./leads-data";
+import {
+  orderFields,
+  orderLines,
+  sameLines,
+  type CatalogueEntry,
+  type OrderLine,
+} from "@/lib/order-lines";
 
-type CatalogProduct = { name: string; price: number; image?: string };
+type CatalogProduct = {
+  name: string;
+  price: number;
+  image?: string;
+  /** Code article du transporteur, pour les produits qu'il heberge. */
+  ref?: string;
+};
 
 type SelectedProduct = {
   name: string;
   price: number;
   qty: number;
   image?: string;
+  ref?: string;
 };
+
+/** Une ligne de commande telle que ce formulaire la manipule. */
+const versSelection = (l: OrderLine): SelectedProduct => ({
+  name: l.name,
+  qty: l.qty,
+  ref: l.ref,
+  price: l.price ?? 0,
+  image: l.image,
+});
+
+const versLigne = (p: SelectedProduct): OrderLine => ({
+  name: p.name,
+  qty: p.qty,
+  ref: p.ref,
+});
 
 /** Vignette d'un produit, ou un carre neutre s'il n'a pas de photo. */
 function ProductThumb({
@@ -93,11 +122,28 @@ export default function EditOrderModal({
 }) {
   const [productQuery, setProductQuery] = useState("");
   const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>([]);
-  const [selected, setSelected] = useState<SelectedProduct[]>(
-    lead.productName
-      ? [{ name: lead.productName, price: 0, qty: lead.itemCount ?? 1 }]
-      : []
+  /*
+   * Les articles de la commande, un par un.
+   *
+   * Le formulaire n'en montrait qu'un : le nom enregistre, en autant
+   * d'exemplaires que la commande comptait d'articles. Une commande de
+   * quatre produits differents se relisait donc comme un seul produit
+   * en quatre exemplaires, et l'enregistrement suivant n'en gardait que
+   * le premier. Les references prelevees disent exactement ce que la
+   * commande contient : c'est d'elles que part la liste.
+   */
+  const { productName, itemCount, stockItems } = lead;
+  const lignesMontage = useMemo(
+    () => orderLines({ productName, itemCount, stockItems }),
+    [productName, itemCount, stockItems]
   );
+  const [selected, setSelected] = useState<SelectedProduct[]>(() =>
+    lignesMontage.map(versSelection)
+  );
+  // Les lignes d'origine, pour ne reecrire les produits que s'ils ont
+  // vraiment change : corriger une adresse ne doit pas toucher au
+  // contenu du colis.
+  const lignesInitiales = useRef<OrderLine[]>(lignesMontage);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   // Statut de livraison, corrigeable a la main.
   //
@@ -133,28 +179,49 @@ export default function EditOrderModal({
       .then((res) => res.json())
       .then((data) => {
         if (cancelled || !Array.isArray(data.products)) return;
-        const list = (
+        const complet = (
           data.products as {
             name: string;
             priceSale: number;
             status: string;
             image?: string;
+            forcelogRef?: string;
           }[]
-        )
-          .filter((p) => p.status === "Actif")
-          .map((p) => ({ name: p.name, price: p.priceSale, image: p.image }));
-        setCatalogProducts(list);
-        // Le prix du produit deja sur la commande, s'il est au catalogue.
-        setSelected((prev) =>
-          prev.map((item) => {
-            const match = list.find((p) => p.name === item.name);
-            if (!match) return item;
-            return {
-              ...item,
-              price: item.price || match.price,
-              image: item.image ?? match.image,
-            };
+        ).map(
+          (p): CatalogueEntry & { status: string } => ({
+            name: p.name,
+            priceSale: p.priceSale,
+            image: p.image,
+            forcelogRef: p.forcelogRef,
+            status: p.status,
           })
+        );
+        // Le choix ne propose que les produits actifs ; la relecture des
+        // lignes, elle, se sert de tout le catalogue — un produit retire
+        // du choix porte encore le nom de ce qui a ete vendu.
+        setCatalogProducts(
+          complet
+            .filter((p) => p.status === "Actif")
+            .map((p) => ({
+              name: p.name,
+              price: p.priceSale ?? 0,
+              image: p.image,
+              ref: p.forcelogRef,
+            }))
+        );
+
+        // Les lignes relues avec le catalogue : chaque reference prend
+        // son nom, son prix et sa photo. Seulement si personne n'a
+        // encore touche a la selection pendant le chargement.
+        const enrichies = orderLines(
+          { productName, itemCount, stockItems },
+          complet
+        );
+        lignesInitiales.current = enrichies;
+        setSelected((prev) =>
+          sameLines(prev.map(versLigne), lignesMontage)
+            ? enrichies.map(versSelection)
+            : prev
         );
       })
       .catch(() => {
@@ -177,13 +244,24 @@ export default function EditOrderModal({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [productName, itemCount, stockItems, lignesMontage]);
 
   async function save() {
     setError(null);
     setSaving(true);
     try {
-      const premier = selected[0];
+      // Les produits ne repartent que s'ils ont change, et tous ensemble :
+      // le nom liste les articles, le compte les totalise et les
+      // references disent au transporteur quoi prelever. Les ecrire
+      // separement, c'est les laisser se contredire.
+      const lignes = selected.map(versLigne);
+      const champs = orderFields(lignes);
+      // Un article dont on ne connait que le code article n'a pas de nom
+      // a enregistrer : le catalogue n'a pas repondu, et ecrire "1FKT5H"
+      // comme nom de produit serait pire que ne rien ecrire.
+      const nommes = lignes.every((l) => l.name !== l.ref);
+      const produitsChanges =
+        nommes && !sameLines(lignes, lignesInitiales.current);
       const res = await fetch(`/api/leads/${lead.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -210,10 +288,12 @@ export default function EditOrderModal({
                   : {}),
               }
             : {}),
-          ...(premier
+          ...(produitsChanges
             ? {
-                productName: premier.name,
-                itemCount: selected.reduce((sum, p) => sum + p.qty, 0),
+                productName: champs.productName,
+                itemCount: champs.itemCount,
+                parcelType: champs.parcelType,
+                stockItems: champs.stockItems,
               }
             : {}),
         }),
@@ -389,8 +469,13 @@ export default function EditOrderModal({
                       <p className="truncate text-[13px] font-medium text-gray-800">
                         {p.name}
                       </p>
-                      <p className="text-[12px] text-gray-500">
+                      <p className="truncate text-[12px] text-gray-500">
                         <span className="font-mono">{p.price} MAD</span> / unite
+                        {p.ref && (
+                          <span className="ml-1.5 font-mono text-gray-400">
+                            {p.ref}
+                          </span>
+                        )}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5 rounded-md border border-gray-200 px-1.5 py-1">
