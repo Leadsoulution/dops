@@ -33,6 +33,13 @@ describe("adPlatformOf", () => {
     expect(adPlatformOf(null)).toBeNull();
   });
 
+  it("reconnait l'appel, source des commandes prises au telephone", () => {
+    // Ce n'est pas une plateforme de trafic, mais c'est bien d'ou vient
+    // la commande, et la colonne doit le montrer comme le reste.
+    expect(adPlatformOf("appel")?.label).toBe("Appel");
+    expect(adPlatformOf("phone")?.key).toBe("phone");
+  });
+
   it("porte un libelle lisible et la couleur de la marque", () => {
     expect(adPlatformOf("sc")?.label).toBe("Snapchat");
     expect(adPlatformOf("fb")?.color).toBe("#1877F2");

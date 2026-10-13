@@ -21,6 +21,17 @@ describe("toRow", () => {
     });
   });
 
+  it("enregistre la source d'une commande saisie a la main", () => {
+    expect(toRow({ utmSource: "tiktok" })).toEqual({ utm_source: "tiktok" });
+  });
+
+  it("n'inscrit pas une source vide", () => {
+    // "Aucune" ne doit pas devenir une plateforme inconnue dans la
+    // colonne : la case reste vide, ce qui se voit et se corrige.
+    expect(toRow({ utmSource: "" })).toEqual({ utm_source: null });
+    expect(toRow({ client: "Hind" })).not.toHaveProperty("utm_source");
+  });
+
   it("efface l'erreur en meme temps qu'il pose le colis", () => {
     // Ce que renvoie un envoi reussi : les deux champs partent ensemble.
     expect(

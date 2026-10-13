@@ -145,6 +145,10 @@ export function toRow(lead: Partial<Lead>): Partial<LeadRow> {
   if (lead.restockedAt !== undefined)
     row.restocked_at = lead.restockedAt || null;
   if (lead.wooOrderId !== undefined) row.woo_order_id = lead.wooOrderId ?? null;
+  // D'ou vient la commande. La boutique le renseigne elle-meme a
+  // l'import ; une commande saisie a la main le tient de l'agent, qui
+  // sait par quel canal le client est arrive.
+  if (lead.utmSource !== undefined) row.utm_source = lead.utmSource || null;
   return row;
 }
 

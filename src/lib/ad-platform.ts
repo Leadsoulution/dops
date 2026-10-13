@@ -20,6 +20,7 @@ export type AdPlatformKey =
   | "google"
   | "youtube"
   | "whatsapp"
+  | "phone"
   | "direct";
 
 export type AdPlatformInfo = {
@@ -37,6 +38,9 @@ export const AD_PLATFORMS: Record<AdPlatformKey, AdPlatformInfo> = {
   google: { key: "google", label: "Google", color: "#4285F4" },
   youtube: { key: "youtube", label: "YouTube", color: "#FF0000" },
   whatsapp: { key: "whatsapp", label: "WhatsApp", color: "#25D366" },
+  // Un appel n'est pas une plateforme de trafic, mais c'est bien d'ou
+  // vient la commande quand un agent la saisit apres un coup de fil.
+  phone: { key: "phone", label: "Appel", color: "#6B7280" },
   direct: { key: "direct", label: "Direct", color: "#6B7280" },
 };
 
@@ -85,6 +89,12 @@ const ALIASES: Record<string, AdPlatformKey> = {
   whatsapp: "whatsapp",
   "whatsapp.com": "whatsapp",
   wa: "whatsapp",
+
+  appel: "phone",
+  phone: "phone",
+  call: "phone",
+  tel: "phone",
+  telephone: "phone",
 
   direct: "direct",
   "(direct)": "direct",

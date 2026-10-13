@@ -12,6 +12,8 @@ import {
   MessageCircle,
   Search,
   ChevronDown,
+  Plus,
+  Minus,
   Truck,
   User,
   Tag,
@@ -62,6 +64,26 @@ type StockItem = {
   price: number | null;
 };
 
+/**
+ * Par quel canal la commande est arrivee.
+ *
+ * Les memes valeurs que celles que la boutique enregistre d'elle-meme
+ * ("fb", "tiktok"...), pour que la colonne Plateforme montre le meme
+ * logo, qu'une commande vienne du site ou d'un agent.
+ */
+const SOURCES: { label: string; value: string }[] = [
+  { label: "Aucune", value: "" },
+  { label: "Facebook", value: "facebook" },
+  { label: "Instagram", value: "instagram" },
+  { label: "TikTok", value: "tiktok" },
+  { label: "Snapchat", value: "snapchat" },
+  { label: "Google", value: "google" },
+  { label: "YouTube", value: "youtube" },
+  { label: "WhatsApp", value: "whatsapp" },
+  { label: "Appel", value: "appel" },
+  { label: "Direct", value: "direct" },
+];
+
 /** Reference auto si l'utilisateur n'en saisit pas, au format des existantes. */
 function generateReference() {
   const now = new Date();
@@ -89,6 +111,7 @@ export default function CreateCommandeModal({
   const [client, setClient] = useState("");
   const [phone, setPhone] = useState("");
   const [reference, setReference] = useState("");
+  const [utmSource, setUtmSource] = useState("");
   /**
    * Le total ecrit a la main, s'il y en a un.
    *
@@ -169,6 +192,25 @@ export default function CreateCommandeModal({
       const next = { ...prev };
       if (quantity <= 0) delete next[ref];
       else next[ref] = quantity;
+      return next;
+    });
+  }
+
+  /**
+   * Ajoute ou retire une unite d'un article.
+   *
+   * Le "+" de la liste et ceux du panier passent par ici : la quantite
+   * se calcule a partir de la derniere connue, pas de celle qu'avait ce
+   * rendu, pour que deux clics rapides en ajoutent bien deux.
+   */
+  function changeStockQuantity(ref: string, delta: number, max?: number) {
+    setStockQuantities((prev) => {
+      const actuel = prev[ref] ?? 0;
+      const vise = actuel + delta;
+      const borne = max !== undefined ? Math.min(vise, max) : vise;
+      const next = { ...prev };
+      if (borne <= 0) delete next[ref];
+      else next[ref] = borne;
       return next;
     });
   }
@@ -277,6 +319,7 @@ export default function CreateCommandeModal({
           status: "Nouveau",
           shipping: "En attente",
           source: "Agent Manual",
+          utmSource: utmSource || undefined,
           date: new Date().toLocaleDateString("fr-FR", {
             day: "numeric",
             month: "short",
@@ -473,10 +516,19 @@ export default function CreateCommandeModal({
                 <label className="mb-1 block text-[12.5px] text-gray-600">
                   Cle source
                 </label>
-                <button className="flex w-full items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-700 hover:bg-gray-50">
-                  Aucune
-                  <ChevronDown className="h-3.5 w-3.5 text-gray-400" />
-                </button>
+                <SelectDropdown
+                  variant="field"
+                  pinnedLabel="Aucune"
+                  options={SOURCES.map((s) => s.label)}
+                  value={
+                    SOURCES.find((s) => s.value === utmSource)?.label ?? "Aucune"
+                  }
+                  onSelect={(label) =>
+                    setUtmSource(
+                      SOURCES.find((s) => s.label === label)?.value ?? ""
+                    )
+                  }
+                />
               </div>
             </div>
           </div>
@@ -537,6 +589,93 @@ export default function CreateCommandeModal({
             {parcelType === "stock" && selectedStock.length === 0 && (
               <div className="mb-3 rounded-lg border border-dashed border-gray-200 px-3 py-2.5 text-center text-[12.5px] text-gray-400">
                 Aucune reference selectionnee dans le stock ForceLog
+              </div>
+            )}
+
+            {/*
+              Le panier : ce qui part dans le colis, avec sa photo et sa
+              quantite. La liste du stock se parcourt, le panier se
+              verifie — melanger les deux obligeait a chercher dans
+              quatre-vingts references celles qui etaient cochees.
+            */}
+            {parcelType === "stock" && selectedStock.length > 0 && (
+              <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 p-2">
+                <p className="mb-1.5 flex items-center justify-between px-1 text-[11px] font-semibold tracking-wide text-gray-500">
+                  <span className="flex items-center gap-1.5">
+                    <ShoppingCart className="h-3 w-3" />
+                    PANIER
+                  </span>
+                  <span className="font-normal text-gray-400">
+                    {selectedStock.length} produit
+                    {selectedStock.length > 1 ? "s" : ""} &middot;{" "}
+                    {selectedStock.reduce((somme, [, qte]) => somme + qte, 0)}{" "}
+                    article
+                    {selectedStock.reduce((somme, [, qte]) => somme + qte, 0) > 1
+                      ? "s"
+                      : ""}
+                  </span>
+                </p>
+                <div className="max-h-40 space-y-1.5 overflow-y-auto pr-0.5">
+                  {selectedStock.map(([ref, qte]) => {
+                    const item = stockItems.find((i) => i.ref === ref);
+                    return (
+                      <div
+                        key={ref}
+                        className="flex items-center gap-2.5 rounded-lg border border-gray-200 bg-white px-2 py-1.5"
+                      >
+                        <div className="h-9 w-9 shrink-0 overflow-hidden rounded-md bg-gray-100">
+                          {item?.image && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={item.image}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[12.5px] font-medium text-gray-800">
+                            {item?.name ?? ref}
+                          </p>
+                          <p className="truncate font-mono text-[11px] text-gray-400">
+                            {ref} &middot; {PRIX_UNITAIRE_MANUEL * qte} MAD
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1 rounded-md border border-gray-200 px-1 py-0.5">
+                          <button
+                            type="button"
+                            onClick={() => changeStockQuantity(ref, -1)}
+                            title="Retirer une unite"
+                            className="rounded p-0.5 text-gray-500 hover:bg-gray-100"
+                          >
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <span className="w-4 text-center font-mono text-[12.5px] text-gray-700">
+                            {qte}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              changeStockQuantity(ref, 1, item?.quantity)
+                            }
+                            title="Ajouter une unite"
+                            className="rounded p-0.5 text-gray-500 hover:bg-gray-100"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setStockQuantity(ref, 0)}
+                          title="Retirer du panier"
+                          className="shrink-0 rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
@@ -638,8 +777,25 @@ export default function CreateCommandeModal({
                             )
                           )
                         }
-                        className="w-16 shrink-0 rounded-md border border-gray-200 px-2 py-1 text-center font-mono text-[12.5px] text-gray-800 focus:border-blue-400 focus:outline-none"
+                        className="w-14 shrink-0 rounded-md border border-gray-200 px-2 py-1 text-center font-mono text-[12.5px] text-gray-800 focus:border-blue-400 focus:outline-none"
                       />
+                      {/*
+                        Le "+" ajoute l'article au panier sans quitter la
+                        liste : une commande de trois produits se compose
+                        en trois clics, et le panier au-dessus montre ce
+                        qu'elle contient deja.
+                      */}
+                      <button
+                        type="button"
+                        title="Ajouter au panier"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          changeStockQuantity(item.ref, 1, item.quantity);
+                        }}
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:border-gray-900 hover:bg-gray-900 hover:text-white"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   );
                 })}
