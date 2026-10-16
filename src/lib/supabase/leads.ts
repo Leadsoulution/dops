@@ -195,14 +195,14 @@ export async function listLeads(): Promise<Lead[]> {
  */
 async function nomsDesCampagnes(): Promise<Map<string, string>> {
   const supabase = getSupabaseServerClient();
-  const { data } = await supabase
-    .from("ad_campaigns")
-    .select("external_id,name");
-  return new Map(
-    ((data ?? []) as unknown as { external_id: string; name: string }[]).map(
-      (c) => [c.external_id, c.name]
-    )
+  // Lecture complete : la table porte les campagnes, leurs ensembles et
+  // leurs publicites. Deux cents aujourd'hui, mais elle ne fait que
+  // grandir, et passe mille lignes les dernieres campagnes perdraient
+  // leur nom dans la colonne CPN sans que rien ne le signale.
+  const rows = await fetchAll<{ external_id: string; name: string }>(() =>
+    supabase.from("ad_campaigns").select("external_id,name")
   );
+  return new Map(rows.map((c) => [c.external_id, c.name]));
 }
 
 /**

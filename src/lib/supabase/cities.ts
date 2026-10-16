@@ -1,4 +1,5 @@
 import { getSupabaseServerClient } from "./server";
+import { fetchAll } from "./page";
 
 /**
  * Acces au dictionnaire des villes canoniques.
@@ -98,7 +99,12 @@ async function countOrdersByKey(
   rows: CityRow[]
 ): Promise<Map<string, number>> {
   const supabase = getSupabaseServerClient();
-  const { data } = await supabase.from("leads").select("ville");
+  // Lecture complete : la table des commandes a depasse mille lignes,
+  // et une lecture simple s'y arrete sans le dire — les villes des
+  // commandes les plus recentes ne seraient plus comptees.
+  const data = await fetchAll<{ ville: string | null }>(() =>
+    supabase.from("leads").select("ville")
+  );
 
   // Chaque forme rencontree pointe vers la cle canonique.
   const byForm = new Map<string, string>();
@@ -109,7 +115,7 @@ async function countOrdersByKey(
   }
 
   const counts = new Map<string, number>();
-  for (const lead of (data ?? []) as { ville: string | null }[]) {
+  for (const lead of data) {
     if (!lead.ville) continue;
     const key = byForm.get(cityKey(lead.ville));
     if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
@@ -127,17 +133,23 @@ async function countOrdersByKey(
  */
 export async function tariffByCityForm(): Promise<Map<string, number>> {
   const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("cities")
-    .select("key,name,aliases,tariff")
-    .eq("active", true);
-  if (error) throw new Error(error.message);
+  /*
+   * Lecture complete du dictionnaire.
+   *
+   * Il compte quatre cent cinquante villes aujourd'hui et s'allonge a
+   * chaque import. Passe mille, une lecture simple en rendrait mille et
+   * tairait le reste : les dernieres villes perdraient leur tarif, puis
+   * leur code transporteur, et leurs commandes seraient refusees sans
+   * que rien n'explique pourquoi.
+   */
+  const data = await fetchAll<
+    Pick<CityRow, "key" | "name" | "aliases" | "tariff">
+  >(() =>
+    supabase.from("cities").select("key,name,aliases,tariff").eq("active", true)
+  );
 
   const tariffs = new Map<string, number>();
-  for (const row of (data ?? []) as Pick<
-    CityRow,
-    "key" | "name" | "aliases" | "tariff"
-  >[]) {
+  for (const row of data) {
     const tariff = Number(row.tariff);
     tariffs.set(cityKey(row.name), tariff);
     tariffs.set(row.key, tariff);
@@ -158,14 +170,19 @@ export async function tariffByCityForm(): Promise<Map<string, number>> {
  */
 export async function deliverableCities(): Promise<Map<string, CarrierCity>> {
   const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("cities")
-    .select("key,name,aliases,carrier_code")
-    .eq("active", true);
-  if (error) throw new Error(error.message);
+  // Meme raison qu'au-dessus : une ville absente de la reponse fait
+  // refuser la commande qui la porte.
+  const data = await fetchAll<
+    Pick<CityRow, "key" | "name" | "aliases" | "carrier_code">
+  >(() =>
+    supabase
+      .from("cities")
+      .select("key,name,aliases,carrier_code")
+      .eq("active", true)
+  );
 
   const cities = new Map<string, CarrierCity>();
-  for (const row of (data ?? []) as Pick<
+  for (const row of data as Pick<
     CityRow,
     "key" | "name" | "aliases" | "carrier_code"
   >[]) {
@@ -182,13 +199,9 @@ export async function deliverableCities(): Promise<Map<string, CarrierCity>> {
 
 export async function listCities(): Promise<City[]> {
   const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("cities")
-    .select(COLUMNS)
-    .order("name", { ascending: true });
-  if (error) throw new Error(error.message);
-
-  const rows = data as CityRow[];
+  const rows = await fetchAll<CityRow>(() =>
+    supabase.from("cities").select(COLUMNS).order("name", { ascending: true })
+  );
   const counts = await countOrdersByKey(rows);
   return rows.map((row) => toCity(row, counts.get(row.key) ?? 0));
 }
@@ -245,12 +258,16 @@ export async function upsertCities(
   inputs: CityInput[]
 ): Promise<{ inserted: number; updated: number }> {
   const supabase = getSupabaseServerClient();
-  const { data: existing } = await supabase
-    .from("cities")
-    .select("key,tariff_source,aliases");
+  // Une cle absente de cette liste passe pour nouvelle : l'import
+  // ecraserait alors le tarif saisi a la main d'une ville deja connue.
+  const existing = await fetchAll<{
+    key: string;
+    tariff_source: string;
+    aliases: string[] | null;
+  }>(() => supabase.from("cities").select("key,tariff_source,aliases"));
   const known = new Map(
     (
-      (existing ?? []) as {
+      existing as {
         key: string;
         tariff_source: string;
         aliases: string[] | null;
