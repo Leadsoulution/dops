@@ -19,6 +19,9 @@ import Sparkline from "./Sparkline";
 import AreaTrendChart from "./AreaTrendChart";
 import ExpensesTab from "./ExpensesTab";
 import CarrierFloatCard from "./CarrierFloatCard";
+import PeriodFilter from "./PeriodFilter";
+import InfoTip, { Formule } from "./InfoTip";
+import { periodBounds, type Range } from "./useTeamStats";
 import type { ExpenseType } from "@/lib/finance/expense-types";
 
 /**
@@ -57,7 +60,12 @@ type Overview = {
     orders?: number;
     unit?: number;
   }[];
-  monthly: { month: string; revenue: number; expenses: number; profit: number }[];
+  monthly: {
+    month: string;
+    revenue: number;
+    expenses: number;
+    profit: number;
+  }[];
   inTransit: { orders: number; amount: number };
 };
 
@@ -88,12 +96,89 @@ function jourCourt(day: string): string {
   });
 }
 
-const TYPE_CARDS: { type: ExpenseType; label: string; icon: typeof Boxes }[] = [
-  { type: "par_commande", label: "Par commande", icon: Package },
-  { type: "publicite", label: "Publicite", icon: Megaphone },
-  { type: "fixe", label: "Fixes", icon: Repeat },
-  { type: "variable", label: "Variables", icon: Zap },
-  { type: "ponctuelle", label: "Ponctuelles", icon: Receipt },
+const TYPE_CARDS: {
+  type: ExpenseType;
+  label: string;
+  icon: typeof Boxes;
+  /** Ce que la carte compte, et comment. */
+  aide: React.ReactNode;
+}[] = [
+  {
+    type: "par_commande",
+    label: "Par commande",
+    icon: Package,
+    aide: (
+      <>
+        <p>
+          Les charges qu&apos;une commande declenche : emballage, confirmation,
+          frais de livraison.
+        </p>
+        <Formule>= prix unitaire x commandes au statut vise</Formule>
+        <p>
+          Chacune est datee au jour qui la declenche. Une commande de septembre
+          livree en octobre coute en octobre.
+        </p>
+      </>
+    ),
+  },
+  {
+    type: "publicite",
+    label: "Publicite",
+    icon: Megaphone,
+    aide: (
+      <>
+        <p>Les budgets publicitaires saisis dans l&apos;onglet Depenses.</p>
+        <Formule>= montant, une fois, le jour engage</Formule>
+        <p>
+          Un budget saisi en un bloc pese entierement sur son mois. Pour le
+          repartir, saisissez-le mois par mois.
+        </p>
+      </>
+    ),
+  },
+  {
+    type: "fixe",
+    label: "Fixes",
+    icon: Repeat,
+    aide: (
+      <>
+        <p>
+          Les charges recurrentes de montant constant : loyer, salaires,
+          abonnements.
+        </p>
+        <Formule>= montant mensuel x jours couverts / jours du mois</Formule>
+        <p>
+          Un loyer commence le quinze ne compte que pour la moitie du mois. Une
+          charge annuelle est d&apos;abord divisee par douze.
+        </p>
+      </>
+    ),
+  },
+  {
+    type: "variable",
+    label: "Variables",
+    icon: Zap,
+    aide: (
+      <>
+        <p>
+          Les charges recurrentes de montant changeant : electricite, carburant,
+          internet.
+        </p>
+        <Formule>= montant mensuel x jours couverts / jours du mois</Formule>
+      </>
+    ),
+  },
+  {
+    type: "ponctuelle",
+    label: "Ponctuelles",
+    icon: Receipt,
+    aide: (
+      <>
+        <p>Les depenses uniques, qui ne reviennent pas.</p>
+        <Formule>= montant, une fois, a sa date</Formule>
+      </>
+    ),
+  },
 ];
 
 const TYPE_LABELS: Record<ExpenseType, string> = {
@@ -110,6 +195,9 @@ export default function FinancePage() {
   >("vue-ensemble");
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // "Maximum" par defaut, comme les autres pages : le profit total se
+  // lit sur tout l'historique, et la periode le restreint a la demande.
+  const [range, setRange] = useState<Range>({ label: "Maximum", custom: null });
 
   // Rechargee quand une charge est ajoutee ou modifiee : le profit en
   // depend, et un chiffre qui ne bouge pas apres une saisie passe pour
@@ -118,7 +206,13 @@ export default function FinancePage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/finance/summary")
+    const { fromDay, toDay } = periodBounds(range);
+    const params = new URLSearchParams();
+    if (fromDay) params.set("from", fromDay);
+    if (toDay) params.set("to", toDay);
+    const requete = params.toString();
+
+    fetch(`/api/finance/summary${requete ? `?${requete}` : ""}`)
       .then((r) => r.json())
       .then((d) => {
         if (cancelled) return;
@@ -134,15 +228,31 @@ export default function FinancePage() {
     return () => {
       cancelled = true;
     };
-  }, [version]);
+  }, [range, version]);
 
   const kpis = [
     {
+      hint: (
+        <InfoTip title="Revenu livre">
+          <p>
+            L&apos;argent reellement encaisse : la somme des commandes remises
+            au client sur la periode, arrondie a la dizaine comme le livreur la
+            reclame.
+          </p>
+          <Formule>= somme des montants des commandes livrees</Formule>
+          <p>
+            Une commande confirmee ou en route ne compte pas : elle n&apos;a
+            rien rapporte tant que le colis n&apos;est pas remis.
+          </p>
+        </InfoTip>
+      ),
       label: "Revenu livre",
       value: data?.revenue,
       subtitle: data
         ? `${data.delivered} livrees${
-            data.inTransit.orders > 0 ? ` · ${data.inTransit.orders} en route` : ""
+            data.inTransit.orders > 0
+              ? ` · ${data.inTransit.orders} en route`
+              : ""
           }`
         : "commandes remises au client",
       icon: DollarSign,
@@ -150,14 +260,42 @@ export default function FinancePage() {
       sparkPositive: true,
     },
     {
+      hint: (
+        <InfoTip title="Depenses totales">
+          <p>
+            Toutes les charges actives de l&apos;onglet Depenses, ramenees a la
+            periode affichee.
+          </p>
+          <Formule>par commande = prix unitaire x commandes</Formule>
+          <Formule>fixe ou variable = montant mensuel au prorata</Formule>
+          <Formule>publicite ou ponctuelle = une fois, a sa date</Formule>
+          <p>
+            Une charge annuelle est divisee par douze. Une charge desactivee ne
+            pese plus.
+          </p>
+        </InfoTip>
+      ),
       label: "Depenses totales",
       value: data?.expenses,
-      subtitle: data ? `${data.lines.length} charges actives` : "charges saisies",
+      subtitle: data
+        ? `${data.lines.length} charges actives`
+        : "charges saisies",
       icon: Receipt,
       spark: data?.monthly.map((m) => m.expenses),
       sparkPositive: false,
     },
     {
+      hint: (
+        <InfoTip title="Profit total">
+          <p>Ce qui reste une fois toutes les charges payees.</p>
+          <Formule>= revenu livre - depenses totales</Formule>
+          <Formule>marge = profit / revenu livre</Formule>
+          <p>
+            Le cout d&apos;achat de la marchandise n&apos;y entre que s&apos;il
+            a ete saisi comme charge.
+          </p>
+        </InfoTip>
+      ),
       label: "Profit total",
       value: data?.profit,
       subtitle: data ? `marge ${data.margin}%` : "revenu - depenses",
@@ -167,9 +305,25 @@ export default function FinancePage() {
       sparkPositive: (data?.profit ?? 0) >= 0,
     },
     {
+      hint: (
+        <InfoTip title="Profit par commande livree">
+          <p>
+            Ce que rapporte une livraison de plus, charges deduites. C&apos;est
+            le chiffre qui dit si la vente vaut la peine d&apos;etre faite.
+          </p>
+          <Formule>= profit total / commandes livrees</Formule>
+          <p>
+            Les charges qui ne dependent pas du nombre de commandes — la
+            publicite, le loyer — y sont incluses : elles se repartissent sur
+            les livraisons de la periode.
+          </p>
+        </InfoTip>
+      ),
       label: "Profit par commande livree",
       value: data?.profitPerDelivered,
-      subtitle: data ? `sur ${data.delivered} livraisons` : "profit / livraisons",
+      subtitle: data
+        ? `sur ${data.delivered} livraisons`
+        : "profit / livraisons",
       icon: Wallet,
     },
   ];
@@ -177,7 +331,7 @@ export default function FinancePage() {
   const courbe = data?.monthly ?? [];
   const maxCourbe = Math.max(
     1,
-    ...courbe.map((m) => Math.max(m.revenue, m.expenses))
+    ...courbe.map((m) => Math.max(m.revenue, m.expenses)),
   );
   // Quatre graduations rondes, calculees sur le plus haut point : les
   // valeurs etaient ecrites en dur et n'ont jamais correspondu a la
@@ -211,6 +365,15 @@ export default function FinancePage() {
         </button>
       </div>
 
+      {/*
+        La periode commande toute la page : le revenu, les charges qui
+        la couvrent, le profit et la courbe. "Maximum" montre tout
+        l'historique.
+      */}
+      <div className="mb-4">
+        <PeriodFilter range={range} onChange={setRange} />
+      </div>
+
       {error && (
         <p className="mb-4 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">
           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -242,7 +405,10 @@ export default function FinancePage() {
                     </span>
                   )}
                 </div>
-                <Icon className="h-4 w-4 shrink-0 text-gray-300" />
+                <span className="flex shrink-0 items-center gap-1">
+                  {kpi.hint}
+                  <Icon className="h-4 w-4 text-gray-300" />
+                </span>
               </div>
               {kpi.value === undefined ? (
                 <p className="flex h-[26px] items-center">
@@ -273,7 +439,7 @@ export default function FinancePage() {
 
       {/* Les charges par nature : c'est la que se voit ce qui pese. */}
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {TYPE_CARDS.map(({ type, label, icon: Icon }) => {
+        {TYPE_CARDS.map(({ type, label, icon: Icon, aide }) => {
           const montant = data?.byType[type];
           const part =
             data && data.expenses > 0 && montant
@@ -288,7 +454,10 @@ export default function FinancePage() {
                 <p className="truncate text-[10.5px] font-semibold uppercase tracking-wide text-gray-400">
                   {label}
                 </p>
-                <Icon className="h-4 w-4 shrink-0 text-gray-300" />
+                <span className="flex shrink-0 items-center gap-1">
+                  <InfoTip title={label}>{aide}</InfoTip>
+                  <Icon className="h-4 w-4 text-gray-300" />
+                </span>
               </div>
               <p className="truncate font-mono text-[16px] font-semibold text-gray-900">
                 {montant === undefined ? "—" : formatMad(montant)}
@@ -337,7 +506,12 @@ export default function FinancePage() {
       {activeTab === "vue-ensemble" && (
         <div className="rounded-xl border border-gray-200 bg-white p-4">
           <p className="mb-4 text-h3 font-semibold text-gray-900">
-            Cashflow &mdash; {courbe.length} derniers mois
+            Cashflow &mdash;{" "}
+            {courbe.length > 1
+              ? `${courbe.length} derniers mois`
+              : courbe.length === 1
+                ? moisCourt(courbe[0].month)
+                : "aucun mois"}
           </p>
           {courbe.length === 0 ? (
             <p className="py-10 text-center text-[12.5px] text-gray-400">
@@ -345,41 +519,45 @@ export default function FinancePage() {
             </p>
           ) : (
             <>
-              <div className="flex items-stretch gap-2">
-                <div className="flex shrink-0 flex-col justify-between py-1 font-mono text-[10px] text-gray-400">
-                  {yAxisTicks.map((tick) => (
-                    <span key={tick}>{nf.format(tick)}</span>
-                  ))}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <AreaTrendChart
-                    labels={courbe.map((m) => moisCourt(m.month))}
-                    series={[
-                      {
-                        name: "depenses",
-                        data: courbe.map((m) => m.expenses),
-                        color: "#ef4444",
-                      },
-                      {
-                        name: "revenu",
-                        data: courbe.map((m) => m.revenue),
-                        color: "#10b981",
-                      },
-                    ]}
-                    height={260}
-                  />
-                </div>
-              </div>
-              <div className="mt-3 flex items-center gap-4 text-[11.5px] text-gray-500">
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-red-500" />
-                  Depenses
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                  Revenu
-                </span>
-              </div>
+              {courbe.length > 1 && (
+                <>
+                  <div className="flex items-stretch gap-2">
+                    <div className="flex shrink-0 flex-col justify-between py-1 font-mono text-[10px] text-gray-400">
+                      {yAxisTicks.map((tick) => (
+                        <span key={tick}>{nf.format(tick)}</span>
+                      ))}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <AreaTrendChart
+                        labels={courbe.map((m) => moisCourt(m.month))}
+                        series={[
+                          {
+                            name: "depenses",
+                            data: courbe.map((m) => m.expenses),
+                            color: "#ef4444",
+                          },
+                          {
+                            name: "revenu",
+                            data: courbe.map((m) => m.revenue),
+                            color: "#10b981",
+                          },
+                        ]}
+                        height={260}
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center gap-4 text-[11.5px] text-gray-500">
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-red-500" />
+                      Depenses
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                      Revenu
+                    </span>
+                  </div>
+                </>
+              )}
 
               {/* Le profit du mois, en chiffres : une courbe ne se lit
                   pas au dirham pres, et c'est pourtant ce qu'on vient
@@ -396,8 +574,13 @@ export default function FinancePage() {
                   </thead>
                   <tbody>
                     {courbe.map((m) => (
-                      <tr key={m.month} className="border-b border-gray-50 last:border-0">
-                        <td className="py-2 text-gray-700">{moisCourt(m.month)}</td>
+                      <tr
+                        key={m.month}
+                        className="border-b border-gray-50 last:border-0"
+                      >
+                        <td className="py-2 text-gray-700">
+                          {moisCourt(m.month)}
+                        </td>
                         <td className="py-2 text-right font-mono text-gray-700">
                           {nf.format(m.revenue)}
                         </td>
@@ -495,7 +678,9 @@ export default function FinancePage() {
                 <div>
                   <div className="mb-1 flex items-center justify-between text-[11.5px] text-gray-500">
                     <span>Depenses</span>
-                    <span className="font-mono">{formatMad(data.expenses)}</span>
+                    <span className="font-mono">
+                      {formatMad(data.expenses)}
+                    </span>
                   </div>
                   <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
                     <div
@@ -505,7 +690,9 @@ export default function FinancePage() {
                           data.revenue > 0
                             ? Math.min(
                                 100,
-                                Math.round((data.expenses / data.revenue) * 100)
+                                Math.round(
+                                  (data.expenses / data.revenue) * 100,
+                                ),
                               )
                             : data.expenses > 0
                               ? 100
@@ -540,7 +727,10 @@ export default function FinancePage() {
                     </thead>
                     <tbody>
                       {data.lines.map((l) => (
-                        <tr key={l.id} className="border-b border-gray-50 last:border-0">
+                        <tr
+                          key={l.id}
+                          className="border-b border-gray-50 last:border-0"
+                        >
                           <td className="py-2 text-gray-800">
                             {l.label}
                             {l.category && (
@@ -549,7 +739,9 @@ export default function FinancePage() {
                               </span>
                             )}
                           </td>
-                          <td className="py-2 text-gray-500">{TYPE_LABELS[l.type]}</td>
+                          <td className="py-2 text-gray-500">
+                            {TYPE_LABELS[l.type]}
+                          </td>
                           <td className="py-2 text-right font-mono text-gray-500">
                             {l.orders !== undefined
                               ? `${nf.format(l.unit ?? 0)} x ${l.orders}`
