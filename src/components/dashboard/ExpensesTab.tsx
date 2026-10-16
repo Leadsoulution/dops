@@ -74,7 +74,12 @@ function parMois(e: Expense): string {
   return "—";
 }
 
-export default function ExpensesTab() {
+export default function ExpensesTab({
+  /** Previent la page que les charges ont bouge : le profit en depend. */
+  onChanged,
+}: {
+  onChanged?: () => void;
+} = {}) {
   const [expenses, setExpenses] = useState<Expense[] | null>(null);
   const [products, setProducts] = useState<{ id: string; name: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -95,6 +100,7 @@ export default function ExpensesTab() {
       else {
         setExpenses(body.expenses as Expense[]);
         setError(null);
+        onChanged?.();
       }
     } catch {
       setError("Charges indisponibles.");
