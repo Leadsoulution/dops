@@ -16,7 +16,7 @@ import {
   Zap,
 } from "lucide-react";
 import Sparkline from "./Sparkline";
-import AreaTrendChart from "./AreaTrendChart";
+import CashflowChart from "./CashflowChart";
 import ExpensesTab from "./ExpensesTab";
 import CarrierFloatCard from "./CarrierFloatCard";
 import PeriodFilter from "./PeriodFilter";
@@ -335,15 +335,6 @@ export default function FinancePage() {
   ];
 
   const courbe = data?.monthly ?? [];
-  const maxCourbe = Math.max(
-    1,
-    ...courbe.map((m) => Math.max(m.revenue, m.expenses)),
-  );
-  // Quatre graduations rondes, calculees sur le plus haut point : les
-  // valeurs etaient ecrites en dur et n'ont jamais correspondu a la
-  // courbe qu'elles bordaient.
-  const pas = Math.ceil(maxCourbe / 4 / 1000) * 1000 || 1000;
-  const yAxisTicks = [4, 3, 2, 1, 0].map((i) => i * pas);
 
   return (
     <div className="scrollbar-hide flex-1 overflow-y-auto bg-gray-50 px-4 py-4 lg:px-6 lg:py-5">
@@ -535,49 +526,10 @@ export default function FinancePage() {
             </p>
           ) : (
             <>
-              {courbe.length > 1 && (
-                <>
-                  <div className="flex items-stretch gap-2">
-                    <div className="flex shrink-0 flex-col justify-between py-1 font-mono text-[10px] text-gray-400">
-                      {yAxisTicks.map((tick) => (
-                        <span key={tick}>{nf.format(tick)}</span>
-                      ))}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <AreaTrendChart
-                        labels={courbe.map((m) => moisCourt(m.month))}
-                        series={[
-                          {
-                            name: "depenses",
-                            data: courbe.map((m) => m.expenses),
-                            color: "#ef4444",
-                          },
-                          {
-                            name: "revenu",
-                            data: courbe.map((m) => m.revenue),
-                            color: "#10b981",
-                          },
-                        ]}
-                        height={260}
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-3 flex items-center gap-4 text-[11.5px] text-gray-500">
-                    <span className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-red-500" />
-                      Depenses
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                      Revenu
-                    </span>
-                  </div>
-                </>
-              )}
+              <CashflowChart months={courbe} />
 
-              {/* Le profit du mois, en chiffres : une courbe ne se lit
-                  pas au dirham pres, et c'est pourtant ce qu'on vient
-                  chercher. */}
+              {/* Le detail au dirham pres : les colonnes abregent les
+                  montants pour tenir, le tableau les donne entiers. */}
               <div className="mt-4 overflow-x-auto">
                 <table className="w-full min-w-[420px] text-[12.5px]">
                   <thead>
