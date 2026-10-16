@@ -26,14 +26,14 @@ const PRODUITS = [
 ];
 
 const commande = (o: Partial<Row>): Row => ({
-  created_at: "2026-09-10T08:00:00.000Z",
+  created_at: "2026-10-20T08:00:00.000Z",
   status: "Confirme",
   amount: "199 MAD",
   product_name: "Collier Arjouane",
   stock_items: "1FKGUA:1",
   tracking_number: "F-AAA",
   delivery_status_code: "DELIVERED",
-  delivery_date: "2026-09-12 14:00",
+  delivery_date: "2026-10-22 14:00",
   ...o,
 });
 
@@ -45,9 +45,9 @@ const charge = (p: Partial<Expense>): Expense => ({
   currency: "MAD",
   exchangeRate: 1,
   amountMad: p.amountMad ?? 0,
-  startDate: p.startDate ?? "2026-09-01",
+  startDate: p.startDate ?? "2026-10-01",
   isActive: p.isActive ?? true,
-  createdAt: "2026-09-01",
+  createdAt: "2026-10-01",
   ...p,
 });
 
@@ -71,14 +71,14 @@ beforeEach(() => {
   charges = [];
 });
 
-const PERIODE = ["2026-09-01", "2026-09-30"] as const;
+const PERIODE = ["2026-10-01", "2026-10-31"] as const;
 
 describe("getFinanceOverview", () => {
   it("compte comme revenu l'encaisse des commandes livrees, arrondi", async () => {
-    // 199 s'arrondit a 200 : c'est la somme que le livreur reclame.
+    // Le prix vendu, pas l'arrondi du livreur : 199 reste 199.
     stub([commande({}), commande({}), commande({ delivery_status_code: "DISTRIBUTION" })]);
     const f = await getFinanceOverview(...PERIODE);
-    expect(f.revenue).toBe(400);
+    expect(f.revenue).toBe(398);
     expect(f.delivered).toBe(2);
   });
 
@@ -96,8 +96,8 @@ describe("getFinanceOverview", () => {
     stub([commande({}), commande({}), commande({ delivery_status_code: "DISTRIBUTION" })]);
     const f = await getFinanceOverview(...PERIODE);
     expect(f.expenses).toBe(66);
-    expect(f.profit).toBe(334);
-    expect(f.profitPerDelivered).toBe(167);
+    expect(f.profit).toBe(332);
+    expect(f.profitPerDelivered).toBe(166);
   });
 
   it("compte une charge a l'expedition sur tout colis parti", async () => {
@@ -134,14 +134,30 @@ describe("getFinanceOverview", () => {
     expect(f.expenses).toBe(20);
   });
 
-  it("date la livraison au jour du transporteur, pas a celui du serveur", async () => {
-    // Livree le 1er octobre a 00h30 heure du Maroc : la commande sort
-    // de septembre, quel que soit le fuseau de la machine qui lit.
-    stub([commande({ delivery_date: "2026-10-01 00:30" })]);
-    const f = await getFinanceOverview(...PERIODE);
-    expect(f.delivered).toBe(0);
-    const octobre = await getFinanceOverview("2026-10-01", "2026-10-31");
+  it("range la commande a sa date d'arrivee, pas a celle de la remise", async () => {
+    // Arrivee le 20 octobre, remise le 3 novembre : elle appartient a
+    // octobre, qui l'a vendue — et novembre ne se l'attribue pas.
+    stub([
+      commande({
+        created_at: "2026-10-20T08:00:00.000Z",
+        delivery_date: "2026-11-03 10:00",
+      }),
+    ]);
+    const octobre = await getFinanceOverview(...PERIODE);
     expect(octobre.delivered).toBe(1);
+    expect(octobre.revenue).toBe(199);
+    const novembre = await getFinanceOverview("2026-11-01", "2026-11-30");
+    expect(novembre.delivered).toBe(0);
+    expect(novembre.revenue).toBe(0);
+  });
+
+  it("ne compte rien avant le premier jour suivi", async () => {
+    // La mise en place qui precede la comptabilite ne doit pas
+    // remonter, meme si on demande une periode plus large.
+    stub([commande({ created_at: "2026-10-10T08:00:00.000Z" })]);
+    const f = await getFinanceOverview("2026-10-01", "2026-10-31", "2026-10-17");
+    expect(f.from).toBe("2026-10-17");
+    expect(f.delivered).toBe(0);
   });
 
   it("chiffre ce qui est parti sans etre encore remis", async () => {
@@ -151,14 +167,17 @@ describe("getFinanceOverview", () => {
       commande({ delivery_status_code: "RETURNED", delivery_date: null }),
     ]);
     const f = await getFinanceOverview(...PERIODE);
-    expect(f.inTransit).toEqual({ orders: 1, amount: 200 });
+    expect(f.inTransit).toEqual({ orders: 1, amount: 199 });
   });
 
   it("rend un point de courbe par mois de la periode", async () => {
-    stub([commande({}), commande({ delivery_date: "2026-10-05 10:00" })]);
-    const f = await getFinanceOverview("2026-09-01", "2026-10-31");
-    expect(f.monthly.map((m) => m.month)).toEqual(["2026-09", "2026-10"]);
-    expect(f.monthly[0].revenue).toBe(200);
-    expect(f.monthly[1].revenue).toBe(200);
+    stub([
+      commande({ created_at: "2026-10-20T08:00:00.000Z" }),
+      commande({ created_at: "2026-11-04T08:00:00.000Z" }),
+    ]);
+    const f = await getFinanceOverview("2026-10-01", "2026-11-30");
+    expect(f.monthly.map((m) => m.month)).toEqual(["2026-10", "2026-11"]);
+    expect(f.monthly[0].revenue).toBe(199);
+    expect(f.monthly[1].revenue).toBe(199);
   });
 });

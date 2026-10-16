@@ -2,7 +2,7 @@ import "server-only";
 import { getSupabaseServerClient } from "./server";
 import { fetchAll } from "./page";
 import { listExpenses } from "./expenses";
-import { amountValue, roundToTen } from "@/lib/amount";
+import { amountValue } from "@/lib/amount";
 import { moroccoDate } from "@/lib/morocco-day";
 import { orderLines, type CatalogueEntry } from "@/lib/order-lines";
 import {
@@ -34,6 +34,17 @@ const FAILED = new Set(["RETURNED", "REFUSE", "CANCELED", "OUT_OF_AREA"]);
 /** Nombre de mois montres par la courbe. */
 const MOIS_COURBE = 6;
 
+/**
+ * Premier jour compte dans les finances.
+ *
+ * Ce qui precede appartient a une periode de mise en place : charges
+ * saisies apres coup, budgets publicitaires reconstitues, commandes de
+ * test. Les melanger a la comptabilite reelle donnait des chiffres que
+ * personne ne pouvait defendre. La page part donc de cette date, et une
+ * periode choisie plus tot y est ramenee.
+ */
+export const DEBUT_SUIVI = "2026-10-17";
+
 type LeadRow = {
   created_at: string;
   status: string | null;
@@ -59,19 +70,6 @@ export type FinanceOverview = FinanceSummary & {
    */
   ads: AdResult[];
 };
-
-/**
- * Le jour marocain d'une date du transporteur.
- *
- * `delivery_date` arrive sous la forme "AAAA-MM-JJ HH:MM", deja a
- * l'heure du Maroc : on en prend les dix premiers caracteres plutot que
- * de la relire dans le fuseau du serveur, qui la ferait basculer d'un
- * jour.
- */
-function jourLivraison(date: string | null): string | undefined {
-  const jour = (date ?? "").trim().slice(0, 10);
-  return /^\d{4}-\d{2}-\d{2}$/.test(jour) ? jour : undefined;
-}
 
 /**
  * Les produits du catalogue que contient une commande.
@@ -113,7 +111,6 @@ function toFact(
   const shipped = Boolean(row.tracking_number);
   return {
     createdDay: moroccoDate(new Date(row.created_at)),
-    deliveredDay: jourLivraison(row.delivery_date),
     // Une commande partie chez le transporteur est passee par la
     // confirmation : c'est elle qui declenche l'envoi.
     confirmed: row.status === "Confirme" || shipped,
@@ -121,10 +118,15 @@ function toFact(
     delivered,
     returned: FAILED.has(code),
     productIds: produitsDe(row, catalogue),
-    // Le livreur encaisse le compte rond annonce au client, celui que
-    // l'application affiche : c'est lui le revenu, pas le prix a
-    // l'unite pres.
-    revenue: delivered ? roundToTen(amountValue(row.amount ?? undefined) ?? 0) : 0,
+    /*
+     * Le prix de la commande, tel qu'il a ete vendu.
+     *
+     * C'etait le compte rond que le livreur reclame — 199 devenait 200.
+     * L'ecart est d'un dirham par commande, mais ce n'est pas la meme
+     * chose : le revenu de la boutique est la somme de ses prix, pas
+     * celle des arrondis du transporteur.
+     */
+    revenue: delivered ? (amountValue(row.amount ?? undefined) ?? 0) : 0,
   };
 }
 
@@ -136,7 +138,10 @@ function toFact(
  */
 export async function getFinanceOverview(
   from?: string,
-  to?: string
+  to?: string,
+  /** Premier jour compte. Parametre pour que les tests ne dependent
+   *  pas de la date de mise en route reelle. */
+  debutSuivi: string = DEBUT_SUIVI
 ): Promise<FinanceOverview> {
   const supabase = getSupabaseServerClient();
 
@@ -162,12 +167,15 @@ export async function getFinanceOverview(
   const facts = rows.map((r) => toFact(r, catalogue));
 
   const aujourdhui = moroccoDate();
-  const debuts = [
-    ...facts.map((f) => f.createdDay),
-    ...expenses.map((e) => e.startDate),
-  ].sort();
-  const debut = from ?? debuts[0] ?? aujourdhui;
-  const fin = to ?? aujourdhui;
+  // Jamais avant le premier jour compte : une periode demandee plus tot
+  // y est ramenee, sans quoi la page melangerait la comptabilite a la
+  // mise en place qui l'a precedee.
+  const debut = from && from > debutSuivi ? from : debutSuivi;
+  // La fin ne peut pas preceder le debut : le jour ou le suivi
+  // commence, "aujourd'hui" est encore la veille, et une periode a
+  // l'envers ne rendrait aucun mois.
+  const demande = to ?? aujourdhui;
+  const fin = demande < debut ? debut : demande;
 
   /*
    * Un budget publicitaire sans date de fin court jusqu'au suivant.
@@ -193,12 +201,16 @@ export async function getFinanceOverview(
    * montant que des commandes livrees, puisque c'est la seule somme
    * reellement entree en caisse.
    */
-  const enRoute = rows.filter(
-    (r) =>
+  const enRoute = rows.filter((r, i) => {
+    const jour = facts[i].createdDay;
+    return (
+      jour >= debut &&
+      jour <= fin &&
       r.tracking_number &&
       r.delivery_status_code !== DELIVERED &&
       !FAILED.has(r.delivery_status_code ?? "")
-  );
+    );
+  });
 
   return {
     ...bilan,
@@ -207,7 +219,7 @@ export async function getFinanceOverview(
     inTransit: {
       orders: enRoute.length,
       amount: enRoute.reduce(
-        (s, r) => s + roundToTen(amountValue(r.amount ?? undefined) ?? 0),
+        (s, r) => s + (amountValue(r.amount ?? undefined) ?? 0),
         0
       ),
     },

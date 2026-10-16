@@ -32,8 +32,6 @@ import {
 export type OrderFact = {
   /** Jour marocain ou la commande est arrivee. */
   createdDay: string;
-  /** Jour marocain de la remise au client, pour celles qui l'ont ete. */
-  deliveredDay?: string;
   /** Passee par la confirmation, meme si elle a ete livree depuis. */
   confirmed: boolean;
   /** Un colis existe chez le transporteur. */
@@ -187,16 +185,21 @@ export function matchesStatus(fact: OrderFact, applies: AppliesTo): boolean {
 }
 
 /**
- * Le jour qui date la commande pour cette charge.
+ * Le jour qui range une commande dans une periode : celui ou elle est
+ * arrivee.
  *
- * Une charge de livraison se rattache au jour de la remise, pas a
- * celui de la commande : une commande de septembre livree en octobre
- * coute en octobre, et c'est ce mois-la qui doit la porter.
+ * C'etait le jour de la remise au client pour tout ce qui touche a la
+ * livraison. Une periode melangeait alors deux choses : les ventes
+ * qu'elle avait faites, et les livraisons de ventes plus anciennes.
+ * Une quinzaine depensait en publicite pour des commandes qu'elle ne
+ * voyait pas encore arriver, et encaissait celles de la quinzaine
+ * d'avant — impossible de dire si elle avait gagne de l'argent.
+ *
+ * Une commande appartient desormais a la periode ou elle est entree,
+ * et tout la suit : son encaissement quand il arrive, et les charges
+ * qu'elle declenche. C'est la meme regle que pour les campagnes.
  */
-export function dayOf(fact: OrderFact, applies: AppliesTo): string {
-  if (applies === "livree" || applies === "retournee") {
-    return fact.deliveredDay ?? fact.createdDay;
-  }
+export function dayOf(fact: OrderFact): string {
   return fact.createdDay;
 }
 
@@ -244,7 +247,7 @@ export function expenseOnPeriod(
     const orders = facts.filter((f) => {
       if (!matchesStatus(f, applies)) return false;
       if (!concerne(f, expense.productId)) return false;
-      const j = dayOf(f, applies);
+      const j = dayOf(f);
       return j >= from && j <= to && j >= debut && j <= fin;
     }).length;
     return {
@@ -388,7 +391,7 @@ export function adResults(
           const n = cohorte.filter((f) => {
             if (!matchesStatus(f, applies)) return false;
             if (!concerne(f, charge.productId)) return false;
-            const j = dayOf(f, applies);
+            const j = dayOf(f);
             return j >= charge.startDate && j <= chargeFin;
           }).length;
           return total + charge.amountMad * n;
@@ -440,8 +443,11 @@ export function financeSummary(
   from: string,
   to: string
 ): FinanceSummary {
+  // Les commandes de la periode qui ont ete remises au client. La
+  // periode est celle de leur arrivee, pas celle de leur livraison :
+  // une commande du 17 livree le 20 appartient au 17.
   const livrees = facts.filter(
-    (f) => f.delivered && (f.deliveredDay ?? f.createdDay) >= from && (f.deliveredDay ?? f.createdDay) <= to
+    (f) => f.delivered && f.createdDay >= from && f.createdDay <= to
   );
   const revenue = sou(livrees.reduce((s, f) => s + f.revenue, 0));
 

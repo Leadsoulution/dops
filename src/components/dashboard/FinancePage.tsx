@@ -117,8 +117,9 @@ const TYPE_CARDS: {
         </p>
         <Formule>= prix unitaire x commandes au statut vise</Formule>
         <p>
-          Chacune est datee au jour qui la declenche. Une commande de septembre
-          livree en octobre coute en octobre.
+          Les commandes comptees sont celles <b>arrivees</b> dans la periode.
+          Une commande du 17 livree le 20 porte ses frais de livraison au 17,
+          avec la vente qui les a causes.
         </p>
       </>
     ),
@@ -240,14 +241,19 @@ export default function FinancePage() {
       hint: (
         <InfoTip title="Revenu livre">
           <p>
-            L&apos;argent reellement encaisse : la somme des commandes remises
-            au client sur la periode, arrondie a la dizaine comme le livreur la
-            reclame.
+            La somme des prix des commandes <b>arrivees</b> dans la periode et
+            deja remises au client — le prix vendu, sans l&apos;arrondi du
+            transporteur.
           </p>
-          <Formule>= somme des montants des commandes livrees</Formule>
+          <Formule>= somme des prix des commandes livrees</Formule>
           <p>
-            Une commande confirmee ou en route ne compte pas : elle n&apos;a
-            rien rapporte tant que le colis n&apos;est pas remis.
+            Une commande du 17 livree le 20 appartient au 17 : la periode
+            compte ce qu&apos;elle a vendu, pas ce qu&apos;elle a livre pour
+            les periodes d&apos;avant.
+          </p>
+          <p>
+            Une commande confirmee ou en route ne compte pas encore : elle
+            n&apos;a rien rapporte tant que le colis n&apos;est pas remis.
           </p>
         </InfoTip>
       ),
@@ -271,7 +277,7 @@ export default function FinancePage() {
             Toutes les charges actives de l&apos;onglet Depenses, ramenees a la
             periode affichee.
           </p>
-          <Formule>par commande = prix unitaire x commandes</Formule>
+          <Formule>par commande = prix unitaire x commandes recues</Formule>
           <Formule>fixe ou variable = montant mensuel au prorata</Formule>
           <Formule>publicite = budget etale sur ses jours</Formule>
           <Formule>ponctuelle = une fois, a sa date</Formule>
@@ -318,6 +324,10 @@ export default function FinancePage() {
             le chiffre qui dit si la vente vaut la peine d&apos;etre faite.
           </p>
           <Formule>= profit total / commandes livrees</Formule>
+          <p>
+            Les commandes de la periode encore en route n&apos;y figurent pas :
+            le chiffre monte a mesure qu&apos;elles arrivent.
+          </p>
           <p>
             Les charges qui ne dependent pas du nombre de commandes — la
             publicite, le loyer — y sont incluses : elles se repartissent sur

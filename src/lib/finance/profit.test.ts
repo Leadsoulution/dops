@@ -38,7 +38,6 @@ const commande = (p: Partial<OrderFact>): OrderFact => ({
 
 const LIVREE = commande({
   createdDay: "2026-09-10",
-  deliveredDay: "2026-09-12",
   confirmed: true,
   shipped: true,
   delivered: true,
@@ -83,31 +82,27 @@ describe("expenseOnPeriod", () => {
     expect(ligne).toMatchObject({ orders: 2, unit: 33, amount: 66 });
   });
 
-  it("date une charge de livraison au jour de la remise", () => {
-    // Commandee en aout, livree en septembre : c'est septembre qui paie.
+  it("date une charge au jour ou la commande est arrivee", () => {
+    // Commandee en aout, livree en septembre : c'est aout qui porte la
+    // vente et ses charges. Une periode ne doit pas melanger ses
+    // propres commandes aux livraisons de celles d'avant.
     const faits = [
       commande({
         createdDay: "2026-08-28",
-        deliveredDay: "2026-09-02",
         delivered: true,
         revenue: 200,
       }),
     ];
+    const frais = charge({
+      type: "par_commande",
+      amountMad: 33,
+      appliesToStatus: "livree",
+      startDate: "2026-08-01",
+    });
+    expect(expenseOnPeriod(frais, faits, ...periode)?.orders).toBe(0);
     expect(
-      expenseOnPeriod(
-        charge({ type: "par_commande", amountMad: 33, appliesToStatus: "livree" }),
-        faits,
-        ...periode
-      )?.orders
+      expenseOnPeriod(frais, faits, "2026-08-01", "2026-08-31")?.orders
     ).toBe(1);
-    expect(
-      expenseOnPeriod(
-        charge({ type: "par_commande", amountMad: 33, appliesToStatus: "livree" }),
-        faits,
-        "2026-08-01",
-        "2026-08-31"
-      )
-    ).toBeNull();
   });
 
   it("ne compte pas une commande anterieure au debut de la charge", () => {
@@ -269,7 +264,6 @@ describe("monthlyBreakdown", () => {
       {
         ...LIVREE,
         createdDay: "2026-10-01",
-        deliveredDay: "2026-10-03",
         revenue: 300,
       },
     ];
@@ -301,7 +295,6 @@ describe("adResults", () => {
       // Recue pendant la campagne, livree apres : elle lui revient.
       commande({
         createdDay: "2026-09-08",
-        deliveredDay: "2026-10-02",
         delivered: true,
         confirmed: true,
         revenue: 300,
@@ -310,7 +303,6 @@ describe("adResults", () => {
       // rien.
       commande({
         createdDay: "2026-08-20",
-        deliveredDay: "2026-09-05",
         delivered: true,
         revenue: 500,
       }),
@@ -325,7 +317,6 @@ describe("adResults", () => {
     const faits = [
       commande({
         createdDay: "2026-09-02",
-        deliveredDay: "2026-09-04",
         delivered: true,
         confirmed: true,
         revenue: 800,
@@ -378,7 +369,6 @@ describe("adResults", () => {
     const faits = [
       commande({
         createdDay: "2026-09-02",
-        deliveredDay: "2026-09-04",
         delivered: true,
         revenue: 800,
       }),
