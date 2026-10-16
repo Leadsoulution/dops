@@ -57,6 +57,50 @@ export type WooImportResult = {
   sansProduit: string[];
 };
 
+/** Code Postgres d'une violation d'unicite. */
+const DOUBLON = "23505";
+
+function estDoublon(error: { code?: string } | null): boolean {
+  return error?.code === DOUBLON;
+}
+
+/**
+ * Pose les nouvelles commandes, sans qu'une seule en bloque d'autres.
+ *
+ * L'insertion se fait d'un bloc, ce qui est le plus rapide. Mais une
+ * commande deja presente fait echouer tout le bloc, et deux
+ * notifications de la boutique arrivees en meme temps lisent la meme
+ * liste : chacune croit avoir du nouveau. On repasse alors ligne par
+ * ligne, en laissant tomber les doublons et en gardant le reste.
+ */
+async function inserer(
+  rows: ReturnType<typeof toRow>[]
+): Promise<{ id: string; reference: string }[]> {
+  const supabase = getSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("leads")
+    .insert(rows)
+    .select("id,reference");
+
+  if (!error) return (data ?? []) as { id: string; reference: string }[];
+  if (!estDoublon(error)) throw new Error(error.message);
+
+  const posees: { id: string; reference: string }[] = [];
+  for (const row of rows) {
+    const { data: une, error: erreur } = await supabase
+      .from("leads")
+      .insert(row)
+      .select("id,reference")
+      .single();
+    if (erreur) {
+      if (!estDoublon(erreur)) throw new Error(erreur.message);
+      continue;
+    }
+    if (une) posees.push(une as { id: string; reference: string });
+  }
+  return posees;
+}
+
 export async function importWooOrders(): Promise<WooImportResult> {
   const orders = await listRecentOrders();
   if (orders.length === 0) return { importees: 0, deja: 0, sansProduit: [] };
@@ -83,11 +127,26 @@ export async function importWooOrders(): Promise<WooImportResult> {
     ])
   );
 
-  // Les commandes deja reprises, pour ne pas les creer une seconde fois.
+  /*
+   * Les commandes deja reprises — cherchees parmi celles-ci seulement.
+   *
+   * La question etait posee a toute la table : "donne-moi tous les
+   * numeros de commande de la boutique". Supabase s'arrete a mille
+   * lignes sans le dire. Passe la milliemme commande, les plus
+   * recentes manquaient a la reponse : elles repassaient pour
+   * nouvelles, l'index unique refusait de les reinserer, et comme
+   * l'insertion part d'un seul bloc, plus aucune commande n'entrait.
+   * La boutique a vendu cinq heures sans que rien n'arrive dans
+   * l'application.
+   *
+   * On ne demande donc que les numeros qu'on s'apprete a traiter : la
+   * reponse ne peut plus depasser la page lue chez la boutique.
+   */
+  const numeros = orders.map((o) => o.id);
   const { data: knownRows } = await supabase
     .from("leads")
     .select("woo_order_id")
-    .not("woo_order_id", "is", null);
+    .in("woo_order_id", numeros);
   const known = new Set(
     ((knownRows ?? []) as { woo_order_id: number }[]).map((r) => r.woo_order_id)
   );
@@ -104,14 +163,11 @@ export async function importWooOrders(): Promise<WooImportResult> {
     nouvelles.push(toLead(order, catalogue, sansProduit));
   }
 
-  if (nouvelles.length > 0) {
-    const { data: inserted, error } = await supabase
-      .from("leads")
-      .insert(nouvelles.map(toRow))
-      .select("id,reference");
-    if (error) throw new Error(error.message);
+  let importees = 0;
 
-    const posees = (inserted ?? []) as { id: string; reference: string }[];
+  if (nouvelles.length > 0) {
+    const posees = await inserer(nouvelles.map(toRow));
+    importees = posees.length;
 
     await Promise.all(
       posees.map((row) =>
@@ -159,8 +215,11 @@ export async function importWooOrders(): Promise<WooImportResult> {
   }
 
   return {
-    importees: nouvelles.length,
-    deja: orders.length - nouvelles.length,
+    // Ce qui est reellement entre, et non ce qu'on s'appretait a poser :
+    // un doublon ecarte en cours de route ne doit pas etre annonce
+    // comme une commande importee.
+    importees,
+    deja: orders.length - importees,
     sansProduit: [...sansProduit],
   };
 }

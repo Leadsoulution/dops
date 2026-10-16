@@ -15,12 +15,20 @@ export async function POST() {
     const result = await importWooOrders();
     return NextResponse.json({ received: true, ...result });
   } catch (error) {
-    // 200 volontaire : un echec de notre cote ne doit pas pousser
-    // WooCommerce a desactiver le webhook apres quelques essais.
-    return NextResponse.json({
-      received: true,
-      error: error instanceof Error ? error.message : "Erreur inattendue.",
-    });
+    const message =
+      error instanceof Error ? error.message : "Erreur inattendue.";
+    /*
+     * L'echec part dans les journaux du serveur.
+     *
+     * La reponse reste 200 — un echec de notre cote ne doit pas pousser
+     * WooCommerce a desactiver le webhook — mais elle ne va nulle part :
+     * personne ne lit le corps d'une notification. Un import qui tombe
+     * ne laissait donc aucune trace, et la boutique a vendu cinq heures
+     * sans que rien n'arrive dans l'application avant qu'on s'en
+     * apercoive.
+     */
+    console.error("[woocommerce] import echoue :", message);
+    return NextResponse.json({ received: true, error: message });
   }
 }
 
