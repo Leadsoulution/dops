@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Expense } from "./expense-types";
 import {
   adResults,
+  resolveAdWindows,
   expenseOnPeriod,
   financeSummary,
   monthlyBreakdown,
@@ -375,5 +376,66 @@ describe("adResults", () => {
     expect(
       adResults([], [charge({ type: "publicite", isActive: false })], "2026-10-16")
     ).toEqual([]);
+  });
+});
+
+describe("resolveAdWindows", () => {
+  const pub = (id: string, startDate: string, endDate?: string) =>
+    charge({ id, type: "publicite", amountMad: 1000, startDate, endDate });
+
+  it("fait courir un budget sans fin jusqu'a la veille du suivant", () => {
+    const [a, b] = resolveAdWindows(
+      [pub("a", "2026-09-15"), pub("b", "2026-09-18")],
+      "2026-10-16"
+    );
+    expect(a.endDate).toBe("2026-09-17");
+    expect(b.endDate).toBe("2026-10-16");
+  });
+
+  it("donne la meme fenetre a deux budgets du meme jour", () => {
+    const [a, b, c] = resolveAdWindows(
+      [pub("a", "2026-09-15"), pub("b", "2026-09-15"), pub("c", "2026-09-16")],
+      "2026-10-16"
+    );
+    expect(a.endDate).toBe("2026-09-15");
+    expect(b.endDate).toBe("2026-09-15");
+    expect(c.endDate).toBe("2026-10-16");
+  });
+
+  it("respecte une fin saisie a la main", () => {
+    const [a] = resolveAdWindows(
+      [pub("a", "2026-09-15", "2026-09-16"), pub("b", "2026-09-20")],
+      "2026-10-16"
+    );
+    expect(a.endDate).toBe("2026-09-16");
+  });
+
+  it("ne touche ni aux autres charges ni aux campagnes desactivees", () => {
+    const loyer = charge({ id: "l", type: "fixe", amountMad: 3000 });
+    const eteinte = charge({
+      id: "x",
+      type: "publicite",
+      amountMad: 100,
+      isActive: false,
+    });
+    const [a, b] = resolveAdWindows([loyer, eteinte], "2026-10-16");
+    expect(a.endDate).toBeUndefined();
+    expect(b.endDate).toBeUndefined();
+  });
+
+  it("repartit une suite de budgets quotidiens sans en compter deux fois", () => {
+    // 500 le 15, 1000 le 18 : du 15 au 17 le budget est celui du 15.
+    const resolus = resolveAdWindows(
+      [
+        charge({ id: "a", type: "publicite", amountMad: 600, startDate: "2026-09-15" }),
+        charge({ id: "b", type: "publicite", amountMad: 1000, startDate: "2026-09-18" }),
+      ],
+      "2026-09-20"
+    );
+    const bilan = financeSummary([], resolus, "2026-09-15", "2026-09-20");
+    expect(bilan.expenses).toBe(1600);
+    // Le premier budget, sur sa seule premiere journee : un tiers.
+    const jour1 = financeSummary([], resolus, "2026-09-15", "2026-09-15");
+    expect(jour1.expenses).toBe(200);
   });
 });

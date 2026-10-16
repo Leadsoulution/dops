@@ -42,7 +42,6 @@ export type AdResult = {
 };
 
 const nf = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 });
-const mad = (v: number) => `${nf.format(v)} DH`;
 
 function jourCourt(day: string): string {
   const [y, m, d] = day.split("-").map(Number);
@@ -87,6 +86,19 @@ export default function AdsSpendTab({
     };
   }, [ads]);
 
+  // Les fenetres des budgets ne se recouvrent pas : une commande n'est
+  // comptee que par un seul d'entre eux, et les colonnes s'additionnent.
+  const total = ads.reduce(
+    (t, a) => ({
+      spend: t.spend + a.spend,
+      received: t.received + a.received,
+      delivered: t.delivered + a.delivered,
+      revenue: t.revenue + a.revenue,
+      profit: t.profit + a.profit,
+    }),
+    { spend: 0, received: 0, delivered: 0, revenue: 0, profit: 0 }
+  );
+
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -130,78 +142,120 @@ export default function AdsSpendTab({
 
       {ads.length === 0 ? (
         <p className="rounded-lg border border-dashed border-gray-200 py-10 text-center text-[12.5px] text-gray-400">
-          Aucune campagne enregistree. Ajoutez un budget avec ses dates de
-          debut et de fin pour mesurer ce qu&apos;il rapporte.
+          Aucun budget enregistre. Ajoutez un montant avec sa date pour
+          mesurer ce qu&apos;il rapporte.
         </p>
       ) : (
-        <div className="space-y-3">
-          {ads.map((a) => {
-            const expense = expenses.find((e) => e.id === a.id) ?? null;
-            return (
-              <div
-                key={a.id}
-                className="overflow-hidden rounded-xl border border-gray-200"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2">
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <p className="truncate text-[13px] font-semibold text-gray-900">
-                      {a.label}
-                    </p>
-                    {a.platform && (
-                      <span className="rounded-full bg-pink-50 px-2 py-0.5 text-[11px] font-medium text-pink-700">
-                        {a.platform}
+        /*
+          Un tableau, et non une carte par budget : les budgets se
+          saisissent au jour le jour, et vingt cartes empilees ne se
+          comparent pas. En ligne, une mauvaise journee se repere d'un
+          coup d'oeil.
+        */
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-[12.5px]">
+            <thead>
+              <tr className="border-b border-gray-100 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                <th className="py-2">Periode</th>
+                <th className="py-2 text-right">Budget</th>
+                <th className="py-2 text-right">Recues</th>
+                <th className="py-2 text-right">Livrees</th>
+                <th className="py-2 text-right">Revenu livre</th>
+                <th className="py-2 text-right">Profit</th>
+                <th className="py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {ads.map((a) => {
+                const expense = expenses.find((e) => e.id === a.id) ?? null;
+                return (
+                  <tr key={a.id} className="border-b border-gray-50 last:border-0">
+                    <td className="py-2 pr-3">
+                      <p className="whitespace-nowrap font-mono text-gray-800">
+                        {jourCourt(a.startDate)}
+                        {a.days > 1 && ` - ${jourCourt(a.endDate ?? a.startDate)}`}
+                        <span className="ml-1.5 font-sans text-[11px] text-gray-400">
+                          {a.days} j
+                        </span>
+                      </p>
+                      <p className="truncate text-[11px] text-gray-400">
+                        {a.label}
+                        {a.platform && ` · ${a.platform}`}
+                      </p>
+                    </td>
+                    <td className="py-2 text-right font-mono text-gray-800">
+                      {nf.format(a.spend)}
+                    </td>
+                    <td className="py-2 text-right font-mono text-gray-700">
+                      {a.received}
+                      {a.received > 0 && (
+                        <span className="block text-[11px] text-gray-400">
+                          {nf.format(a.costPerOrder)} l&apos;une
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 text-right font-mono text-gray-700">
+                      {a.delivered}
+                      <span className="block text-[11px] text-gray-400">
+                        {a.deliveryRate}%
+                        {a.pending > 0 && ` · ${a.pending} en route`}
                       </span>
-                    )}
-                    <span className="font-mono text-[11.5px] text-gray-500">
-                      {jourCourt(a.startDate)}
-                      {" - "}
-                      {a.endDate ? jourCourt(a.endDate) : "en cours"}
-                      <span className="ml-1.5 text-gray-400">
-                        {a.days} jour{a.days > 1 ? "s" : ""}
-                      </span>
-                    </span>
-                  </div>
-                  {expense && (
-                    <button
-                      onClick={() => setModal({ expense })}
-                      title="Modifier cette campagne"
-                      className="flex shrink-0 items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-[11.5px] text-gray-600 hover:bg-gray-50"
+                    </td>
+                    <td className="py-2 text-right font-mono text-gray-800">
+                      {nf.format(a.revenue)}
+                    </td>
+                    <td
+                      className={`py-2 text-right font-mono font-semibold ${
+                        a.profit < 0 ? "text-red-600" : "text-emerald-600"
+                      }`}
                     >
-                      <Pencil className="h-3 w-3" />
-                      Modifier
-                    </button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 divide-gray-100 sm:grid-cols-5 sm:divide-x">
-                  <Chiffre label="Budget" value={mad(a.spend)} />
-                  <Chiffre
-                    label="Commandes recues"
-                    value={String(a.received)}
-                    detail={`${mad(a.costPerOrder)} l'une`}
-                  />
-                  <Chiffre
-                    label="Livrees"
-                    value={`${a.delivered}`}
-                    detail={`${a.deliveryRate}% · ${mad(a.costPerDelivered)} l'une`}
-                  />
-                  <Chiffre
-                    label="Revenu livre"
-                    value={mad(a.revenue)}
-                    detail={
-                      a.pending > 0 ? `${a.pending} encore en route` : undefined
-                    }
-                  />
-                  <Chiffre
-                    label="Profit"
-                    value={mad(a.profit)}
-                    detail={`dont ${mad(a.orderCharges)} de charges`}
-                    tone={a.profit < 0 ? "negatif" : "positif"}
-                  />
-                </div>
-              </div>
-            );
-          })}
+                      {nf.format(a.profit)}
+                      <span className="block font-sans text-[11px] font-normal text-gray-400">
+                        {nf.format(a.orderCharges)} de charges
+                      </span>
+                    </td>
+                    <td className="py-2 pl-2 text-right">
+                      {expense && (
+                        <button
+                          onClick={() => setModal({ expense })}
+                          title="Modifier ce budget"
+                          className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-gray-200 text-[13px] font-semibold text-gray-900">
+                <td className="py-2.5">
+                  Total
+                  <span className="ml-1.5 font-normal text-gray-400">
+                    {ads.length} budget{ads.length > 1 ? "s" : ""}
+                  </span>
+                </td>
+                <td className="py-2.5 text-right font-mono">
+                  {nf.format(total.spend)}
+                </td>
+                <td className="py-2.5 text-right font-mono">{total.received}</td>
+                <td className="py-2.5 text-right font-mono">{total.delivered}</td>
+                <td className="py-2.5 text-right font-mono">
+                  {nf.format(total.revenue)}
+                </td>
+                <td
+                  className={`py-2.5 text-right font-mono ${
+                    total.profit < 0 ? "text-red-600" : "text-emerald-600"
+                  }`}
+                >
+                  {nf.format(total.profit)}
+                </td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
         </div>
       )}
 
@@ -216,40 +270,6 @@ export default function AdsSpendTab({
           onClose={() => setModal(null)}
           onSaved={onChanged}
         />
-      )}
-    </div>
-  );
-}
-
-function Chiffre({
-  label,
-  value,
-  detail,
-  tone,
-}: {
-  label: string;
-  value: string;
-  detail?: string;
-  tone?: "positif" | "negatif";
-}) {
-  return (
-    <div className="px-3 py-2.5">
-      <p className="truncate text-[10.5px] font-semibold uppercase tracking-wide text-gray-400">
-        {label}
-      </p>
-      <p
-        className={`truncate font-mono text-[15px] font-semibold ${
-          tone === "negatif"
-            ? "text-red-600"
-            : tone === "positif"
-              ? "text-emerald-600"
-              : "text-gray-900"
-        }`}
-      >
-        {value}
-      </p>
-      {detail && (
-        <p className="truncate text-[11px] text-gray-400">{detail}</p>
       )}
     </div>
   );

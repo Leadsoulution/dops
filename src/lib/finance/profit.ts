@@ -98,6 +98,50 @@ export function overlapDays(
   return Math.round((fin - debut) / JOUR_MS) + 1;
 }
 
+const maxDay = (a: string, b: string) => (a > b ? a : b);
+const minDay = (a: string, b: string) => (a < b ? a : b);
+
+/** La date, decalee de `delta` jours. */
+function shiftDay(day: string, delta: number): string {
+  const d = new Date(jour(day) + delta * JOUR_MS);
+  const deux = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${deux(d.getUTCMonth() + 1)}-${deux(
+    d.getUTCDate()
+  )}`;
+}
+
+/**
+ * La fin implicite d'un budget publicitaire : la veille du suivant.
+ *
+ * Les budgets se saisissent au fil de l'eau — cinq cents un jour, mille
+ * le lendemain — et la date de fin est rarement connue au moment ou on
+ * les note. Un budget sans fin court donc jusqu'au budget suivant, et
+ * le dernier jusqu'a aujourd'hui : c'est la lecture naturelle d'une
+ * suite de depenses quotidiennes, et elle evite qu'un budget en
+ * recouvre un autre.
+ *
+ * Deux budgets saisis le meme jour partagent la meme fenetre : aucun
+ * des deux ne commence apres l'autre.
+ */
+export function resolveAdWindows(expenses: Expense[], today: string): Expense[] {
+  const debuts = [
+    ...new Set(
+      expenses
+        .filter((e) => e.type === "publicite" && e.isActive)
+        .map((e) => e.startDate)
+    ),
+  ].sort();
+
+  return expenses.map((e) => {
+    if (e.type !== "publicite" || !e.isActive || e.endDate) return e;
+    const suivant = debuts.find((d) => d > e.startDate);
+    return {
+      ...e,
+      endDate: suivant ? shiftDay(suivant, -1) : maxDay(today, e.startDate),
+    };
+  });
+}
+
 /** Les mois "AAAA-MM" touches par une periode, du plus ancien au dernier. */
 export function monthsIn(from: string, to: string): string[] {
   const mois: string[] = [];
@@ -125,9 +169,6 @@ export function monthSpan(month: string): { first: string; last: string } {
     last: `${month}-${String(dernier).padStart(2, "0")}`,
   };
 }
-
-const maxDay = (a: string, b: string) => (a > b ? a : b);
-const minDay = (a: string, b: string) => (a < b ? a : b);
 
 /** Le statut vise est-il celui par lequel cette commande est passee ? */
 export function matchesStatus(fact: OrderFact, applies: AppliesTo): boolean {

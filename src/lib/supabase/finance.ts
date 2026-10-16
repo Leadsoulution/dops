@@ -8,6 +8,7 @@ import { orderLines, type CatalogueEntry } from "@/lib/order-lines";
 import {
   adResults,
   financeSummary,
+  resolveAdWindows,
   monthlyBreakdown,
   monthsIn,
   type AdResult,
@@ -168,13 +169,22 @@ export async function getFinanceOverview(
   const debut = from ?? debuts[0] ?? aujourdhui;
   const fin = to ?? aujourdhui;
 
-  const bilan = financeSummary(facts, expenses, debut, fin);
+  /*
+   * Un budget publicitaire sans date de fin court jusqu'au suivant.
+   *
+   * Resolu une fois ici, avant tout calcul : le bilan, la courbe et le
+   * resultat des campagnes doivent voir les memes fenetres, sinon les
+   * trois se contredisent.
+   */
+  const charges = resolveAdWindows(expenses, aujourdhui);
+
+  const bilan = financeSummary(facts, charges, debut, fin);
 
   // La courbe ne montre que les derniers mois : au-dela, les colonnes
   // deviennent illisibles et personne ne compare un mois a celui d'il y
   // a deux ans.
   const tous = monthsIn(debut, fin);
-  const monthly = monthlyBreakdown(facts, expenses, tous.slice(-MOIS_COURBE));
+  const monthly = monthlyBreakdown(facts, charges, tous.slice(-MOIS_COURBE));
 
   /*
    * Ce qui n'est pas encore encaisse : parti, ni remis ni perdu.
@@ -193,7 +203,7 @@ export async function getFinanceOverview(
   return {
     ...bilan,
     monthly,
-    ads: adResults(facts, expenses, aujourdhui),
+    ads: adResults(facts, charges, aujourdhui),
     inTransit: {
       orders: enRoute.length,
       amount: enRoute.reduce(
