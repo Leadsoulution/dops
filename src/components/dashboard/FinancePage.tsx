@@ -20,6 +20,7 @@ import AreaTrendChart from "./AreaTrendChart";
 import ExpensesTab from "./ExpensesTab";
 import CarrierFloatCard from "./CarrierFloatCard";
 import PeriodFilter from "./PeriodFilter";
+import AdsSpendTab, { AdsSpendLoading, type AdResult } from "./AdsSpendTab";
 import InfoTip, { Formule } from "./InfoTip";
 import { periodBounds, type Range } from "./useTeamStats";
 import type { ExpenseType } from "@/lib/finance/expense-types";
@@ -67,6 +68,7 @@ type Overview = {
     profit: number;
   }[];
   inTransit: { orders: number; amount: number };
+  ads: AdResult[];
 };
 
 const nf = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 });
@@ -127,11 +129,14 @@ const TYPE_CARDS: {
     icon: Megaphone,
     aide: (
       <>
-        <p>Les budgets publicitaires saisis dans l&apos;onglet Depenses.</p>
-        <Formule>= montant, une fois, le jour engage</Formule>
         <p>
-          Un budget saisi en un bloc pese entierement sur son mois. Pour le
-          repartir, saisissez-le mois par mois.
+          Les budgets saisis dans l&apos;onglet Publicite, avec leurs dates de
+          debut et de fin.
+        </p>
+        <Formule>= budget x jours couverts / jours de diffusion</Formule>
+        <p>
+          Un budget sans date de fin ne peut pas s&apos;etaler : il compte en
+          entier le jour engage.
         </p>
       </>
     ),
@@ -191,7 +196,7 @@ const TYPE_LABELS: Record<ExpenseType, string> = {
 
 export default function FinancePage() {
   const [activeTab, setActiveTab] = useState<
-    "vue-ensemble" | "depenses" | "rentabilite"
+    "vue-ensemble" | "publicite" | "depenses" | "rentabilite"
   >("vue-ensemble");
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -268,7 +273,8 @@ export default function FinancePage() {
           </p>
           <Formule>par commande = prix unitaire x commandes</Formule>
           <Formule>fixe ou variable = montant mensuel au prorata</Formule>
-          <Formule>publicite ou ponctuelle = une fois, a sa date</Formule>
+          <Formule>publicite = budget etale sur ses jours</Formule>
+          <Formule>ponctuelle = une fois, a sa date</Formule>
           <p>
             Une charge annuelle est divisee par douze. Une charge desactivee ne
             pese plus.
@@ -482,6 +488,16 @@ export default function FinancePage() {
           Vue d&apos;ensemble
         </button>
         <button
+          onClick={() => setActiveTab("publicite")}
+          className={`whitespace-nowrap border-b-2 pb-2.5 text-[13.5px] transition-colors ${
+            activeTab === "publicite"
+              ? "border-gray-900 font-semibold text-gray-900"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          Publicite
+        </button>
+        <button
           onClick={() => setActiveTab("depenses")}
           className={`whitespace-nowrap border-b-2 pb-2.5 text-[13.5px] transition-colors ${
             activeTab === "depenses"
@@ -603,6 +619,13 @@ export default function FinancePage() {
           )}
         </div>
       )}
+
+      {activeTab === "publicite" &&
+        (data ? (
+          <AdsSpendTab ads={data.ads} onChanged={() => setVersion((v) => v + 1)} />
+        ) : (
+          <AdsSpendLoading />
+        ))}
 
       {activeTab === "depenses" && (
         <ExpensesTab onChanged={() => setVersion((v) => v + 1)} />

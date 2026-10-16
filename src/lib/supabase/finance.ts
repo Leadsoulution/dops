@@ -6,9 +6,11 @@ import { amountValue, roundToTen } from "@/lib/amount";
 import { moroccoDate } from "@/lib/morocco-day";
 import { orderLines, type CatalogueEntry } from "@/lib/order-lines";
 import {
+  adResults,
   financeSummary,
   monthlyBreakdown,
   monthsIn,
+  type AdResult,
   type FinanceSummary,
   type OrderFact,
 } from "@/lib/finance/profit";
@@ -49,6 +51,12 @@ export type FinanceOverview = FinanceSummary & {
   monthly: { month: string; revenue: number; expenses: number; profit: number }[];
   /** Commandes encore en route : leur encaissement reste a venir. */
   inTransit: { orders: number; amount: number };
+  /**
+   * Les campagnes, jugees sur les commandes recues pendant leur
+   * diffusion. Elles ne suivent pas la periode affichee : une campagne
+   * se mesure sur sa propre fenetre, du premier au dernier jour.
+   */
+  ads: AdResult[];
 };
 
 /**
@@ -185,6 +193,7 @@ export async function getFinanceOverview(
   return {
     ...bilan,
     monthly,
+    ads: adResults(facts, expenses, aujourdhui),
     inTransit: {
       orders: enRoute.length,
       amount: enRoute.reduce(

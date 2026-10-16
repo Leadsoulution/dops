@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Expense } from "./expense-types";
 import {
+  adResults,
   expenseOnPeriod,
   financeSummary,
   monthlyBreakdown,
@@ -181,6 +182,19 @@ describe("expenseOnPeriod", () => {
     expect(expenseOnPeriod(pub, [], "2026-10-01", "2026-10-31")).toBeNull();
   });
 
+  it("etale une campagne sur ses jours de diffusion", () => {
+    // Trente mille du 1er au 30 : une semaine en coute sept trentiemes.
+    const pub = charge({
+      type: "publicite",
+      amountMad: 30000,
+      startDate: "2026-09-01",
+      endDate: "2026-09-30",
+    });
+    expect(expenseOnPeriod(pub, [], ...periode)?.amount).toBe(30000);
+    expect(expenseOnPeriod(pub, [], "2026-09-01", "2026-09-07")?.amount).toBe(7000);
+    expect(expenseOnPeriod(pub, [], "2026-10-01", "2026-10-31")).toBeNull();
+  });
+
   it("ignore une charge desactivee", () => {
     expect(
       expenseOnPeriod(
@@ -267,5 +281,99 @@ describe("monthlyBreakdown", () => {
       { month: "2026-09", revenue: 200, expenses: 50, profit: 150 },
       { month: "2026-10", revenue: 300, expenses: 50, profit: 250 },
     ]);
+  });
+});
+
+describe("adResults", () => {
+  const campagne = charge({
+    id: "pub",
+    type: "publicite",
+    label: "Campagne septembre",
+    platform: "Facebook",
+    amountMad: 1000,
+    startDate: "2026-09-01",
+    endDate: "2026-09-10",
+  });
+
+  it("compte les commandes recues pendant la diffusion, pas celles livrees", () => {
+    const faits = [
+      // Recue pendant la campagne, livree apres : elle lui revient.
+      commande({
+        createdDay: "2026-09-08",
+        deliveredDay: "2026-10-02",
+        delivered: true,
+        confirmed: true,
+        revenue: 300,
+      }),
+      // Recue avant la campagne mais livree pendant : elle ne lui doit
+      // rien.
+      commande({
+        createdDay: "2026-08-20",
+        deliveredDay: "2026-09-05",
+        delivered: true,
+        revenue: 500,
+      }),
+    ];
+    const [r] = adResults(faits, [campagne], "2026-10-16");
+    expect(r.received).toBe(1);
+    expect(r.delivered).toBe(1);
+    expect(r.revenue).toBe(300);
+  });
+
+  it("deduit le budget et les charges des commandes amenees", () => {
+    const faits = [
+      commande({
+        createdDay: "2026-09-02",
+        deliveredDay: "2026-09-04",
+        delivered: true,
+        confirmed: true,
+        revenue: 800,
+      }),
+      commande({ createdDay: "2026-09-03", confirmed: true }),
+    ];
+    const [r] = adResults(
+      faits,
+      [
+        campagne,
+        charge({ id: "liv", amountMad: 33, appliesToStatus: "livree" }),
+      ],
+      "2026-10-16"
+    );
+    expect(r.spend).toBe(1000);
+    expect(r.orderCharges).toBe(33);
+    expect(r.profit).toBe(800 - 1000 - 33);
+    expect(r.received).toBe(2);
+    expect(r.costPerOrder).toBe(500);
+    expect(r.costPerDelivered).toBe(1000);
+    expect(r.deliveryRate).toBe(50);
+  });
+
+  it("annonce a part les commandes dont le sort n'est pas connu", () => {
+    const faits = [
+      commande({ createdDay: "2026-09-02", shipped: true, confirmed: true }),
+      commande({ createdDay: "2026-09-03", returned: true }),
+    ];
+    const [r] = adResults(faits, [campagne], "2026-10-16");
+    expect(r.pending).toBe(1);
+    expect(r.delivered).toBe(0);
+  });
+
+  it("court jusqu'a aujourd'hui quand la campagne n'a pas de fin", () => {
+    const sansFin = charge({
+      id: "pub2",
+      type: "publicite",
+      amountMad: 500,
+      startDate: "2026-09-01",
+    });
+    const faits = [commande({ createdDay: "2026-10-10", confirmed: true })];
+    const [r] = adResults(faits, [sansFin], "2026-10-16");
+    expect(r.received).toBe(1);
+    expect(r.days).toBe(46);
+  });
+
+  it("ne retient que les campagnes actives", () => {
+    expect(
+      adResults([], [charge({ type: "publicite", isActive: false })], "2026-10-16")
+    ).toEqual([]);
   });
 });

@@ -32,14 +32,26 @@ export default function AddExpenseModal({
   onSaved,
   expense,
   products,
+  lockType,
+  titre,
 }: {
   onClose: () => void;
   onSaved: () => void;
   /** Charge existante : le formulaire passe en modification. */
   expense?: Expense | null;
   products: { id: string; name: string }[];
+  /**
+   * Nature imposee : le choix du type disparait. La section
+   * publicitaire n'ouvre ce formulaire que pour des campagnes, et
+   * laisser choisir "loyer" dans une page consacree aux publicites
+   * n'apporterait qu'une erreur de saisie.
+   */
+  lockType?: ExpenseType;
+  titre?: string;
 }) {
-  const [type, setType] = useState<ExpenseType>(expense?.type ?? "ponctuelle");
+  const [type, setType] = useState<ExpenseType>(
+    lockType ?? expense?.type ?? "ponctuelle"
+  );
   const [label, setLabel] = useState(expense?.label ?? "");
   const [amount, setAmount] = useState(String(expense?.amount ?? ""));
   const [category, setCategory] = useState<string | null>(
@@ -119,7 +131,8 @@ export default function AddExpenseModal({
           <div className="flex items-start gap-2.5">
             <Receipt className="mt-0.5 h-4 w-4 text-gray-700" />
             <h2 className="text-h2 font-semibold text-gray-900">
-              {expense ? "Modifier la depense" : "Ajouter une depense"}
+              {titre ??
+                (expense ? "Modifier la depense" : "Ajouter une depense")}
             </h2>
           </div>
           <button
@@ -132,6 +145,7 @@ export default function AddExpenseModal({
 
         <div className="space-y-3 overflow-y-auto px-5 py-4">
           {/* Le type d'abord : c'est lui qui decide du reste. */}
+          {!lockType && (
           <div>
             <label className="mb-1 block text-[12.5px] text-gray-600">
               Type de charge *
@@ -156,6 +170,7 @@ export default function AddExpenseModal({
               ))}
             </div>
           </div>
+          )}
 
           <Champ label="Libelle *">
             <input

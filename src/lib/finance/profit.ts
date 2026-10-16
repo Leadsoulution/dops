@@ -227,9 +227,135 @@ export function expenseOnPeriod(
     return { ...base, amount: sou(total) };
   }
 
-  // Ponctuelle et publicite : une fois, le jour de l'engagement.
+  /*
+   * Une campagne qui porte une date de fin est etalee sur ses jours.
+   *
+   * Un budget de trente mille dirhams du 1er au 30 ne pese pas
+   * entierement sur le 1er : il brule jour apres jour, et une semaine
+   * de cette campagne coute une semaine de budget. Sans date de fin, on
+   * ne sait pas sur quoi l'etaler : le montant compte alors une fois,
+   * le jour engage, comme une depense ponctuelle.
+   */
+  if (expense.type === "publicite" && expense.endDate) {
+    const duree = overlapDays(debut, expense.endDate, debut, expense.endDate);
+    const couverts = overlapDays(debut, expense.endDate, from, to);
+    if (couverts === 0) return null;
+    return { ...base, amount: sou((expense.amountMad * couverts) / duree) };
+  }
+
+  // Ponctuelle, et publicite sans fin : une fois, le jour de l'engagement.
   const engage = debut >= from && debut <= to;
   return engage ? { ...base, amount: sou(expense.amountMad) } : null;
+}
+
+/** Le resultat d'une campagne, mesure sur les commandes qu'elle a amenees. */
+export type AdResult = {
+  id: string;
+  label: string;
+  platform?: string;
+  startDate: string;
+  endDate?: string;
+  /** Jours de diffusion comptes dans le resultat. */
+  days: number;
+  /** Budget de la campagne, en entier. */
+  spend: number;
+  /** Commandes arrivees pendant la diffusion. */
+  received: number;
+  confirmed: number;
+  delivered: number;
+  /** Encore en route : leur sort n'est pas connu. */
+  pending: number;
+  /** Encaisse des commandes de la campagne deja livrees. */
+  revenue: number;
+  /** Charges par commande declenchees par ces commandes. */
+  orderCharges: number;
+  profit: number;
+  costPerOrder: number;
+  costPerDelivered: number;
+  /** Part des commandes recues qui a ete livree, en pourcentage. */
+  deliveryRate: number;
+};
+
+/**
+ * Ce qu'une campagne a rapporte.
+ *
+ * Mesuree sur les commandes **recues pendant la diffusion**, et non sur
+ * celles livrees pendant cette periode. La difference n'est pas un
+ * detail : une commande arrivee le 30 septembre est livree en octobre,
+ * et la compter en octobre attribuerait au budget d'octobre une vente
+ * payee par celui de septembre. Une campagne se juge sur ce qu'elle a
+ * fait entrer, meme si l'argent arrive plus tard.
+ *
+ * Le revenu ne compte que les commandes de la campagne effectivement
+ * remises au client : celles encore en route sont annoncees a part,
+ * parce qu'elles peuvent encore echouer.
+ */
+export function adResults(
+  facts: OrderFact[],
+  expenses: Expense[],
+  today: string
+): AdResult[] {
+  const charges = expenses.filter(
+    (e) => e.isActive && e.type === "par_commande"
+  );
+
+  return expenses
+    .filter((e) => e.type === "publicite" && e.isActive)
+    .map((pub) => {
+      const debut = pub.startDate;
+      const fin = pub.endDate ?? today;
+      const cohorte = facts.filter(
+        (f) =>
+          f.createdDay >= debut &&
+          f.createdDay <= fin &&
+          concerne(f, pub.productId)
+      );
+
+      const livrees = cohorte.filter((f) => f.delivered);
+      const revenue = sou(livrees.reduce((s, f) => s + f.revenue, 0));
+
+      // Les charges par commande que cette cohorte a declenchees : une
+      // campagne ne porte pas que son budget, elle porte aussi
+      // l'emballage et la livraison des commandes qu'elle a amenees.
+      const orderCharges = sou(
+        charges.reduce((total, charge) => {
+          const applies = charge.appliesToStatus ?? "livree";
+          const chargeFin = charge.endDate ?? "9999-12-31";
+          const n = cohorte.filter((f) => {
+            if (!matchesStatus(f, applies)) return false;
+            if (!concerne(f, charge.productId)) return false;
+            const j = dayOf(f, applies);
+            return j >= charge.startDate && j <= chargeFin;
+          }).length;
+          return total + charge.amountMad * n;
+        }, 0)
+      );
+
+      const spend = pub.amountMad;
+      const received = cohorte.length;
+      const delivered = livrees.length;
+
+      return {
+        id: pub.id,
+        label: pub.label,
+        platform: pub.platform,
+        startDate: debut,
+        endDate: pub.endDate,
+        days: overlapDays(debut, fin, debut, fin),
+        spend,
+        received,
+        confirmed: cohorte.filter((f) => f.confirmed).length,
+        delivered,
+        pending: cohorte.filter((f) => !f.delivered && !f.returned).length,
+        revenue,
+        orderCharges,
+        profit: sou(revenue - spend - orderCharges),
+        costPerOrder: received > 0 ? sou(spend / received) : 0,
+        costPerDelivered: delivered > 0 ? sou(spend / delivered) : 0,
+        deliveryRate: received > 0 ? Math.round((delivered / received) * 100) : 0,
+      };
+    })
+    .sort((a, b) => (a.startDate < b.startDate ? 1 : -1));
 }
 
 /** Le compte complet d'une periode. */
