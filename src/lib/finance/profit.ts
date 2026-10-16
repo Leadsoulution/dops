@@ -291,6 +291,7 @@ export function expenseOnPeriod(
 
 /** Le resultat d'une campagne, mesure sur les commandes qu'elle a amenees. */
 export type AdResult = {
+  /** La fenetre elle-meme : "2026-09-15_2026-09-17". */
   id: string;
   label: string;
   platform?: string;
@@ -298,8 +299,10 @@ export type AdResult = {
   endDate?: string;
   /** Jours de diffusion comptes dans le resultat. */
   days: number;
-  /** Budget de la campagne, en entier. */
+  /** Budget de la fenetre : la somme des montants saisis dessus. */
   spend: number;
+  /** Les budgets qui composent la fenetre, pour pouvoir les corriger. */
+  entries: { id: string; label: string; amount: number }[];
   /** Commandes arrivees pendant la diffusion. */
   received: number;
   confirmed: number;
@@ -340,16 +343,36 @@ export function adResults(
     (e) => e.isActive && e.type === "par_commande"
   );
 
-  return expenses
-    .filter((e) => e.type === "publicite" && e.isActive)
-    .map((pub) => {
-      const debut = pub.startDate;
-      const fin = pub.endDate ?? today;
+  /*
+   * Les budgets sont regroupes par fenetre, et non pris un a un.
+   *
+   * Deux budgets notes le meme jour couvrent les memes commandes : les
+   * mesurer separement compterait deux fois la meme cohorte, et la
+   * ligne de total annoncerait plus de commandes qu'il n'en est arrive.
+   * Une fenetre, une cohorte, un resultat — et le budget de la journee
+   * est la somme de ce qui a ete saisi dessus.
+   */
+  const fenetres = new Map<string, { debut: string; fin: string; pubs: Expense[] }>();
+  for (const pub of expenses) {
+    if (pub.type !== "publicite" || !pub.isActive) continue;
+    const debut = pub.startDate;
+    const fin = pub.endDate ?? today;
+    const cle = `${debut}_${fin}`;
+    const existante = fenetres.get(cle);
+    if (existante) existante.pubs.push(pub);
+    else fenetres.set(cle, { debut, fin, pubs: [pub] });
+  }
+
+  return [...fenetres.entries()]
+    .map(([cle, { debut, fin, pubs }]) => {
+      const produit = pubs.every((p) => p.productId === pubs[0].productId)
+        ? pubs[0].productId
+        : undefined;
       const cohorte = facts.filter(
         (f) =>
           f.createdDay >= debut &&
           f.createdDay <= fin &&
-          concerne(f, pub.productId)
+          concerne(f, produit)
       );
 
       const livrees = cohorte.filter((f) => f.delivered);
@@ -372,18 +395,29 @@ export function adResults(
         }, 0)
       );
 
-      const spend = pub.amountMad;
+      const spend = sou(pubs.reduce((s, p) => s + p.amountMad, 0));
       const received = cohorte.length;
       const delivered = livrees.length;
+      const plateformes = [
+        ...new Set(pubs.map((p) => p.platform).filter(Boolean)),
+      ];
 
       return {
-        id: pub.id,
-        label: pub.label,
-        platform: pub.platform,
+        id: cle,
+        label:
+          pubs.length === 1
+            ? pubs[0].label
+            : `${pubs.length} budgets`,
+        platform: plateformes.length === 1 ? plateformes[0] : undefined,
         startDate: debut,
-        endDate: pub.endDate,
+        endDate: pubs[0].endDate ?? fin,
         days: overlapDays(debut, fin, debut, fin),
         spend,
+        entries: pubs.map((p) => ({
+          id: p.id,
+          label: p.label,
+          amount: p.amountMad,
+        })),
         received,
         confirmed: cohorte.filter((f) => f.confirmed).length,
         delivered,

@@ -372,6 +372,41 @@ describe("adResults", () => {
     expect(r.days).toBe(46);
   });
 
+  it("ne compte qu'une fois la cohorte de deux budgets du meme jour", () => {
+    // Deux budgets notes le 1er : ils couvrent les memes commandes, et
+    // les separer en annoncerait le double.
+    const faits = [
+      commande({
+        createdDay: "2026-09-02",
+        deliveredDay: "2026-09-04",
+        delivered: true,
+        revenue: 800,
+      }),
+    ];
+    const resultats = adResults(
+      faits,
+      [
+        charge({ id: "a", type: "publicite", amountMad: 500, startDate: "2026-09-01", endDate: "2026-09-10" }),
+        charge({ id: "b", type: "publicite", amountMad: 1300, startDate: "2026-09-01", endDate: "2026-09-10" }),
+      ],
+      "2026-10-16"
+    );
+    expect(resultats).toHaveLength(1);
+    expect(resultats[0].spend).toBe(1800);
+    expect(resultats[0].received).toBe(1);
+    expect(resultats[0].revenue).toBe(800);
+    expect(resultats[0].entries.map((e) => e.amount)).toEqual([500, 1300]);
+    expect(resultats[0].label).toBe("2 budgets");
+  });
+
+  it("garde son libelle a un budget seul sur sa fenetre", () => {
+    const [r] = adResults([], [campagne], "2026-10-16");
+    expect(r.label).toBe("Campagne septembre");
+    expect(r.entries).toEqual([
+      { id: "pub", label: "Campagne septembre", amount: 1000 },
+    ]);
+  });
+
   it("ne retient que les campagnes actives", () => {
     expect(
       adResults([], [charge({ type: "publicite", isActive: false })], "2026-10-16")

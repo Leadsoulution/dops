@@ -24,6 +24,7 @@ import type { Expense } from "@/lib/finance/expense-types";
 export type AdResult = {
   id: string;
   label: string;
+  entries: { id: string; label: string; amount: number }[];
   platform?: string;
   startDate: string;
   endDate?: string;
@@ -167,7 +168,12 @@ export default function AdsSpendTab({
             </thead>
             <tbody>
               {ads.map((a) => {
-                const expense = expenses.find((e) => e.id === a.id) ?? null;
+                const saisies = a.entries
+                  .map((e) => ({
+                    ...e,
+                    expense: expenses.find((x) => x.id === e.id) ?? null,
+                  }))
+                  .filter((e) => e.expense);
                 return (
                   <tr key={a.id} className="border-b border-gray-50 last:border-0">
                     <td className="py-2 pr-3">
@@ -179,7 +185,11 @@ export default function AdsSpendTab({
                         </span>
                       </p>
                       <p className="truncate text-[11px] text-gray-400">
-                        {a.label}
+                        {a.entries.length > 1
+                          ? a.entries
+                              .map((e) => nf.format(e.amount))
+                              .join(" + ")
+                          : a.label}
                         {a.platform && ` · ${a.platform}`}
                       </p>
                     </td>
@@ -214,16 +224,24 @@ export default function AdsSpendTab({
                         {nf.format(a.orderCharges)} de charges
                       </span>
                     </td>
+                    {/*
+                      Un crayon par budget saisi : deux montants notes le
+                      meme jour partagent une ligne, mais restent deux
+                      saisies que l'on corrige separement.
+                    */}
                     <td className="py-2 pl-2 text-right">
-                      {expense && (
-                        <button
-                          onClick={() => setModal({ expense })}
-                          title="Modifier ce budget"
-                          className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                      )}
+                      <span className="flex items-center justify-end gap-0.5">
+                        {saisies.map((e) => (
+                          <button
+                            key={e.id}
+                            onClick={() => setModal({ expense: e.expense })}
+                            title={`Modifier ${e.label} (${nf.format(e.amount)} DH)`}
+                            className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                        ))}
+                      </span>
                     </td>
                   </tr>
                 );
