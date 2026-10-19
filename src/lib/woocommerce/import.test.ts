@@ -27,6 +27,16 @@ vi.mock("@/lib/webhooks/send", () => ({ emit: () => Promise.resolve() }));
 
 import { importWooOrders } from "./import";
 
+/** Le catalogue interne, tel que l'import le lit. */
+const CATALOGUE = [
+  {
+    name: "Collier Rose V2",
+    woo_sku: "LOR-ROSE-V2",
+    forcelog_ref: "180ZEI",
+    default_parcel_type: "stock",
+  },
+];
+
 const commande = (id: number): WooOrder => ({
   id,
   number: String(id),
@@ -51,7 +61,7 @@ function stub() {
     if (table === "products") {
       const chain = {
         select: () => chain,
-        not: () => Promise.resolve({ data: [], error: null }),
+        not: () => Promise.resolve({ data: CATALOGUE, error: null }),
       };
       return chain;
     }
@@ -178,6 +188,50 @@ describe("importWooOrders", () => {
     const r = await importWooOrders();
     expect(posees.map((p) => p.woo_order_id)).toEqual([1802]);
     expect(r.importees).toBe(1);
+  });
+
+  it("nomme la commande d'apres le catalogue, pas le titre de la boutique", async () => {
+    // La boutique vend LOR-ROSE-V2 sous le titre de l'ancien produit :
+    // le code article dit ce qui a ete achete, le titre non.
+    commandes = [
+      {
+        ...commande(1801),
+        line_items: [
+          {
+            product_id: 387,
+            name: "Collier Rose (ancien titre)",
+            sku: "LOR-ROSE-V2",
+            quantity: 1,
+            total: "169.00",
+          },
+        ],
+      },
+    ];
+    stub();
+    await importWooOrders();
+    expect(posees[0].product_name).toBe("Collier Rose V2");
+    expect(posees[0].stock_items).toBe("180ZEI:1");
+  });
+
+  it("garde le titre de la boutique quand le code est inconnu", async () => {
+    commandes = [
+      {
+        ...commande(1802),
+        line_items: [
+          {
+            product_id: 1,
+            name: "Produit hors catalogue",
+            sku: "ZZZ",
+            quantity: 1,
+            total: "99.00",
+          },
+        ],
+      },
+    ];
+    stub();
+    const r = await importWooOrders();
+    expect(posees[0].product_name).toBe("Produit hors catalogue");
+    expect(r.sansProduit).toEqual(["ZZZ"]);
   });
 
   it("ecarte les commandes annulees", async () => {

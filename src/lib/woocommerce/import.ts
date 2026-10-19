@@ -252,6 +252,22 @@ function toLead(
   const attribution = orderAttribution(order);
 
   const first = items[0];
+
+  /*
+   * Le nom du produit vient du catalogue, pas du titre de la boutique.
+   *
+   * La boutique vend `LOR-ROSE-V2` sous le titre de `LOR-ROSE` : les
+   * deux references sont distinctes, leurs articles aussi, mais la
+   * fiche du site a garde l'ancien intitule. La commande arrivait donc
+   * sous le nom du mauvais produit — le bon article partait chez le
+   * transporteur, puisque la reference vient du code article, mais
+   * l'agent lisait autre chose a l'ecran, et la photo suivait le nom.
+   *
+   * Le code article est ce que le client a reellement achete : c'est
+   * lui qui nomme la commande. Un code inconnu du catalogue garde le
+   * titre de la boutique — mieux vaut son nom que pas de nom.
+   */
+  const nomProduit = matched[0]?.entry?.name ?? first?.name ?? "";
   const client = [order.billing?.first_name, order.billing?.last_name]
     .filter(Boolean)
     .join(" ")
@@ -262,8 +278,8 @@ function toLead(
     client: client || "Client boutique",
     phone: order.billing?.phone ?? "",
     source: "WooCommerce",
-    productName: first?.name ?? "",
-    productLabel: label(first?.name ?? ""),
+    productName: nomProduit,
+    productLabel: label(nomProduit),
     itemCount: items.reduce((sum, i) => sum + i.quantity, 0) || undefined,
     amount: `${Math.round(Number(order.total) || 0)} MAD`,
     status: "Nouveau",
