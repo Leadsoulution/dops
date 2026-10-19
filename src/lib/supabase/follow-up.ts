@@ -1,6 +1,7 @@
 import "server-only";
 import { getSupabaseServerClient } from "./server";
 import { fetchAll } from "./page";
+import { imageOfOrder, productImageIndex } from "@/lib/product-image";
 import {
   daysSince,
   followUpState,
@@ -80,6 +81,7 @@ type Row = {
   product_name: string | null;
   product_label: string | null;
   item_count: number | null;
+  stock_items: string | null;
   amount: string | null;
   status: string;
   date: string | null;
@@ -105,7 +107,7 @@ type SuiviRow = {
 const CHAMPS =
   "id,reference,client,phone,ville,quartier,adresse,product_name," +
   "product_label,item_count,amount,status,date,source,customer_note," +
-  "tracking_number,delivery_status,delivery_status_code,deliverer," +
+  "stock_items,tracking_number,delivery_status,delivery_status_code,deliverer," +
   "deliverer_phone,delivery_date,created_at,last_modified_at";
 
 export async function getFollowUps(userId: string): Promise<{
@@ -117,7 +119,10 @@ export async function getFollowUps(userId: string): Promise<{
 
   const [rows, produits, suivis] = await Promise.all([
     fetchAll<Row>(() => supabase.from("leads").select(CHAMPS)),
-    supabase.from("products").select("name,image").not("image", "is", null),
+    supabase
+      .from("products")
+      .select("name,image,forcelog_ref")
+      .not("image", "is", null),
     // Seulement les lignes de cette personne : celles des autres ne la
     // regardent pas et ne doivent pas vider sa file.
     fetchAll<SuiviRow>(() =>
@@ -130,11 +135,18 @@ export async function getFollowUps(userId: string): Promise<{
 
   const avancement = new Map(suivis.map((x) => [x.lead_id, x]));
 
-  const imageParNom = new Map(
-    ((produits.data ?? []) as { name: string; image: string }[]).map((p) => [
-      p.name.trim().toLowerCase(),
-      p.image,
-    ])
+  // La photo vient du code article preleve : le nom ne designe pas un
+  // produit, et l'agent au telephone doit voir ce qui sera expedie.
+  const photos = productImageIndex(
+    ((produits.data ?? []) as {
+      name: string;
+      image: string;
+      forcelog_ref: string | null;
+    }[]).map((p) => ({
+      name: p.name,
+      image: p.image,
+      forcelogRef: p.forcelog_ref ?? undefined,
+    }))
   );
 
   const maintenant = new Date();
@@ -163,7 +175,10 @@ export async function getFollowUps(userId: string): Promise<{
       adresse: row.adresse ?? undefined,
       productName: row.product_name ?? "",
       productLabel: row.product_label ?? "",
-      productImage: imageParNom.get((row.product_name ?? "").trim().toLowerCase()),
+      productImage: imageOfOrder(photos, {
+        productName: row.product_name,
+        stockItems: row.stock_items,
+      }),
       itemCount: row.item_count ?? 1,
       amount: row.amount ?? "",
       status:

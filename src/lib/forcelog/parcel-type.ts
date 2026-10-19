@@ -1,3 +1,5 @@
+import { parseStockItems } from "@/lib/stock-items";
+
 /**
  * Colis simple ou colis de stock : la decision, prise au moment de
  * l'expedition.
@@ -40,11 +42,38 @@ export function resolveParcelType(
     stockItems: order.stockItems,
   };
 
-  // Une commande a plusieurs references a ete composee a l'import, a
-  // partir de ses lignes d'origine. La commande ne retient que le nom du
-  // premier article : impossible de la recomposer ici sans inventer les
-  // autres. On garde donc ce qui avait ete calcule.
-  if (order.stockItems?.includes(",")) return stored;
+  /*
+   * Le code article d'abord : c'est lui qui dit ce que le client a
+   * achete.
+   *
+   * Le nom ne le dit pas. Deux produits peuvent porter le meme intitule
+   * — la boutique vend une variante sous le titre de l'ancienne — et un
+   * produit renomme laisse derriere lui des commandes au nom perime.
+   * Chercher par le nom, c'etait risquer de prelever le mauvais article
+   * au depot du transporteur.
+   *
+   * Les references sont relues au catalogue : chacune doit encore y
+   * exister et s'y prelever. Une reference devenue inconnue laisse la
+   * commande telle qu'elle avait ete prevue, faute de mieux.
+   */
+  const refs = [...parseStockItems(order.stockItems)];
+  if (refs.length > 0) {
+    const lignes = refs.map(([ref, qte]) => ({
+      ref,
+      qte,
+      produit: catalogue.find((p) => p.forcelogRef === ref),
+    }));
+    if (lignes.some((l) => !l.produit)) return stored;
+    if (lignes.every((l) => l.produit!.defaultParcelType === "stock")) {
+      return {
+        parcelType: "stock",
+        stockItems: lignes.map((l) => `${l.ref}:${l.qte}`).join(","),
+      };
+    }
+    // Un produit a quitte le stock du transporteur : le colis repart de
+    // notre depot plutot que d'echouer au prelevement.
+    return { parcelType: "simple", stockItems: undefined };
+  }
 
   const wanted = order.productName?.trim().toLowerCase();
   if (!wanted) return stored;

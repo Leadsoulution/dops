@@ -1,4 +1,5 @@
 import { getSupabaseServerClient } from "./server";
+import { imageOfOrder, productImageIndex } from "@/lib/product-image";
 import { fetchAll } from "./page";
 import { emit } from "@/lib/webhooks/send";
 import { cityKey, tariffByCityForm } from "./cities";
@@ -246,17 +247,16 @@ async function withProductImages(leads: Lead[]): Promise<Lead[]> {
   }[];
   if (rows.length === 0) return leads;
 
-  const byRef = new Map(
-    rows.filter((r) => r.forcelog_ref).map((r) => [r.forcelog_ref as string, r.image])
+  const index = productImageIndex(
+    rows.map((r) => ({
+      name: r.name,
+      image: r.image,
+      forcelogRef: r.forcelog_ref ?? undefined,
+    }))
   );
-  const byName = new Map(rows.map((r) => [r.name.trim().toLowerCase(), r.image]));
 
   return leads.map((lead) => {
-    // "180ZEI:2,18BWTD:1" : la photo du premier article preleve.
-    const firstRef = lead.stockItems?.split(",")[0]?.split(":")[0]?.trim();
-    const image =
-      (firstRef && byRef.get(firstRef)) ||
-      byName.get(lead.productName.trim().toLowerCase());
+    const image = imageOfOrder(index, lead);
     return image ? { ...lead, productImage: image } : lead;
   });
 }

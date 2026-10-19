@@ -3,6 +3,7 @@ import { getSupabaseServerClient } from "./server";
 import { fetchAll } from "./page";
 import { cityKey } from "./cities";
 import { amountValue, roundToTen } from "@/lib/amount";
+import { parseStockItems } from "@/lib/stock-items";
 
 /**
  * Indicateurs du tableau de bord.
@@ -53,6 +54,7 @@ type LeadRow = {
   amount: string | null;
   item_count: number | null;
   product_name: string | null;
+  stock_items: string | null;
   tracking_number: string | null;
   delivery_status_code: string | null;
 };
@@ -101,23 +103,62 @@ export async function getDashboardKpis(
       supabase
         .from("leads")
         .select(
-          "created_at,status,ville,amount,item_count,product_name,tracking_number,delivery_status_code"
+          "created_at,status,ville,amount,item_count,product_name,stock_items,tracking_number,delivery_status_code"
         )
     ),
-    supabase.from("products").select("name,cost_supplier"),
+    supabase.from("products").select("name,forcelog_ref,cost_supplier"),
     supabase.from("cities").select("key,name,aliases,tariff").eq("active", true),
   ]);
 
-  // Cout d'achat par produit, quand il est renseigne.
+  /*
+   * Cout d'achat par produit, par code article d'abord.
+   *
+   * Il etait cherche par le nom seul. Un produit renomme laissait
+   * derriere lui des commandes au nom perime, dont la marchandise
+   * cessait d'etre comptee : le profit montait sans raison.
+   */
+  const costByRef = new Map<string, number>();
   const costByProduct = new Map<string, number>();
   for (const p of (products.data ?? []) as {
     name: string;
+    forcelog_ref: string | null;
     cost_supplier: number | string | null;
   }[]) {
     const cost = Number(p.cost_supplier);
+    if (Number.isFinite(cost) && cost > 0 && p.forcelog_ref) {
+      costByRef.set(p.forcelog_ref, cost);
+    }
     if (Number.isFinite(cost) && cost > 0) {
       costByProduct.set(p.name.trim().toLowerCase(), cost);
     }
+  }
+
+  /**
+   * Ce que la marchandise d'une commande a coute, ou rien si on
+   * l'ignore.
+   *
+   * Les codes articles preleves d'abord : ils designent le produit meme
+   * apres un changement d'intitule, et ils portent la quantite exacte
+   * de chacun. Le nom ne sert que pour les commandes anciennes, qui
+   * n'en portent pas.
+   *
+   * Un seul article au cout inconnu annule le calcul pour toute la
+   * commande : la compter a moitie ferait passer sa marchandise pour
+   * moins chere qu'elle n'est.
+   */
+  function coutMarchandise(l: LeadRow): number | undefined {
+    const refs = [...parseStockItems(l.stock_items)];
+    if (refs.length > 0) {
+      let total = 0;
+      for (const [ref, qte] of refs) {
+        const cout = costByRef.get(ref);
+        if (cout === undefined) return undefined;
+        total += cout * qte;
+      }
+      return total;
+    }
+    const parNom = costByProduct.get((l.product_name ?? "").trim().toLowerCase());
+    return parNom === undefined ? undefined : parNom * (l.item_count ?? 1);
   }
 
   // Tarif de livraison par forme de ville rencontree.
@@ -173,13 +214,10 @@ export async function getDashboardKpis(
     // de quoi leur marchandise serait comptee gratuite.
     let profit = 0;
     for (const l of delivered) {
-      const cost = costByProduct.get((l.product_name ?? "").trim().toLowerCase());
+      const cost = coutMarchandise(l);
       if (cost === undefined) continue;
       const tariff = tariffByCity.get(cityKey(l.ville ?? "")) ?? 0;
-      profit +=
-        roundToTen(amountValue(l.amount ?? undefined) ?? 0) -
-        cost * (l.item_count ?? 1) -
-        tariff;
+      profit += roundToTen(amountValue(l.amount ?? undefined) ?? 0) - cost - tariff;
     }
 
     return {

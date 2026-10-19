@@ -108,3 +108,63 @@ describe("resolveParcelType", () => {
     ).toEqual({ parcelType: "stock", stockItems: "ZZZ:1" });
   });
 });
+
+describe("resolveParcelType, par code article", () => {
+  /*
+   * Le nom ne designe pas un produit : la boutique vend une variante
+   * sous le titre de l'ancienne, et un produit renomme laisse derriere
+   * lui des commandes au nom perime. Seul le code article dit ce qui a
+   * ete achete.
+   */
+  const CATALOGUE = [
+    { name: "Collier Rose", forcelogRef: "1FL5NX", defaultParcelType: "stock" as const },
+    { name: "Collier Rose", forcelogRef: "180ZEI", defaultParcelType: "stock" as const },
+    { name: "Bracelet", defaultParcelType: "simple" as const },
+  ];
+
+  it("preleve la reference portee par la commande, pas celle de son nom", () => {
+    expect(
+      resolveParcelType(
+        { productName: "Collier Rose", itemCount: 1, parcelType: "stock", stockItems: "180ZEI:1" },
+        CATALOGUE
+      )
+    ).toEqual({ parcelType: "stock", stockItems: "180ZEI:1" });
+  });
+
+  it("garde les quantites de chaque reference", () => {
+    expect(
+      resolveParcelType(
+        { productName: "Collier Rose", stockItems: "180ZEI:2,1FL5NX:1", parcelType: "stock" },
+        CATALOGUE
+      )
+    ).toEqual({ parcelType: "stock", stockItems: "180ZEI:2,1FL5NX:1" });
+  });
+
+  it("repasse en colis simple quand le produit a quitte le stock", () => {
+    const sorti = [
+      { name: "Collier Rose", forcelogRef: "180ZEI", defaultParcelType: "simple" as const },
+    ];
+    expect(
+      resolveParcelType(
+        { productName: "Collier Rose", stockItems: "180ZEI:1", parcelType: "stock" },
+        sorti
+      )
+    ).toEqual({ parcelType: "simple", stockItems: undefined });
+  });
+
+  it("ne touche a rien quand la reference est inconnue du catalogue", () => {
+    expect(
+      resolveParcelType(
+        { productName: "Collier Rose", stockItems: "9ZZZZZ:1", parcelType: "stock" },
+        CATALOGUE
+      )
+    ).toEqual({ parcelType: "stock", stockItems: "9ZZZZZ:1" });
+  });
+
+  it("ne choisit pas entre deux produits de meme nom", () => {
+    // Sans code article, deux homonymes au catalogue : on ne devine pas.
+    expect(
+      resolveParcelType({ productName: "Collier Rose", itemCount: 1 }, CATALOGUE)
+    ).toEqual({ parcelType: "simple", stockItems: undefined });
+  });
+});

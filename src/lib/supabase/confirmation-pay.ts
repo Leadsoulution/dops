@@ -2,6 +2,7 @@ import "server-only";
 import { getSupabaseServerClient } from "./server";
 import { resolveAttribution } from "./attribution";
 import { fetchAll } from "./page";
+import { imageOfOrder, productImageIndex } from "@/lib/product-image";
 import { getIntegrationSettings } from "./integrations";
 
 /**
@@ -102,6 +103,7 @@ type LeadRow = {
   client: string;
   product_name: string | null;
   product_label: string | null;
+  stock_items: string | null;
   ville: string | null;
   amount: string | null;
   tracking_number: string | null;
@@ -134,12 +136,15 @@ export async function getPaymentReport(
       supabase
         .from("leads")
         .select(
-          "id,reference,client,product_name,product_label,ville,amount,tracking_number,delivery_status,delivery_status_code,delivery_date,confirmation_paid_at,confirmation_paid_amount,confirmation_paid_by"
+          "id,reference,client,product_name,product_label,stock_items,ville,amount,tracking_number,delivery_status,delivery_status_code,delivery_date,confirmation_paid_at,confirmation_paid_amount,confirmation_paid_by"
         )
         .eq("delivery_status_code", DELIVERED)
     ),
     supabase.from("profiles").select("id,name,role"),
-    supabase.from("products").select("name,image").not("image", "is", null),
+    supabase
+      .from("products")
+      .select("name,image,forcelog_ref")
+      .not("image", "is", null),
     fetchAll<EventRow>(() =>
       supabase
         .from("lead_events")
@@ -150,14 +155,19 @@ export async function getPaymentReport(
 
   if (profilesRes.error) throw new Error(profilesRes.error.message);
 
-  // La photo du produit, rapprochee par son nom comme ailleurs dans
-  // l'application : une ligne de paiement se reconnait mieux a l'image
-  // du produit qu'a une reference.
-  const imageByProduct = new Map(
-    ((productsRes.data ?? []) as { name: string; image: string }[]).map((p) => [
-      p.name.trim().toLowerCase(),
-      p.image,
-    ])
+  // La photo du produit : une ligne de paiement se reconnait mieux a
+  // l'image qu'a une reference. Rapprochee par le code article preleve,
+  // comme ailleurs — le nom ne designe pas un produit.
+  const photos = productImageIndex(
+    ((productsRes.data ?? []) as {
+      name: string;
+      image: string;
+      forcelog_ref: string | null;
+    }[]).map((p) => ({
+      name: p.name,
+      image: p.image,
+      forcelogRef: p.forcelog_ref ?? undefined,
+    }))
   );
 
   const profiles = (profilesRes.data ?? []) as {
@@ -215,9 +225,10 @@ export async function getPaymentReport(
       client: lead.client,
       productName: lead.product_name ?? "",
       productLabel: lead.product_label ?? "",
-      productImage: imageByProduct.get(
-        (lead.product_name ?? "").trim().toLowerCase()
-      ),
+      productImage: imageOfOrder(photos, {
+        productName: lead.product_name,
+        stockItems: lead.stock_items,
+      }),
       trackingNumber: lead.tracking_number ?? "",
       deliveryStatus: lead.delivery_status ?? "Livre",
       deliveryDate: lead.delivery_date ?? "",
