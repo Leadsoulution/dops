@@ -178,6 +178,8 @@ export default function SpeedafConnectModal({ onClose }: { onClose: () => void }
                     value={form.appCode}
                     onChange={(e) => maj("appCode", e.target.value)}
                     placeholder="MA000025"
+                    name="speedaf-app-code"
+                    autoComplete="off"
                     className={`${champ} font-mono`}
                   />
                 </Champ>
@@ -186,6 +188,8 @@ export default function SpeedafConnectModal({ onClose }: { onClose: () => void }
                     value={form.customerCode}
                     onChange={(e) => maj("customerCode", e.target.value)}
                     placeholder="MA000025"
+                    name="speedaf-client-code"
+                    autoComplete="off"
                     className={`${champ} font-mono`}
                   />
                 </Champ>
@@ -226,6 +230,8 @@ export default function SpeedafConnectModal({ onClose }: { onClose: () => void }
                   <input
                     value={form.senderName}
                     onChange={(e) => maj("senderName", e.target.value)}
+                    name="speedaf-exp-nom"
+                    autoComplete="off"
                     className={champ}
                   />
                 </Champ>
@@ -234,6 +240,8 @@ export default function SpeedafConnectModal({ onClose }: { onClose: () => void }
                     value={form.senderMobile}
                     onChange={(e) => maj("senderMobile", e.target.value)}
                     placeholder="06 12 34 56 78"
+                    name="speedaf-exp-tel"
+                    autoComplete="off"
                     className={champ}
                   />
                 </Champ>
@@ -243,6 +251,8 @@ export default function SpeedafConnectModal({ onClose }: { onClose: () => void }
                 <input
                   value={form.senderAddress}
                   onChange={(e) => maj("senderAddress", e.target.value)}
+                  name="speedaf-exp-adresse"
+                  autoComplete="off"
                   className={champ}
                 />
               </Champ>
@@ -252,6 +262,8 @@ export default function SpeedafConnectModal({ onClose }: { onClose: () => void }
                   <input
                     value={form.senderCity}
                     onChange={(e) => maj("senderCity", e.target.value)}
+                    name="speedaf-exp-ville"
+                    autoComplete="off"
                     className={champ}
                   />
                 </Champ>
@@ -259,7 +271,9 @@ export default function SpeedafConnectModal({ onClose }: { onClose: () => void }
                   <input
                     value={form.senderProvince}
                     onChange={(e) => maj("senderProvince", e.target.value)}
-                    placeholder="Comme la ville"
+                    placeholder="CASABLANCA - SETTAT"
+                    name="speedaf-exp-region"
+                    autoComplete="off"
                     className={champ}
                   />
                 </Champ>
@@ -267,11 +281,21 @@ export default function SpeedafConnectModal({ onClose }: { onClose: () => void }
                   <input
                     value={form.senderDistrict}
                     onChange={(e) => maj("senderDistrict", e.target.value)}
-                    placeholder="Comme la ville"
+                    placeholder="Sbata"
+                    name="speedaf-exp-district"
+                    autoComplete="off"
                     className={champ}
                   />
                 </Champ>
               </div>
+
+              <p className="-mt-1 text-[11px] text-gray-400">
+                Region et district doivent porter les noms du referentiel
+                Speedaf — pour Casablanca : region
+                <span className="font-mono"> CASABLANCA - SETTAT</span>, district
+                le quartier (<span className="font-mono">Sbata</span>,
+                <span className="font-mono"> MAARIF</span>...).
+              </p>
 
               <Champ label="Poids par defaut d'un colis (kg)">
                 <input
