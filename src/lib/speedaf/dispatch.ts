@@ -3,12 +3,11 @@ import type { Lead } from "@/components/dashboard/leads-data";
 import { amountValue, roundToTen } from "@/lib/amount";
 import { orderLines } from "@/lib/order-lines";
 import { parcelCatalogue } from "@/lib/supabase/products";
+import { createOrder, SpeedafError } from "./client";
 import {
-  createOrder,
-  speedafConfig,
-  SpeedafError,
-  type SpeedafSender,
-} from "./client";
+  getSpeedafSettings,
+  manquePourExpedier,
+} from "@/lib/supabase/speedaf-settings";
 import { NOUVEAU } from "./status";
 
 /**
@@ -26,25 +25,6 @@ import { NOUVEAU } from "./status";
  * changent pas d'une commande a l'autre, et les laisser saisir
  * garantirait qu'un jour un colis parte avec l'adresse d'un autre.
  */
-
-/** Poids par defaut d'un colis, en kilos, quand rien ne le precise. */
-const POIDS_PAR_DEFAUT = 0.5;
-
-function sender(): SpeedafSender | null {
-  const name = process.env.SPEEDAF_SENDER_NAME;
-  const mobile = process.env.SPEEDAF_SENDER_MOBILE;
-  const address = process.env.SPEEDAF_SENDER_ADDRESS;
-  const cityName = process.env.SPEEDAF_SENDER_CITY;
-  if (!name || !mobile || !address || !cityName) return null;
-  return {
-    name,
-    mobile,
-    address,
-    cityName,
-    provinceName: process.env.SPEEDAF_SENDER_PROVINCE || cityName,
-    districtName: process.env.SPEEDAF_SENDER_DISTRICT || cityName,
-  };
-}
 
 /**
  * Envoie la commande et rend les champs de suivi a enregistrer.
@@ -69,17 +49,12 @@ export async function dispatchToSpeedaf(
     | "customerNote"
   >
 ): Promise<Partial<Lead>> {
-  const config = speedafConfig();
-  if (!config) {
-    return { trackingError: "Identifiants Speedaf non configures." };
+  const config = await getSpeedafSettings();
+  const manque = manquePourExpedier(config);
+  if (!config || manque) {
+    return { trackingError: manque ?? "Identifiants Speedaf non configures." };
   }
-  const expediteur = sender();
-  if (!expediteur) {
-    return {
-      trackingError:
-        "Adresse d'expedition Speedaf manquante (SPEEDAF_SENDER_*).",
-    };
-  }
+  const expediteur = config.sender;
   if (!lead.ville?.trim()) {
     return { trackingError: "Ville manquante : Speedaf la refuserait." };
   }
@@ -113,7 +88,7 @@ export async function dispatchToSpeedaf(
       // sinon — il refuse un champ vide.
       acceptDistrictName: lead.quartier?.trim() || lead.ville,
       codFee: montant,
-      parcelWeight: Number(process.env.SPEEDAF_DEFAULT_WEIGHT) || POIDS_PAR_DEFAUT,
+      parcelWeight: config.weight,
       remark: lead.customerNote?.trim() || undefined,
       items: lignes.map((l) => ({
         sku: l.ref ?? l.name,

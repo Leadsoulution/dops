@@ -1,6 +1,7 @@
 import "server-only";
 import type { Lead } from "@/components/dashboard/leads-data";
-import { speedafConfig, trackParcels, type SpeedafTrack } from "./client";
+import { trackParcels, type SpeedafTrack } from "./client";
+import { getSpeedafSettings } from "@/lib/supabase/speedaf-settings";
 import { latestStatus } from "./status";
 
 /**
@@ -61,7 +62,7 @@ export async function collectSpeedafUpdates(leads: Lead[]): Promise<{
   error?: string;
 }> {
   const updates = new Map<string, Partial<Lead>>();
-  const config = speedafConfig();
+  const config = await getSpeedafSettings();
   if (!config) return { updates, checked: 0 };
 
   const suivis = leads.filter(

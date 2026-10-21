@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronRight, Loader2, X } from "lucide-react";
 import Toggle from "./Toggle";
+import SpeedafConnectModal from "./SpeedafConnectModal";
 import type { Integration } from "./integrations-data";
 import WooCommerceConnectModal from "./WooCommerceConnectModal";
 import GoogleSheetsConnectModal from "./GoogleSheetsConnectModal";
@@ -161,6 +162,10 @@ export default function ConnectIntegrationModal({
 
   if (integration.id === "forcelog") {
     return <ForceLogConnectModal integration={integration} onClose={onClose} />;
+  }
+
+  if (integration.id === "speedaf") {
+    return <SpeedafConnectModal onClose={onClose} />;
   }
 
   if (integration.id === "google-sheets") {
