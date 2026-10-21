@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createHmac } from "node:crypto";
 import { verifyWebhook } from "./client";
 
@@ -32,5 +32,49 @@ describe("verifyWebhook", () => {
   it("refuse une signature de longueur inattendue", () => {
     expect(verifyWebhook(cle, horodatage, corps, "hmac-sha256=abc")).toBe(false);
     expect(verifyWebhook(cle, horodatage, corps, "")).toBe(false);
+  });
+});
+
+describe("deballage des reponses", () => {
+  /*
+   * Speedaf emballe tantot une fois, tantot deux : la liste des
+   * regions revient en {success, data:{success, data:[...]}} alors que
+   * la creation d'un colis revient en {success, data:{billCode}}.
+   * Verifie sur leur environnement de test, et nulle part dans leur
+   * documentation.
+   */
+  function enveloppe(interne: unknown) {
+    return JSON.stringify({ success: true, error: null, data: interne });
+  }
+
+  it("rend la liste et non son enveloppe", async () => {
+    const regions = [{ code: "MAR00024", name: "CASABLANCA - SETTAT" }];
+    const faux = vi.fn(async () =>
+      new Response(enveloppe({ success: true, error: null, data: regions }))
+    );
+    vi.stubGlobal("fetch", faux);
+    const { getArea } = await import("./client");
+    await expect(
+      getArea(
+        { baseUrl: "https://x", appCode: "a", customerCode: "c", platformSource: "p" },
+        1
+      )
+    ).resolves.toEqual(regions);
+    vi.unstubAllGlobals();
+  });
+
+  it("laisse intacte une reponse emballee une seule fois", async () => {
+    const colis = { billCode: "MA020000031836", success: true, message: null };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(enveloppe(colis))));
+    const { printLabels } = await import("./client");
+    // `printLabels` lit `orderLabels` : une reponse sans ce champ rend
+    // une liste vide plutot que de se tromper d'etage.
+    await expect(
+      printLabels(
+        { baseUrl: "https://x", appCode: "a", customerCode: "c", platformSource: "p" },
+        ["X"]
+      )
+    ).resolves.toEqual([]);
+    vi.unstubAllGlobals();
   });
 });

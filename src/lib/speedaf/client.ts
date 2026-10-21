@@ -90,7 +90,39 @@ async function call<T>(
       corps.error?.code
     );
   }
-  return corps.data as T;
+  return deballe(corps.data, res.status) as T;
+}
+
+/**
+ * Certaines reponses sont emballees deux fois.
+ *
+ * La liste des regions revient en `{success, data: {success, data: [...]}}`
+ * alors que la creation d'un colis revient en `{success, data: {...}}`.
+ * Rien dans la documentation ne le dit ; c'est verifie sur leur
+ * environnement de test. Prendre `data` sans regarder rendait donc
+ * l'enveloppe au lieu du contenu, et la liste paraissait vide.
+ *
+ * On ne deballe que ce qui est reconnaissable comme une enveloppe —
+ * un objet qui porte `success` et `data` — pour ne pas eventrer une
+ * reponse qui contiendrait ces noms par hasard.
+ */
+function deballe(data: unknown, status: number): unknown {
+  if (
+    data &&
+    typeof data === "object" &&
+    !Array.isArray(data) &&
+    "success" in data &&
+    "data" in data
+  ) {
+    const interne = data as { success?: boolean; data?: unknown; message?: string };
+    if (interne.success === false) {
+      throw new SpeedafError(
+        interne.message ?? `Erreur Speedaf (HTTP ${status}).`
+      );
+    }
+    return interne.data;
+  }
+  return data;
 }
 
 /* ------------------------------------------------------------------ */
