@@ -2,7 +2,8 @@ import "server-only";
 import type { Lead } from "@/components/dashboard/leads-data";
 import { amountValue, roundToTen } from "@/lib/amount";
 import { orderLines } from "@/lib/order-lines";
-import { parcelCatalogue } from "@/lib/supabase/products";
+import { speedafCityFor } from "@/lib/supabase/carrier-cities";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { createOrder, SpeedafError } from "./client";
 import {
   getSpeedafSettings,
@@ -60,6 +61,22 @@ export async function dispatchToSpeedaf(
   }
 
   /*
+   * La ville, telle que Speedaf l'ecrit.
+   *
+   * Leur liste n'est pas la notre : ils desservent huit cent treize
+   * localites, dont la moitie nous est inconnue, et ignorent la moitie
+   * des notres. Envoyer notre orthographe ferait refuser le colis a
+   * l'adresse, ou pire, le ferait partir ailleurs. Une ville qu'ils
+   * ne connaissent pas est donc refusee ici, pas chez eux.
+   */
+  const villeSpeedaf = await speedafCityFor(lead.ville).catch(() => null);
+  if (!villeSpeedaf) {
+    return {
+      trackingError: `Speedaf ne dessert pas "${lead.ville}".`,
+    };
+  }
+
+  /*
    * Les articles, un par ligne.
    *
    * Le code article sert de `sku` : c'est ce que le preparateur lit sur
@@ -68,10 +85,43 @@ export async function dispatchToSpeedaf(
    * nom enregistre — mieux vaut un bordereau approximatif qu'un colis
    * refuse.
    */
-  let lignes = orderLines(lead, await parcelCatalogue().catch(() => []));
+  /*
+   * Le catalogue, avec sa propre reference.
+   *
+   * Le `sku` envoye a Speedaf est celui que porte le produit dans
+   * l'application — le meme que celui saisi dans leur entrepot. Le
+   * code ForceLog ne leur dirait rien.
+   */
+  const { data: produits } = await getSupabaseServerClient()
+    .from("products")
+    .select("ref,name,forcelog_ref,default_parcel_type");
+  const catalogue = ((produits ?? []) as {
+    ref: string;
+    name: string;
+    forcelog_ref: string | null;
+    default_parcel_type: string;
+  }[]).map((p) => ({
+    name: p.name,
+    forcelogRef: p.forcelog_ref ?? undefined,
+    defaultParcelType: (p.default_parcel_type === "stock" ? "stock" : "simple") as
+      | "stock"
+      | "simple",
+    ref: p.ref,
+  }));
+
+  let lignes = orderLines(lead, catalogue);
   if (lignes.length === 0) {
     lignes = [{ name: lead.productName || "Commande", qty: lead.itemCount ?? 1 }];
   }
+
+  const skuDe = (ligne: { name: string; ref?: string }) => {
+    const produit =
+      catalogue.find((p) => p.forcelogRef && p.forcelogRef === ligne.ref) ??
+      catalogue.find(
+        (p) => p.name.trim().toLowerCase() === ligne.name.trim().toLowerCase()
+      );
+    return produit?.ref ?? ligne.ref ?? ligne.name;
+  };
 
   const montant = roundToTen(amountValue(lead.amount) ?? 0);
   const unites = lignes.reduce((s, l) => s + l.qty, 0) || 1;
@@ -82,16 +132,16 @@ export async function dispatchToSpeedaf(
       acceptName: lead.client,
       acceptMobile: lead.phone,
       acceptAddress: lead.adresse?.trim() || lead.ville,
-      acceptProvinceName: lead.ville,
-      acceptCityName: lead.ville,
-      // Speedaf exige un district : le quartier quand on l'a, la ville
-      // sinon — il refuse un champ vide.
-      acceptDistrictName: lead.quartier?.trim() || lead.ville,
+      acceptProvinceName: villeSpeedaf.parentName ?? villeSpeedaf.name,
+      acceptCityName: villeSpeedaf.name,
+      // Speedaf exige un district : le quartier quand on l'a, leur nom
+      // de ville sinon — il refuse un champ vide.
+      acceptDistrictName: lead.quartier?.trim() || villeSpeedaf.name,
       codFee: montant,
       parcelWeight: config.weight,
       remark: lead.customerNote?.trim() || undefined,
       items: lignes.map((l) => ({
-        sku: l.ref ?? l.name,
+        sku: skuDe(l),
         goodsName: l.name,
         goodsQTY: l.qty,
         // Valeur unitaire declaree : le montant reparti sur les unites.

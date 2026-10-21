@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import SelectDropdown from "./SelectDropdown";
 import { moroccanCities, type Lead } from "./leads-data";
+import { CARRIERS, carrierOfLead, type CarrierId } from "@/lib/carriers/registry";
+import { normalizeCity } from "@/lib/carriers/city-match";
 import {
   orderFields,
   orderLines,
@@ -154,6 +156,20 @@ export default function EditOrderModal({
     lead.deliveryStatus ?? ""
   );
 
+  /*
+   * Le transporteur, et les villes qu'il dessert.
+   *
+   * Les deux listes ne se recouvrent pas : ForceLog livre des
+   * localites que Speedaf ignore, et l'inverse. Changer de
+   * transporteur sur une commande dont la ville n'est pas desservie
+   * donnerait un colis refuse au moment de l'envoi — et l'erreur
+   * n'apparaitrait qu'apres la confirmation. Elle s'affiche ici.
+   */
+  const [carrier, setCarrier] = useState<CarrierId>(carrierOfLead(lead.carrier));
+  const [villesDuTransporteur, setVillesDuTransporteur] = useState<Set<string> | null>(
+    null
+  );
+
   const [client, setClient] = useState(lead.client);
   const [phone, setPhone] = useState(lead.phone);
   const [ville, setVille] = useState(lead.ville ?? "");
@@ -228,6 +244,17 @@ export default function EditOrderModal({
         /* Catalogue vide : la commande reste modifiable. */
       });
 
+    fetch(`/api/carriers/cities?carrier=${carrier}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled || !Array.isArray(data.keys)) return;
+        setVillesDuTransporteur(new Set(data.keys as string[]));
+      })
+      .catch(() => {
+        // Liste indisponible : on n'invente pas un refus.
+        if (!cancelled) setVillesDuTransporteur(null);
+      });
+
     fetch("/api/cities")
       .then((res) => res.json())
       .then((data) => {
@@ -244,7 +271,7 @@ export default function EditOrderModal({
     return () => {
       cancelled = true;
     };
-  }, [productName, itemCount, stockItems, lignesMontage]);
+  }, [productName, itemCount, stockItems, lignesMontage, carrier]);
 
   async function save() {
     setError(null);
@@ -272,6 +299,7 @@ export default function EditOrderModal({
           quartier: quartier.trim(),
           adresse: adresse.trim(),
           amount: `${total.trim() || 0} MAD`,
+          ...(carrier !== carrierOfLead(lead.carrier) ? { carrier } : {}),
           // Corrige a la main : on enregistre aussi le code, dont
           // dependent la couleur du badge et le calcul des paiements.
           ...(deliveryStatus !== (lead.deliveryStatus ?? "")
@@ -307,6 +335,17 @@ export default function EditOrderModal({
       setSaving(false);
     }
   }
+
+  const transporteur = CARRIERS.find((c) => c.id === carrier) ?? CARRIERS[0];
+  /*
+   * Une ville n'est refusee que si la liste a pu etre lue : sans elle,
+   * on ne sait rien, et afficher un refus serait pire que se taire.
+   */
+  const villeRefusee = Boolean(
+    ville.trim() &&
+      villesDuTransporteur &&
+      !villesDuTransporteur.has(normalizeCity(ville))
+  );
 
   const filteredProducts = productQuery
     ? catalogProducts.filter((p) =>
@@ -401,6 +440,39 @@ export default function EditOrderModal({
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-800 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none"
                 />
               </div>
+              <div>
+                <label className="mb-1 block text-[12.5px] text-gray-600">
+                  Transporteur
+                </label>
+                <div className="flex gap-1.5">
+                  {CARRIERS.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setCarrier(c.id)}
+                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[12.5px] font-medium ${
+                        carrier === c.id
+                          ? "border-gray-900 bg-gray-50 text-gray-900"
+                          : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      <span
+                        className={`flex h-5 w-5 items-center justify-center rounded text-[9.5px] font-semibold ${c.logo.bg} ${c.logo.fg}`}
+                      >
+                        {c.logo.letter}
+                      </span>
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+                {lead.trackingNumber && (
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    Le colis est deja parti : changer de transporteur ne
+                    deplacera pas celui-la.
+                  </p>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-[12.5px] text-gray-600">
@@ -415,6 +487,12 @@ export default function EditOrderModal({
                     searchable
                     searchPlaceholder="Rechercher une ville..."
                   />
+                  {villeRefusee && (
+                    <p className="mt-1 flex items-start gap-1.5 text-[11.5px] font-medium text-red-600">
+                      <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+                      {transporteur.name} ne dessert pas {ville}.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="mb-1 block text-[12.5px] text-gray-600">
