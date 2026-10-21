@@ -1,0 +1,357 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+/**
+ * Client Speedaf (Open API v2).
+ *
+ * Trois choses a savoir avant de lire :
+ *
+ * 1. L'authentification passe par l'adresse, pas par un en-tete :
+ *    `?appCode=...&timestamp=...`, l'horodatage en millisecondes et
+ *    perime au bout de quelques minutes. Il est donc calcule a chaque
+ *    appel, jamais garde.
+ * 2. Le corps est toujours `{"data": ...}` envoye en `text/plain` —
+ *    c'est ce que fait leur propre exemple curl, et le serveur refuse
+ *    certaines requetes en `application/json`.
+ * 3. Rien n'est jamais vrai parce que la reponse est 200 : le succes se
+ *    lit dans `success`, et l'erreur dans `error.code` / `error.message`.
+ *    Meme piege que chez ForceLog.
+ *
+ * Les identifiants ne quittent pas le serveur : ce module ne doit
+ * jamais etre importe depuis un composant client.
+ */
+
+export class SpeedafError extends Error {
+  readonly code?: string;
+  constructor(message: string, code?: string) {
+    super(message);
+    this.name = "SpeedafError";
+    this.code = code;
+  }
+}
+
+export type SpeedafConfig = {
+  /** Adresse de base, production ou UAT. */
+  baseUrl: string;
+  appCode: string;
+  customerCode: string;
+  /** Nom de la plateforme, fourni par Speedaf. */
+  platformSource: string;
+  /** Cle de signature des notifications, fournie par Speedaf. */
+  secretKey?: string;
+};
+
+export const SPEEDAF_PROD = "https://apis.speedaf.com";
+export const SPEEDAF_UAT = "https://uat-api.speedaf.com";
+
+/** La configuration lue dans l'environnement, si elle y est complete. */
+export function speedafConfig(): SpeedafConfig | null {
+  const appCode = process.env.SPEEDAF_APP_CODE;
+  const customerCode = process.env.SPEEDAF_CUSTOMER_CODE;
+  if (!appCode || !customerCode) return null;
+  return {
+    baseUrl: process.env.SPEEDAF_BASE_URL || SPEEDAF_PROD,
+    appCode,
+    customerCode,
+    platformSource: process.env.SPEEDAF_PLATFORM_SOURCE || "Orderly",
+    secretKey: process.env.SPEEDAF_SECRET_KEY,
+  };
+}
+
+async function call<T>(
+  config: SpeedafConfig,
+  path: string,
+  data: unknown
+): Promise<T> {
+  const url = new URL(path, config.baseUrl);
+  url.searchParams.set("appCode", config.appCode);
+  url.searchParams.set("timestamp", String(Date.now()));
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: JSON.stringify({ data }),
+    });
+  } catch {
+    throw new SpeedafError("Impossible de joindre Speedaf (erreur reseau).");
+  }
+
+  let corps: { success?: boolean; error?: { code?: string; message?: string }; data?: T };
+  try {
+    corps = await res.json();
+  } catch {
+    throw new SpeedafError(`Reponse Speedaf invalide (HTTP ${res.status}).`);
+  }
+
+  if (!corps.success) {
+    throw new SpeedafError(
+      corps.error?.message ?? `Erreur Speedaf (HTTP ${res.status}).`,
+      corps.error?.code
+    );
+  }
+  return corps.data as T;
+}
+
+/* ------------------------------------------------------------------ */
+/* Colis                                                               */
+/* ------------------------------------------------------------------ */
+
+/** L'expediteur : notre depot. Speedaf l'exige a chaque colis. */
+export type SpeedafSender = {
+  name: string;
+  mobile: string;
+  address: string;
+  provinceName: string;
+  cityName: string;
+  districtName: string;
+};
+
+export type SpeedafOrder = {
+  /** Notre reference, pour retrouver la commande. */
+  customOrderNo: string;
+  acceptName: string;
+  acceptMobile: string;
+  acceptAddress: string;
+  acceptProvinceName: string;
+  acceptCityName: string;
+  acceptDistrictName: string;
+  /** Montant a encaisser, en dirhams. */
+  codFee: number;
+  /** Poids total du colis, en kilos. */
+  parcelWeight: number;
+  remark?: string;
+  /** Le client peut-il ouvrir le colis avant de payer ? */
+  allowOpen?: boolean;
+  items: {
+    sku: string;
+    goodsName: string;
+    goodsQTY: number;
+    goodsValue: number;
+  }[];
+};
+
+export type SpeedafParcel = {
+  billCode: string;
+  labelUrl?: string | null;
+  customerOrderNo?: string;
+};
+
+/**
+ * Cree un colis et rend son numero de bordereau.
+ *
+ * Les codes figes viennent des annexes de la documentation :
+ * PT01 express, DE01 livraison a domicile, TT01 route, ST01 expedition
+ * locale, PA02 reglement mensuel. Ils ne varient pas d'une commande a
+ * l'autre pour une livraison nationale en paiement a la livraison.
+ */
+export async function createOrder(
+  config: SpeedafConfig,
+  sender: SpeedafSender,
+  order: SpeedafOrder
+): Promise<SpeedafParcel> {
+  const data = {
+    customOrderNo: order.customOrderNo,
+    billCode: "",
+    customerCode: config.customerCode,
+    platformSource: config.platformSource,
+    parcelType: "PT01",
+    deliveryType: "DE01",
+    transportType: "TT01",
+    shipType: "ST01",
+    payMethod: "PA02",
+    isAllowOpen: order.allowOpen ? 1 : 0,
+    acceptName: order.acceptName.slice(0, 100),
+    acceptMobile: order.acceptMobile.slice(0, 20),
+    acceptAddress: order.acceptAddress.slice(0, 500),
+    acceptCountryCode: "MA",
+    acceptCountryName: "Morocco",
+    acceptProvinceName: order.acceptProvinceName,
+    acceptCityName: order.acceptCityName,
+    acceptDistrictName: order.acceptDistrictName,
+    sendName: sender.name,
+    sendAddress: sender.address,
+    sendMobile: sender.mobile,
+    sendCountryCode: "MA",
+    sendCountryName: "Morocco",
+    sendProvinceName: sender.provinceName,
+    sendCityName: sender.cityName,
+    sendDistrictName: sender.districtName,
+    parcelWeight: order.parcelWeight,
+    piece: 1,
+    goodsQTY: order.items.reduce((s, i) => s + i.goodsQTY, 0),
+    codFee: order.codFee,
+    currencyType: "MAD",
+    pickUpAging: 1,
+    remark: (order.remark ?? "").slice(0, 200),
+    itemList: order.items.map((i) => ({
+      sku: i.sku.slice(0, 50),
+      goodsName: i.goodsName.slice(0, 100),
+      goodsQTY: i.goodsQTY,
+      goodsValue: i.goodsValue,
+      currencyType: "MAD",
+      goodsType: "IT01",
+      blInsure: 0,
+      battery: 0,
+    })),
+  };
+
+  const reponse = await call<{
+    billCode?: string;
+    labelUrl?: string | null;
+    customerOrderNo?: string;
+    success?: boolean;
+    message?: string | null;
+  }>(config, "/open-api/express/order/v2/createOrder", data);
+
+  if (!reponse?.billCode) {
+    throw new SpeedafError(reponse?.message ?? "Colis refuse par Speedaf.");
+  }
+  return {
+    billCode: reponse.billCode,
+    labelUrl: reponse.labelUrl,
+    customerOrderNo: reponse.customerOrderNo,
+  };
+}
+
+/** Annule un colis. Speedaf repond colis par colis. */
+export async function cancelOrder(
+  config: SpeedafConfig,
+  billCode: string,
+  reason: string
+): Promise<void> {
+  const reponse = await call<
+    { billCode: string; success: boolean; message?: string }[]
+  >(config, "/open-api/express/order/v2/cancelOrder", [
+    { customerCode: config.customerCode, billCode, cancelReason: reason },
+  ]);
+  const ligne = reponse?.find((r) => r.billCode === billCode) ?? reponse?.[0];
+  if (ligne && !ligne.success) {
+    throw new SpeedafError(ligne.message ?? "Annulation refusee.");
+  }
+}
+
+export type SpeedafTrack = {
+  mailNo: string;
+  action: string;
+  subAction?: string;
+  actionName?: string;
+  msgEng?: string;
+  msgLoc?: string;
+  message?: string;
+  time: string;
+  /** Photo de la remise, quand le livreur en depose une. */
+  pictureUrl?: string;
+};
+
+/**
+ * Le suivi de plusieurs colis d'un coup.
+ *
+ * C'est l'avantage de Speedaf sur ForceLog, qui ne repond que d'un
+ * colis a la fois : une synchronisation de cinquante colis tient en un
+ * appel. La taille maximale de la liste n'etant pas documentee, on la
+ * decoupe par precaution.
+ */
+export async function trackParcels(
+  config: SpeedafConfig,
+  billCodes: string[],
+  tranche = 50
+): Promise<Map<string, SpeedafTrack[]>> {
+  const out = new Map<string, SpeedafTrack[]>();
+  for (let i = 0; i < billCodes.length; i += tranche) {
+    const lot = billCodes.slice(i, i + tranche);
+    const reponse = await call<{ mailNo: string; tracks: SpeedafTrack[] }[]>(
+      config,
+      "/open-api/express/track/v2/query",
+      { mailNoList: lot }
+    );
+    for (const colis of reponse ?? []) {
+      out.set(colis.mailNo, colis.tracks ?? []);
+    }
+  }
+  return out;
+}
+
+/**
+ * L'etiquette d'un colis, au format marocain.
+ *
+ * `labelType: 46` est le bordereau 10x10 propre au Maroc ; les deux
+ * autres formats sont des doubles feuilles qui ne tiennent pas sur les
+ * imprimantes d'etiquettes.
+ */
+export async function printLabels(
+  config: SpeedafConfig,
+  billCodes: string[]
+): Promise<{ waybillNo: string; labelUrl?: string; labelBase64?: string }[]> {
+  const reponse = await call<{
+    orderLabels?: { waybillNo: string; labelUrl?: string; labelBase64?: string }[];
+  }>(config, "/open-api/express/order/v2/print", {
+    waybillNoList: billCodes,
+    labelType: 46,
+    withLogo: true,
+  });
+  return reponse?.orderLabels ?? [];
+}
+
+/** Les regions du pays : 1 province, 2 ville, 3 district. */
+export function getArea(
+  config: SpeedafConfig,
+  type: 1 | 2 | 3,
+  parentCode = ""
+): Promise<{ code: string; name: string }[]> {
+  return call(config, "/open-api/common/area/v2/new/getArea", {
+    countryCode: "MA",
+    parentCode,
+    type,
+  });
+}
+
+/** L'arbre complet province / ville / district d'un pays. */
+export function getAreaTree(config: SpeedafConfig): Promise<
+  { code: string; name: string; type: number; children?: unknown[] }[]
+> {
+  return call(config, "/open-api/common/area/v2/getTreeByCountryCode", {
+    countryCode: "MA",
+  });
+}
+
+/** Abonne l'application aux notifications de suivi. */
+export function subscribeWebhook(
+  config: SpeedafConfig,
+  callbackUrl: string
+): Promise<unknown> {
+  return call(config, "/open-api/express/track/webhook/subscribe", {
+    customerCode: config.customerCode,
+    callbackUrl,
+    appCode: config.appCode,
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Notifications                                                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * La notification vient-elle bien de Speedaf ?
+ *
+ * Ils signent `timestamp + "\n" + corps` en HMAC-SHA256 avec la cle du
+ * compte. La verification porte sur le corps **brut** : reformater le
+ * JSON avant de signer donne une autre signature, et la notification
+ * serait rejetee a tort.
+ *
+ * La comparaison est a temps constant : comparer deux signatures avec
+ * `===` laisse fuir, par la duree, de quoi en fabriquer une.
+ */
+export function verifyWebhook(
+  secretKey: string,
+  timestamp: string,
+  rawBody: string,
+  signature: string
+): boolean {
+  const attendu = createHmac("sha256", secretKey)
+    .update(`${timestamp}\n${rawBody}`)
+    .digest("hex");
+  const recu = signature.replace(/^hmac-sha256=/i, "").trim().toLowerCase();
+  if (recu.length !== attendu.length) return false;
+  return timingSafeEqual(Buffer.from(recu), Buffer.from(attendu));
+}

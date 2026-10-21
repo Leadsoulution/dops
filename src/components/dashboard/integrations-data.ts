@@ -133,6 +133,20 @@ export const integrations: Integration[] = [
       "Creez des colis, suivez les livraisons et recuperez les etiquettes directement depuis Lead2Door.",
     logo: { letter: "FL", bg: "bg-orange-50", fg: "text-orange-600" },
   },
+  {
+    id: "speedaf",
+    name: "Speedaf",
+    subtitle: "Speedaf Express Maroc",
+    category: "shipping",
+    status: "Configuration en attente",
+    health: "Aucun run",
+    lastImport: 0,
+    lastSync: null,
+    connectedAt: null,
+    description:
+      "Deuxieme transporteur : creation de colis, suivi, etiquette 10x10 et notifications signees. La marchandise part de votre depot, Speedaf n'en detient pas.",
+    logo: { letter: "SP", bg: "bg-sky-50", fg: "text-sky-600" },
+  },
 ];
 
 export const alertPlatforms = integrations

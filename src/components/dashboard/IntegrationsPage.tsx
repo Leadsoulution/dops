@@ -15,6 +15,7 @@ import {
   Truck,
 } from "lucide-react";
 import ConnectIntegrationModal from "./ConnectIntegrationModal";
+import CarrierRoutingPanel from "./CarrierRoutingPanel";
 import { integrations, alertPlatforms, type Integration } from "./integrations-data";
 
 type TabKey = "toutes" | "leads" | "ads" | "shipping";
@@ -418,6 +419,10 @@ export default function IntegrationsPage() {
           );
         })}
       </div>
+
+      {/* La repartition n'a de sens qu'entre transporteurs : elle vit
+          dans leur onglet, au-dessus de leurs cartes. */}
+      {activeTab === "shipping" && <CarrierRoutingPanel />}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {visible.map((integration) => (
