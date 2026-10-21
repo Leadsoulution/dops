@@ -21,6 +21,7 @@ const PUBLIC_PATHS = [
   "/login",
   "/api/auth/login",
   "/api/forcelog/webhook",
+  "/api/speedaf/webhook",
   "/api/woocommerce/webhook",
 ];
 

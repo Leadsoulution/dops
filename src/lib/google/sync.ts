@@ -5,7 +5,8 @@ import { listLeads, updateLead } from "@/lib/supabase/leads";
 import { recordLeadChanges } from "@/lib/supabase/lead-events";
 import type { Lead, LeadStatus } from "@/components/dashboard/leads-data";
 import { leadStatusOptions } from "@/components/dashboard/leads-data";
-import { AUTO_DISPATCH_STATUS, dispatchToForceLog } from "@/lib/forcelog/dispatch";
+import { AUTO_DISPATCH_STATUS } from "@/lib/forcelog/dispatch";
+import { dispatchLead } from "@/lib/carriers/dispatch";
 import {
   ensureSheetExists,
   isSheetsConfigured,
@@ -130,7 +131,7 @@ export async function syncSheet(): Promise<SheetSyncResult> {
     // la feuille resterait chez nous sans que personne s'en apercoive.
     if (statut === AUTO_DISPATCH_STATUS && !updated.trackingNumber) {
       const avantEnvoi = updated;
-      updated = await updateLead(updated.id, await dispatchToForceLog(updated));
+      updated = await updateLead(updated.id, await dispatchLead(updated));
       await recordLeadChanges(avantEnvoi, updated, { name: "ForceLog" });
     }
 

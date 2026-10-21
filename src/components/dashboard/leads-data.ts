@@ -117,6 +117,8 @@ export type Lead = {
   parcelType?: "simple" | "stock";
   /** References prelevees pour un colis de stock, format "ref:qte,ref:qte". */
   stockItems?: string;
+  /** Transporteur qui a pris le colis. Vide : ForceLog, le premier. */
+  carrier?: string;
   /**
    * Consigne du client sur la livraison, ex. "livrer apres 19H".
    * Transmise au transporteur dans le champ COMMENT du colis, a sa

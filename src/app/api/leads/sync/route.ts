@@ -3,6 +3,8 @@ import { listLeads, updateLead } from "@/lib/supabase/leads";
 import { recordLeadChanges } from "@/lib/supabase/lead-events";
 import { isSupabaseServerConfigured } from "@/lib/supabase/server";
 import { collectStatusUpdates, collectDeliverers } from "@/lib/forcelog/dispatch";
+import { collectSpeedafUpdates } from "@/lib/speedaf/sync";
+import { carrierOfLead } from "@/lib/carriers/registry";
 import { retryPending } from "@/lib/webhooks/send";
 
 /**
@@ -18,11 +20,32 @@ export async function POST() {
 
   try {
     const leads = await listLeads();
-    const { updates, checked, error } = await collectStatusUpdates(leads);
 
+    /*
+     * Les deux transporteurs sont interroges de front.
+     *
+     * Ils n'ont rien en commun : ForceLog repond d'un colis a la fois
+     * et se rattrape sur plusieurs passages, Speedaf rend cinquante
+     * colis en un appel. Les lancer ensemble evite d'ajouter l'attente
+     * de l'un a celle de l'autre.
+     */
+    const [forcelog, speedaf] = await Promise.all([
+      collectStatusUpdates(leads.filter((l) => carrierOfLead(l.carrier) === "forcelog")),
+      collectSpeedafUpdates(leads),
+    ]);
+
+    const { checked } = forcelog;
+    // Un transporteur en panne ne doit pas empecher l'autre de
+    // repondre : l'erreur n'est rendue que si rien n'a abouti.
+    const error = forcelog.error && speedaf.error ? forcelog.error : undefined;
     if (error) {
       return NextResponse.json({ error, checked }, { status: 502 });
     }
+
+    const updates = new Map([...forcelog.updates, ...speedaf.updates]);
+    const transporteurDe = new Map(
+      leads.map((l) => [l.id, carrierOfLead(l.carrier) === "speedaf" ? "Speedaf" : "ForceLog"])
+    );
 
     const updated = await Promise.all(
       [...updates.entries()].map(async ([id, changes]) => {
@@ -31,7 +54,11 @@ export async function POST() {
         // Le transporteur signe ses propres changements : lire "Par
         // ForceLog" dans l'historique evite de croire qu'un collegue a
         // touche au statut de livraison.
-        if (avant) await recordLeadChanges(avant, apres, { name: "ForceLog" });
+        if (avant) {
+          await recordLeadChanges(avant, apres, {
+            name: transporteurDe.get(id) ?? "ForceLog",
+          });
+        }
         return apres;
       })
     );

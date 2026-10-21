@@ -3,7 +3,8 @@ import { deleteLead, listLeads, updateLead } from "@/lib/supabase/leads";
 import { isSupabaseServerConfigured } from "@/lib/supabase/server";
 import { getSessionProfile } from "@/lib/supabase/auth";
 import { recordLeadChanges } from "@/lib/supabase/lead-events";
-import { dispatchToForceLog, shouldDispatch } from "@/lib/forcelog/dispatch";
+import { shouldDispatch } from "@/lib/forcelog/dispatch";
+import { dispatchLead } from "@/lib/carriers/dispatch";
 
 function notConfigured() {
   return NextResponse.json(
@@ -40,7 +41,7 @@ export async function PATCH(
     // ville refusee au premier essai.
     if (shouldDispatch(lead)) {
       const avantEnvoi = lead;
-      lead = await updateLead(id, await dispatchToForceLog(lead));
+      lead = await updateLead(id, await dispatchLead(lead));
       await recordLeadChanges(avantEnvoi, lead, { name: "ForceLog" });
     }
 

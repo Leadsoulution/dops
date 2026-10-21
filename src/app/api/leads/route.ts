@@ -3,7 +3,8 @@ import { createLead, listLeads, updateLead, updateLeads } from "@/lib/supabase/l
 import { isSupabaseServerConfigured } from "@/lib/supabase/server";
 import { getSessionProfile } from "@/lib/supabase/auth";
 import { recordLeadChanges } from "@/lib/supabase/lead-events";
-import { dispatchToForceLog, shouldDispatch } from "@/lib/forcelog/dispatch";
+import { shouldDispatch } from "@/lib/forcelog/dispatch";
+import { dispatchLead } from "@/lib/carriers/dispatch";
 
 function notConfigured() {
   return NextResponse.json(
@@ -95,7 +96,7 @@ export async function PATCH(request: NextRequest) {
     if (aEnvoyer.length > 0) {
       const dispatched = await Promise.all(
         aEnvoyer.map(async (lead) =>
-          updateLead(lead.id, await dispatchToForceLog(lead))
+          updateLead(lead.id, await dispatchLead(lead))
         )
       );
       await Promise.all(

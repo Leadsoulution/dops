@@ -46,6 +46,7 @@ type LeadRow = {
   delivery_date: string | null;
   parcel_type: string | null;
   stock_items: string | null;
+  carrier: string | null;
   customer_note: string | null;
   restocked_at: string | null;
   woo_order_id: number | null;
@@ -88,6 +89,7 @@ function toLead(row: LeadRow, campagnes?: Map<string, string>): Lead {
     deliveryDate: row.delivery_date ?? undefined,
     parcelType: (row.parcel_type as Lead["parcelType"]) ?? "simple",
     stockItems: row.stock_items ?? undefined,
+    carrier: row.carrier ?? undefined,
     customerNote: row.customer_note ?? undefined,
     restockedAt: row.restocked_at ?? undefined,
     wooOrderId: row.woo_order_id ?? undefined,
@@ -141,6 +143,7 @@ export function toRow(lead: Partial<Lead>): Partial<LeadRow> {
     row.delivery_date = lead.deliveryDate || null;
   if (lead.parcelType !== undefined) row.parcel_type = lead.parcelType;
   if (lead.stockItems !== undefined) row.stock_items = lead.stockItems ?? null;
+  if (lead.carrier !== undefined) row.carrier = lead.carrier || null;
   if (lead.customerNote !== undefined)
     row.customer_note = lead.customerNote || null;
   if (lead.restockedAt !== undefined)
@@ -154,7 +157,7 @@ export function toRow(lead: Partial<Lead>): Partial<LeadRow> {
 }
 
 const COLUMNS =
-  "id,reference,product_label,product_name,item_count,client,phone,source,assigned_to,amount,status,shipping,date,ville,tarif,quartier,adresse,tracking_number,tracking_error,delivery_status,delivery_status_code,payment_status,deliverer,deliverer_phone,delivery_date,parcel_type,stock_items,customer_note,restocked_at,woo_order_id,utm_source,utm_medium,utm_campaign,utm_content,last_modified_by,last_modified_at";
+  "id,reference,product_label,product_name,item_count,client,phone,source,assigned_to,amount,status,shipping,date,ville,tarif,quartier,adresse,tracking_number,tracking_error,delivery_status,delivery_status_code,payment_status,deliverer,deliverer_phone,delivery_date,parcel_type,stock_items,carrier,customer_note,restocked_at,woo_order_id,utm_source,utm_medium,utm_campaign,utm_content,last_modified_by,last_modified_at";
 
 export async function listLeads(): Promise<Lead[]> {
   const supabase = getSupabaseServerClient();
