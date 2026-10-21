@@ -42,6 +42,7 @@ export default function CreateProductModal({
   const [quantity, setQuantity] = useState("0");
   const [reorderThreshold, setReorderThreshold] = useState("0");
   const [forcelogRef, setForcelogRef] = useState("");
+  const [speedafSku, setSpeedafSku] = useState("");
   const [wooSku, setWooSku] = useState("");
   const [parcelType, setParcelType] = useState<"simple" | "stock">("simple");
   const [saving, setSaving] = useState(false);
@@ -108,6 +109,7 @@ export default function CreateProductModal({
           status,
           image: image ?? undefined,
           forcelogRef: forcelogRef.trim(),
+          speedafSku: speedafSku.trim(),
           wooSku: wooSku.trim(),
           defaultParcelType: forcelogRef.trim() ? parcelType : "simple",
         }),
@@ -322,6 +324,22 @@ export default function CreateProductModal({
                   placeholder="LOR-ROSE-V2"
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-[13px] text-gray-800 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none"
                 />
+              </div>
+              <div>
+                <label className="mb-1 block text-[12.5px] text-gray-600">
+                  SKU Speedaf
+                </label>
+                <input
+                  type="text"
+                  value={speedafSku}
+                  onChange={(e) => setSpeedafSku(e.target.value)}
+                  placeholder="Comme le SKU WooCommerce"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-[13px] text-gray-800 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none"
+                />
+                <p className="mt-1 text-[11.5px] text-gray-400">
+                  Le code de ce produit dans l&apos;entrepot Speedaf. Vide, le
+                  SKU WooCommerce est envoye a sa place.
+                </p>
               </div>
               <ParcelTypePicker
                 value={parcelType}

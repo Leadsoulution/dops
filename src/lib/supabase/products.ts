@@ -26,6 +26,8 @@ export type StockProduct = {
   forcelogRef?: string;
   /** SKU de la boutique WooCommerce. */
   wooSku?: string;
+  /** Code du produit dans l'entrepot Speedaf. */
+  speedafSku?: string;
   /**
    * Comment ce produit part par defaut :
    * - "simple" : expedie depuis notre depot
@@ -52,6 +54,7 @@ type ProductRow = {
   barcode: string | null;
   forcelog_ref: string | null;
   woo_sku: string | null;
+  speedaf_sku: string | null;
   default_parcel_type: string;
   quantity: number;
   waiting_quantity: number;
@@ -66,7 +69,7 @@ type ProductRow = {
 };
 
 const COLUMNS =
-  "id,ref,name,product_name,barcode,forcelog_ref,woo_sku,default_parcel_type,quantity,waiting_quantity,image,supplier,price_sale,cost_supplier,reorder_threshold,status,source,updated_at";
+  "id,ref,name,product_name,barcode,forcelog_ref,woo_sku,speedaf_sku,default_parcel_type,quantity,waiting_quantity,image,supplier,price_sale,cost_supplier,reorder_threshold,status,source,updated_at";
 
 function toProduct(row: ProductRow): StockProduct {
   return {
@@ -77,6 +80,7 @@ function toProduct(row: ProductRow): StockProduct {
     barcode: row.barcode ?? undefined,
     forcelogRef: row.forcelog_ref ?? undefined,
     wooSku: row.woo_sku ?? undefined,
+    speedafSku: row.speedaf_sku ?? undefined,
     defaultParcelType: row.default_parcel_type === "stock" ? "stock" : "simple",
     quantity: row.quantity,
     waitingQuantity: row.waiting_quantity,
@@ -98,6 +102,7 @@ export type ProductInput = {
   barcode?: string;
   forcelogRef?: string;
   wooSku?: string;
+  speedafSku?: string;
   defaultParcelType?: "simple" | "stock";
   supplier?: string;
   priceSale?: number;
@@ -121,6 +126,9 @@ function toRow(input: Partial<ProductInput>) {
   if (input.barcode !== undefined) row.barcode = input.barcode || null;
   if (input.forcelogRef !== undefined) row.forcelog_ref = input.forcelogRef || null;
   if (input.wooSku !== undefined) row.woo_sku = input.wooSku || null;
+  if (input.speedafSku !== undefined) {
+    row.speedaf_sku = input.speedafSku || null;
+  }
   if (input.defaultParcelType !== undefined) {
     row.default_parcel_type = input.defaultParcelType;
   }
@@ -518,6 +526,7 @@ export async function mergeIntoCarrierProduct(
     .from("products")
     .update({
       woo_sku: source.wooSku ?? target.wooSku ?? null,
+      speedaf_sku: source.speedafSku ?? target.speedafSku ?? null,
       // On ne remplace que ce qui manquait : le travail deja saisi sur la
       // fiche transporteur prime.
       price_sale: target.priceSale || source.priceSale,

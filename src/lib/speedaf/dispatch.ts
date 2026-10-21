@@ -94,11 +94,13 @@ export async function dispatchToSpeedaf(
    */
   const { data: produits } = await getSupabaseServerClient()
     .from("products")
-    .select("ref,name,forcelog_ref,default_parcel_type");
+    .select("ref,name,forcelog_ref,woo_sku,speedaf_sku,default_parcel_type");
   const catalogue = ((produits ?? []) as {
     ref: string;
     name: string;
     forcelog_ref: string | null;
+    woo_sku: string | null;
+    speedaf_sku: string | null;
     default_parcel_type: string;
   }[]).map((p) => ({
     name: p.name,
@@ -107,6 +109,10 @@ export async function dispatchToSpeedaf(
       | "stock"
       | "simple",
     ref: p.ref,
+    // Le code de ce produit chez Speedaf, puis celui de la boutique :
+    // la plupart des produits y sont crees sous leur SKU WooCommerce,
+    // et seuls ceux qui en different ont besoin du premier.
+    sku: p.speedaf_sku || p.woo_sku || p.ref,
   }));
 
   let lignes = orderLines(lead, catalogue);
@@ -120,7 +126,7 @@ export async function dispatchToSpeedaf(
       catalogue.find(
         (p) => p.name.trim().toLowerCase() === ligne.name.trim().toLowerCase()
       );
-    return produit?.ref ?? ligne.ref ?? ligne.name;
+    return produit?.sku ?? ligne.ref ?? ligne.name;
   };
 
   const montant = roundToTen(amountValue(lead.amount) ?? 0);
