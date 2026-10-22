@@ -23,6 +23,14 @@ import { actualShares, normalizeShares } from "@/lib/carriers/routing";
 
 type Routing = { default: CarrierId; shares: Record<CarrierId, number> };
 
+type ProduitRouting = {
+  id: string;
+  ref: string;
+  name: string;
+  shares: Record<string, number> | null;
+  counts: Record<CarrierId, number>;
+};
+
 const nf = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 0 });
 
 export default function CarrierRoutingPanel() {
@@ -31,6 +39,7 @@ export default function CarrierRoutingPanel() {
     forcelog: 0,
     speedaf: 0,
   });
+  const [produits, setProduits] = useState<ProduitRouting[] | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -50,10 +59,50 @@ export default function CarrierRoutingPanel() {
       .catch(() => {
         if (!cancelled) setError("Repartition indisponible.");
       });
+    fetch("/api/carriers/products")
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled && Array.isArray(d.products)) setProduits(d.products);
+      })
+      .catch(() => {
+        if (!cancelled) setProduits([]);
+      });
+
     return () => {
       cancelled = true;
     };
   }, []);
+
+  /**
+   * Pose la repartition d'un produit, ou le remet sous la regle
+   * generale quand `shares` est nul.
+   */
+  async function enregistrerProduit(
+    productId: string,
+    shares: Record<string, number> | null
+  ) {
+    setProduits(
+      (prev) =>
+        prev?.map((p) => (p.id === productId ? { ...p, shares } : p)) ?? prev
+    );
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/carriers/products", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId, shares }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Enregistrement refuse.");
+      if (Array.isArray(body.products)) setProduits(body.products);
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur inattendue.");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   useEffect(() => {
     if (!saved) return;
@@ -220,6 +269,128 @@ export default function CarrierRoutingPanel() {
               ) : null
             )}
           </div>
+          {/* Produit par produit : un article qui n'est en stock que
+              chez l'un doit partir chez lui, quoi que dise la regle
+              generale. */}
+          <div className="mt-4 border-t border-gray-100 pt-3">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+              Par produit
+            </p>
+            {!produits ? (
+              <p className="flex items-center gap-2 py-3 text-[12px] text-gray-500">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Lecture des produits...
+              </p>
+            ) : produits.length === 0 ? (
+              <p className="py-3 text-[12px] text-gray-400">Aucun produit.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {produits.map((p) => {
+                  const propre = p.shares;
+                  const effectives = propre ?? routing.shares;
+                  const partis = CARRIERS.reduce(
+                    (s, c) => s + (p.counts[c.id] ?? 0),
+                    0
+                  );
+                  return (
+                    <div
+                      key={p.id}
+                      className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 px-2.5 py-2"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[12.5px] text-gray-800">
+                          {p.name}
+                        </p>
+                        <p className="truncate font-mono text-[11px] text-gray-400">
+                          {p.ref}
+                          {partis > 0 && (
+                            <span className="ml-1.5 font-sans">
+                              {CARRIERS.filter((c) => p.counts[c.id])
+                                .map(
+                                  (c) =>
+                                    `${c.name} ${Math.round(
+                                      ((p.counts[c.id] ?? 0) / partis) * 100
+                                    )}%`
+                                )
+                                .join(" · ")}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+
+                      {CARRIERS.map((c) => (
+                        <span
+                          key={c.id}
+                          className="flex shrink-0 items-center gap-1"
+                          title={`${c.name} : part voulue`}
+                        >
+                          <span
+                            className={`flex h-5 w-5 items-center justify-center rounded text-[9.5px] font-semibold ${c.logo.bg} ${c.logo.fg}`}
+                          >
+                            {c.logo.letter}
+                          </span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={effectives[c.id] ?? 0}
+                            onChange={(e) =>
+                              setProduits(
+                                (prev) =>
+                                  prev?.map((x) =>
+                                    x.id === p.id
+                                      ? {
+                                          ...x,
+                                          shares: {
+                                            ...(x.shares ?? routing.shares),
+                                            [c.id]: Math.max(
+                                              0,
+                                              Math.min(
+                                                100,
+                                                Number(e.target.value) || 0
+                                              )
+                                            ),
+                                          },
+                                        }
+                                      : x
+                                  ) ?? prev
+                              )
+                            }
+                            onBlur={() =>
+                              void enregistrerProduit(
+                                p.id,
+                                produits.find((x) => x.id === p.id)?.shares ?? null
+                              )
+                            }
+                            className={`w-14 rounded-md border px-1.5 py-1 text-center font-mono text-[12px] focus:border-blue-400 focus:outline-none ${
+                              propre
+                                ? "border-gray-300 text-gray-800"
+                                : "border-gray-200 text-gray-400"
+                            }`}
+                          />
+                        </span>
+                      ))}
+
+                      <button
+                        type="button"
+                        onClick={() => void enregistrerProduit(p.id, null)}
+                        disabled={!propre}
+                        title="Suivre la repartition generale"
+                        className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-medium ${
+                          propre
+                            ? "border border-gray-300 text-gray-600 hover:bg-gray-100"
+                            : "text-gray-400"
+                        }`}
+                      >
+                        {propre ? "Reinitialiser" : "Regle generale"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           <p className="mt-1.5 text-[11.5px] text-gray-400">
             {CARRIERS.filter((c) => voulues[c.id])
               .map((c) => `${c.name} ${nf.format(voulues[c.id])}%`)

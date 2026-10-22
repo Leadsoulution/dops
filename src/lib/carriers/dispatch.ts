@@ -2,7 +2,7 @@ import "server-only";
 import type { Lead } from "@/components/dashboard/leads-data";
 import { dispatchToForceLog } from "@/lib/forcelog/dispatch";
 import { dispatchToSpeedaf } from "@/lib/speedaf/dispatch";
-import { nextCarrier } from "@/lib/supabase/carriers";
+import { nextCarrierForProduct } from "@/lib/supabase/carriers";
 import { carrierOfLead, type CarrierId } from "./registry";
 
 /**
@@ -37,7 +37,7 @@ export async function dispatchLead(
 ): Promise<Partial<Lead>> {
   const choisi: CarrierId = lead.carrier
     ? carrierOfLead(lead.carrier)
-    : await nextCarrier().catch(() => "forcelog" as CarrierId);
+    : await nextCarrierForProduct(lead).catch(() => "forcelog" as CarrierId);
 
   if (choisi === "speedaf") {
     const resultat = await dispatchToSpeedaf(lead);

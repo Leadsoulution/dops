@@ -29,6 +29,11 @@ export type StockProduct = {
   /** Code du produit dans l'entrepot Speedaf. */
   speedafSku?: string;
   /**
+   * Repartition propre a ce produit, en pourcentage par transporteur.
+   * Absente, le produit suit la repartition generale.
+   */
+  carrierShares?: Record<string, number>;
+  /**
    * Comment ce produit part par defaut :
    * - "simple" : expedie depuis notre depot
    * - "stock"  : preleve dans le depot du transporteur
@@ -55,6 +60,7 @@ type ProductRow = {
   forcelog_ref: string | null;
   woo_sku: string | null;
   speedaf_sku: string | null;
+  carrier_shares: Record<string, number> | null;
   default_parcel_type: string;
   quantity: number;
   waiting_quantity: number;
@@ -69,7 +75,7 @@ type ProductRow = {
 };
 
 const COLUMNS =
-  "id,ref,name,product_name,barcode,forcelog_ref,woo_sku,speedaf_sku,default_parcel_type,quantity,waiting_quantity,image,supplier,price_sale,cost_supplier,reorder_threshold,status,source,updated_at";
+  "id,ref,name,product_name,barcode,forcelog_ref,woo_sku,speedaf_sku,carrier_shares,default_parcel_type,quantity,waiting_quantity,image,supplier,price_sale,cost_supplier,reorder_threshold,status,source,updated_at";
 
 function toProduct(row: ProductRow): StockProduct {
   return {
@@ -81,6 +87,7 @@ function toProduct(row: ProductRow): StockProduct {
     forcelogRef: row.forcelog_ref ?? undefined,
     wooSku: row.woo_sku ?? undefined,
     speedafSku: row.speedaf_sku ?? undefined,
+    carrierShares: row.carrier_shares ?? undefined,
     defaultParcelType: row.default_parcel_type === "stock" ? "stock" : "simple",
     quantity: row.quantity,
     waitingQuantity: row.waiting_quantity,
@@ -103,6 +110,7 @@ export type ProductInput = {
   forcelogRef?: string;
   wooSku?: string;
   speedafSku?: string;
+  carrierShares?: Record<string, number> | null;
   defaultParcelType?: "simple" | "stock";
   supplier?: string;
   priceSale?: number;
@@ -128,6 +136,9 @@ function toRow(input: Partial<ProductInput>) {
   if (input.wooSku !== undefined) row.woo_sku = input.wooSku || null;
   if (input.speedafSku !== undefined) {
     row.speedaf_sku = input.speedafSku || null;
+  }
+  if (input.carrierShares !== undefined) {
+    row.carrier_shares = input.carrierShares ?? null;
   }
   if (input.defaultParcelType !== undefined) {
     row.default_parcel_type = input.defaultParcelType;
