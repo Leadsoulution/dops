@@ -44,6 +44,21 @@ describe("delivererFrom", () => {
     ).toEqual({ name: "Ejalonibu Wahab", phone: "09025119825" });
   });
 
+  it("lit le livreur dans un message reel, en francais", () => {
+    // Releve sur un colis de production : le message nomme le hub,
+    // l'operateur, puis le livreur et son numero. C'est le dernier nom
+    // qui porte le colis.
+    expect(
+      delivererFrom([
+        {
+          action: "4",
+          message:
+            "【Hub Ouazazate 4】 a scanne pour livraison, l'operateur est 【Rachid】, le livreur est 【ABDESSAMAD MELLOUKI】【0676919588】",
+        },
+      ])
+    ).toEqual({ name: "ABDESSAMAD MELLOUKI", phone: "0676919588" });
+  });
+
   it("ne rend rien sans message exploitable", () => {
     expect(delivererFrom([])).toBeUndefined();
     expect(delivererFrom([{ action: "5" }])).toBeUndefined();
