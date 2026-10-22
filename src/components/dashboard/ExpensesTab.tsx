@@ -20,6 +20,7 @@ import {
   PLATFORMS,
   monthlyAmount,
   type Expense,
+  type ExpenseType,
 } from "@/lib/finance/expense-types";
 
 /**
@@ -82,8 +83,21 @@ function parMois(e: Expense): string {
 export default function ExpensesTab({
   /** Previent la page que les charges ont bouge : le profit en depend. */
   onChanged,
+  /**
+   * Nature affichee. Absente, la section les montre toutes.
+   *
+   * Un loyer, un budget publicitaire et trois dirhams d'emballage ne
+   * se decident pas au meme moment et ne se comparent pas : chacun a
+   * sa section, et n'y voit que ses semblables.
+   */
+  type,
+  titre,
+  sousTitre,
 }: {
   onChanged?: () => void;
+  type?: ExpenseType;
+  titre?: string;
+  sousTitre?: string;
 } = {}) {
   const [expenses, setExpenses] = useState<Expense[] | null>(null);
   const [products, setProducts] = useState<{ id: string; name: string }[]>([]);
@@ -177,6 +191,7 @@ export default function ExpensesTab({
   }
 
   const liste = (expenses ?? []).filter((e) => {
+    if (type && e.type !== type) return false;
     if (fType && fType !== TOUS && TYPE_LABELS[e.type] !== fType) return false;
     if (fCategorie && fCategorie !== TOUS && e.category !== fCategorie) return false;
     if (fPlateforme && fPlateforme !== TOUS && e.platform !== fPlateforme) return false;
@@ -188,19 +203,41 @@ export default function ExpensesTab({
     ...new Set((expenses ?? []).map((e) => e.startDate.slice(0, 7))),
   ].sort((a, b) => b.localeCompare(a));
 
-  const totalMensuel = liste
-    .filter((e) => e.isActive && (e.type === "fixe" || e.type === "variable"))
-    .reduce((s, e) => s + monthlyAmount(e.amountMad, e.periodicity), 0);
+  /*
+   * Le total de la section, avec son unite.
+   *
+   * Elles ne s'additionnent pas : soixante-dix dirhams par commande et
+   * quatre mille dirhams de publicite ne font pas quatre mille
+   * soixante-dix. Chaque nature porte donc la sienne, et il n'y a pas
+   * de total general.
+   */
+  const actives = liste.filter((e) => e.isActive);
+  const total = actives.reduce(
+    (s, e) =>
+      s +
+      (e.type === "fixe" || e.type === "variable"
+        ? monthlyAmount(e.amountMad, e.periodicity)
+        : e.amountMad),
+    0
+  );
+  const unite =
+    type === "par_commande"
+      ? "DH par commande"
+      : type === "fixe" || type === "variable"
+        ? "DH par mois"
+        : "DH";
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 px-5 py-4">
         <div>
-          <p className="text-h3 font-semibold text-gray-900">Charges</p>
+          <p className="text-h3 font-semibold text-gray-900">
+            {titre ?? "Charges"}
+          </p>
           <p className="text-[12.5px] text-gray-500">
             {liste.length} charge{liste.length > 1 ? "s" : ""}
-            {totalMensuel > 0 &&
-              ` — ${nf.format(totalMensuel)} MAD de recurrent par mois`}
+            {total > 0 && ` — ${nf.format(total)} ${unite}`}
+            {sousTitre && ` · ${sousTitre}`}
           </p>
         </div>
         <button
@@ -213,13 +250,15 @@ export default function ExpensesTab({
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 px-5 py-3">
-        <SelectDropdown
-          variant="chip"
-          pinnedLabel="Type"
-          options={[TOUS, ...EXPENSE_TYPES.map((t) => t.label)]}
-          value={fType ?? undefined}
-          onSelect={setFType}
-        />
+        {!type && (
+          <SelectDropdown
+            variant="chip"
+            pinnedLabel="Type"
+            options={[TOUS, ...EXPENSE_TYPES.map((t) => t.label)]}
+            value={fType ?? undefined}
+            onSelect={setFType}
+          />
+        )}
         <SelectDropdown
           variant="chip"
           pinnedLabel="Categorie"
@@ -274,133 +313,81 @@ export default function ExpensesTab({
         </div>
       )}
 
-      {/*
-        Une colonne par nature de charge.
-        Une liste unique melangeait un loyer, un budget publicitaire et
-        trois dirhams d'emballage : trois choses qui ne se comparent
-        pas, ne se decident pas au meme moment et ne se verifient pas
-        de la meme facon. Chacune a desormais sa colonne et son total.
-      */}
       {expenses && liste.length > 0 && (
-        <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">
-          {EXPENSE_TYPES.filter(
-            (t) => !fType || fType === TOUS || t.label === fType
-          ).map((t) => {
-            const colonne = liste.filter((e) => e.type === t.value);
-            const total = colonne
-              .filter((e) => e.isActive)
-              .reduce(
-                (somme, e) =>
-                  somme +
-                  (e.type === "fixe" || e.type === "variable"
-                    ? monthlyAmount(e.amountMad, e.periodicity)
-                    : e.amountMad),
-                0
-              );
-            const parUnite = t.value === "par_commande";
-            return (
-              <div
-                key={t.value}
-                className="flex flex-col overflow-hidden rounded-xl border border-gray-200"
-              >
-                <div className="flex items-start justify-between gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2">
-                  <div className="min-w-0">
-                    <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-gray-800">
-                      <span
-                        className={`rounded px-1.5 py-0.5 text-[11px] ${TYPE_COULEURS[t.value]}`}
-                      >
-                        {t.label}
-                      </span>
-                      <span className="font-normal text-gray-400">
-                        {colonne.length}
-                      </span>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[840px] text-left">
+            <thead>
+              <tr className="border-b border-gray-100 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                <th className="px-5 py-3">Libelle</th>
+                <th className="px-3 py-3">Type</th>
+                <th className="px-3 py-3 text-right">Montant</th>
+                <th className="px-3 py-3">Equivalent</th>
+                <th className="px-3 py-3">Periode</th>
+                <th className="px-3 py-3 w-32">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {liste.map((e) => (
+                <tr
+                  key={e.id}
+                  className={`border-b border-gray-50 text-[13px] last:border-0 ${
+                    e.isActive ? "text-gray-700" : "bg-gray-50/60 text-gray-400"
+                  }`}
+                >
+                  <td className="px-5 py-3">
+                    <p className="font-medium text-gray-800">{e.label}</p>
+                    <p className="text-[11.5px] text-gray-400">
+                      {detail(e) || e.category || "—"}
                     </p>
-                  </div>
-                  {colonne.length > 0 && (
-                    <p className="shrink-0 text-right font-mono text-[12.5px] font-semibold text-gray-900">
-                      {nf.format(total)}
-                      <span className="ml-1 font-sans text-[10.5px] font-normal text-gray-400">
-                        {parUnite
-                          ? "DH / commande"
-                          : t.value === "fixe" || t.value === "variable"
-                            ? "DH / mois"
-                            : "DH"}
-                      </span>
-                    </p>
-                  )}
-                </div>
-
-                {colonne.length === 0 ? (
-                  <p className="px-3 py-6 text-center text-[11.5px] text-gray-400">
-                    Aucune charge
-                  </p>
-                ) : (
-                  <ul className="divide-y divide-gray-50">
-                    {colonne.map((e) => (
-                      <li
-                        key={e.id}
-                        className={`px-3 py-2 ${e.isActive ? "" : "bg-gray-50/60"}`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p
-                              className={`truncate text-[12.5px] font-medium ${
-                                e.isActive ? "text-gray-800" : "text-gray-400"
-                              }`}
-                            >
-                              {e.label}
-                            </p>
-                            <p className="truncate text-[11px] text-gray-400">
-                              {detail(e) || e.category || "—"}
-                            </p>
-                          </div>
-                          <p
-                            className={`shrink-0 text-right font-mono text-[12.5px] ${
-                              e.isActive ? "text-gray-900" : "text-gray-400"
-                            }`}
-                          >
-                            {nf.format(e.amountMad)}
-                            <span className="block font-sans text-[10.5px] text-gray-400">
-                              {/* Une charge annuelle ne se compare pas a
-                                  une mensuelle : on montre les deux. */}
-                              {e.type === "fixe" || e.type === "variable"
-                                ? parMois(e)
-                                : e.startDate}
-                            </span>
-                          </p>
-                        </div>
-                        <div className="mt-1 flex items-center gap-0.5">
-                          <Action
-                            title="Modifier"
-                            onClick={() => setModal({ expense: e })}
-                            icon={<Pencil className="h-3.5 w-3.5" />}
-                          />
-                          <Action
-                            title="Dupliquer"
-                            onClick={() => dupliquer(e)}
-                            icon={<Copy className="h-3.5 w-3.5" />}
-                          />
-                          <Action
-                            title={e.isActive ? "Desactiver" : "Reactiver"}
-                            onClick={() => void basculer(e)}
-                            busy={busy === e.id}
-                            icon={<Power className="h-3.5 w-3.5" />}
-                            tone={e.isActive ? "" : "text-emerald-600"}
-                          />
-                          <Action
-                            title="Supprimer"
-                            onClick={() => setASupprimer(e)}
-                            icon={<Trash2 className="h-3.5 w-3.5" />}
-                            tone="text-red-600"
-                          />
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            );
-          })}
+                  </td>
+                  <td className="px-3 py-3">
+                    <span
+                      className={`rounded-md px-2 py-0.5 text-[11.5px] font-medium ${TYPE_COULEURS[e.type]}`}
+                    >
+                      {TYPE_LABELS[e.type]}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3 text-right font-mono font-medium text-gray-900">
+                    {nf.format(e.amountMad)}
+                  </td>
+                  <td className="px-3 py-3 font-mono text-[12px] text-gray-500">
+                    {parMois(e)}
+                  </td>
+                  <td className="px-3 py-3 font-mono text-[12px] text-gray-500">
+                    {e.startDate}
+                    {e.endDate && e.endDate !== e.startDate && ` → ${e.endDate}`}
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="flex items-center gap-1">
+                      <Action
+                        title="Modifier"
+                        onClick={() => setModal({ expense: e })}
+                        icon={<Pencil className="h-3.5 w-3.5" />}
+                      />
+                      <Action
+                        title="Dupliquer"
+                        onClick={() => dupliquer(e)}
+                        icon={<Copy className="h-3.5 w-3.5" />}
+                      />
+                      <Action
+                        title={e.isActive ? "Desactiver" : "Reactiver"}
+                        onClick={() => void basculer(e)}
+                        busy={busy === e.id}
+                        icon={<Power className="h-3.5 w-3.5" />}
+                        tone={e.isActive ? "" : "text-emerald-600"}
+                      />
+                      <Action
+                        title="Supprimer"
+                        onClick={() => setASupprimer(e)}
+                        icon={<Trash2 className="h-3.5 w-3.5" />}
+                        tone="text-red-600"
+                      />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -408,6 +395,9 @@ export default function ExpensesTab({
         <AddExpenseModal
           expense={modal.expense?.id ? modal.expense : (modal.expense ?? null)}
           products={products}
+          // Dans une section dediee, la nature est deja choisie : la
+          // redemander n'ajoute qu'une occasion de se tromper.
+          lockType={modal.expense?.id ? undefined : type}
           onClose={() => setModal(null)}
           onSaved={() => void load()}
         />

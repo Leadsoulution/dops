@@ -187,6 +187,61 @@ const TYPE_CARDS: {
   },
 ];
 
+/**
+ * Les sections de la page.
+ *
+ * Chaque nature de charge a la sienne, comme la publicite avait deja
+ * la sienne : un loyer, un budget publicitaire et trois dirhams
+ * d'emballage ne se decident pas au meme moment, et les melanger dans
+ * une liste unique obligeait a filtrer pour retrouver les siens.
+ */
+type Onglet =
+  | "vue-ensemble"
+  | "publicite"
+  | "par_commande"
+  | "fixe"
+  | "variable"
+  | "ponctuelle"
+  | "depenses"
+  | "rentabilite";
+
+const ONGLETS: { key: Onglet; label: string }[] = [
+  { key: "vue-ensemble", label: "Vue d'ensemble" },
+  { key: "publicite", label: "Publicite" },
+  { key: "par_commande", label: "Par commande" },
+  { key: "fixe", label: "Fixes" },
+  { key: "variable", label: "Variables" },
+  { key: "ponctuelle", label: "Ponctuelles" },
+  { key: "depenses", label: "Toutes les charges" },
+  { key: "rentabilite", label: "Rentabilite" },
+];
+
+/** Ce que chaque section de charges annonce. */
+const SECTIONS: Partial<
+  Record<Onglet, { type: ExpenseType; titre: string; sousTitre: string }>
+> = {
+  par_commande: {
+    type: "par_commande",
+    titre: "Charges par commande",
+    sousTitre: "emballage, confirmation, livraison",
+  },
+  fixe: {
+    type: "fixe",
+    titre: "Charges fixes",
+    sousTitre: "loyer, salaires, abonnements",
+  },
+  variable: {
+    type: "variable",
+    titre: "Charges variables",
+    sousTitre: "electricite, carburant, internet",
+  },
+  ponctuelle: {
+    type: "ponctuelle",
+    titre: "Depenses ponctuelles",
+    sousTitre: "une fois, a leur date",
+  },
+};
+
 const TYPE_LABELS: Record<ExpenseType, string> = {
   par_commande: "Par commande",
   fixe: "Fixe",
@@ -196,9 +251,7 @@ const TYPE_LABELS: Record<ExpenseType, string> = {
 };
 
 export default function FinancePage() {
-  const [activeTab, setActiveTab] = useState<
-    "vue-ensemble" | "publicite" | "depenses" | "rentabilite"
-  >("vue-ensemble");
+  const [activeTab, setActiveTab] = useState<Onglet>("vue-ensemble");
   const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
   // "Maximum" par defaut, comme les autres pages : le profit total se
@@ -477,47 +530,22 @@ export default function FinancePage() {
         })}
       </div>
 
-      <div className="mb-4 flex items-center gap-6 border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab("vue-ensemble")}
-          className={`whitespace-nowrap border-b-2 pb-2.5 text-[13.5px] transition-colors ${
-            activeTab === "vue-ensemble"
-              ? "border-gray-900 font-semibold text-gray-900"
-              : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          Vue d&apos;ensemble
-        </button>
-        <button
-          onClick={() => setActiveTab("publicite")}
-          className={`whitespace-nowrap border-b-2 pb-2.5 text-[13.5px] transition-colors ${
-            activeTab === "publicite"
-              ? "border-gray-900 font-semibold text-gray-900"
-              : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          Publicite
-        </button>
-        <button
-          onClick={() => setActiveTab("depenses")}
-          className={`whitespace-nowrap border-b-2 pb-2.5 text-[13.5px] transition-colors ${
-            activeTab === "depenses"
-              ? "border-gray-900 font-semibold text-gray-900"
-              : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          Depenses
-        </button>
-        <button
-          onClick={() => setActiveTab("rentabilite")}
-          className={`whitespace-nowrap border-b-2 pb-2.5 text-[13.5px] transition-colors ${
-            activeTab === "rentabilite"
-              ? "border-gray-900 font-semibold text-gray-900"
-              : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          Rentabilite
-        </button>
+      {/* Huit sections : la barre defile plutot que de se replier sur
+          un petit ecran. */}
+      <div className="scrollbar-hide mb-4 flex items-center gap-6 overflow-x-auto border-b border-gray-200">
+        {ONGLETS.map((o) => (
+          <button
+            key={o.key}
+            onClick={() => setActiveTab(o.key)}
+            className={`whitespace-nowrap border-b-2 pb-2.5 text-[13.5px] transition-colors ${
+              activeTab === o.key
+                ? "border-gray-900 font-semibold text-gray-900"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
       </div>
 
       {activeTab === "vue-ensemble" && (
@@ -588,6 +616,17 @@ export default function FinancePage() {
         ) : (
           <AdsSpendLoading />
         ))}
+
+      {/* Une section par nature de charge : elle n'y voit que les
+          siennes, et le bouton d'ajout ouvre deja la bonne. */}
+      {SECTIONS[activeTab] && (
+        <ExpensesTab
+          type={SECTIONS[activeTab]!.type}
+          titre={SECTIONS[activeTab]!.titre}
+          sousTitre={SECTIONS[activeTab]!.sousTitre}
+          onChanged={() => setVersion((v) => v + 1)}
+        />
+      )}
 
       {activeTab === "depenses" && (
         <ExpensesTab onChanged={() => setVersion((v) => v + 1)} />
