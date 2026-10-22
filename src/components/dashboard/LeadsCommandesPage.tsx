@@ -60,6 +60,7 @@ import {
   type Lead,
   type LeadStatus,
 } from "./leads-data";
+import { carrierInfo, carrierOfLead } from "@/lib/carriers/registry";
 import { displayAmount } from "@/lib/amount";
 import { clientFlags } from "@/lib/client-history";
 import {
@@ -81,8 +82,33 @@ import SelectDropdown from "./SelectDropdown";
 import ConfirmDialog from "./ConfirmDialog";
 import DateRangeCalendar from "./DateRangeCalendar";
 
-/** Transporteur integre a l'application. */
-const CARRIER_NAME = "ForceLog";
+/**
+ * Le transporteur d'une commande, tel qu'il s'affiche.
+ *
+ * Il se lit sur la commande, jamais sur une constante : depuis que
+ * Speedaf en prend une part, afficher "ForceLog" partout enverrait
+ * chercher un colis chez qui ne l'a jamais eu. Une commande sans
+ * transporteur ni numero de suivi n'est partie chez personne : elle
+ * n'affiche rien plutot qu'un nom devine.
+ */
+function CarrierBadge({ lead, compact }: { lead: Lead; compact?: boolean }) {
+  if (!lead.trackingNumber && !lead.carrier) {
+    return compact ? (
+      <span />
+    ) : (
+      <span className="text-[12px] text-gray-300">&mdash;</span>
+    );
+  }
+  const { name, logo } = carrierInfo(carrierOfLead(lead.carrier));
+  return (
+    <span
+      className={`flex w-fit items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 font-medium ${logo.bg} ${logo.fg} ${compact ? "text-[11.5px]" : "text-[12px]"}`}
+    >
+      <Truck className="h-3 w-3" />
+      {name}
+    </span>
+  );
+}
 
 /**
  * Commandes affichees d'un coup.
@@ -1419,14 +1445,7 @@ export default function LeadsCommandesPage() {
                     })()}
                   </td>
                   <td className="whitespace-nowrap px-3 py-3">
-                    {lead.trackingNumber ? (
-                      <span className="flex w-fit items-center gap-1 rounded-md bg-orange-50 px-2 py-1 text-[12px] font-medium text-orange-600">
-                        <Truck className="h-3 w-3" />
-                        {CARRIER_NAME}
-                      </span>
-                    ) : (
-                      <span className="text-[12px] text-gray-300">&mdash;</span>
-                    )}
+                    <CarrierBadge lead={lead} />
                   </td>
                   <td className="whitespace-nowrap px-3 py-3">
                     {sendingToForceLog.has(lead.id) ? (
@@ -1630,14 +1649,7 @@ export default function LeadsCommandesPage() {
               </div>
 
               <div className="mb-2 flex items-center justify-between">
-                {lead.trackingNumber ? (
-                  <span className="flex items-center gap-1 rounded-md bg-orange-50 px-2 py-1 text-[11.5px] font-medium text-orange-600">
-                    <Truck className="h-3 w-3" />
-                    {CARRIER_NAME}
-                  </span>
-                ) : (
-                  <span />
-                )}
+                <CarrierBadge lead={lead} compact />
                 <span className="font-mono text-[16px] font-semibold text-gray-900">
                   {displayAmount(lead.amount)}
                 </span>
