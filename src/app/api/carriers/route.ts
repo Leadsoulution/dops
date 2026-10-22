@@ -86,8 +86,24 @@ export async function PUT(request: NextRequest) {
     );
   }
 
+  // Le tarif de livraison de chacun : il s'affiche sur la commande et
+  // ne depend que du transporteur.
+  const actuel = await getCarrierRouting();
+  const tariffs = { ...actuel.tariffs };
+  for (const id of connus) {
+    const valeur = Number(corps.tariffs?.[id]);
+    if (corps.tariffs?.[id] === undefined) continue;
+    if (!Number.isFinite(valeur) || valeur < 0 || valeur > 10000) {
+      return NextResponse.json(
+        { error: `Tarif invalide pour ${id}.` },
+        { status: 400 }
+      );
+    }
+    tariffs[id] = Math.round(valeur * 100) / 100;
+  }
+
   try {
-    await saveCarrierRouting({ default: corps.default, shares });
+    await saveCarrierRouting({ default: corps.default, shares, tariffs });
     return NextResponse.json(await getCarrierRouting().then((routing) => ({ routing })));
   } catch (error) {
     return NextResponse.json(

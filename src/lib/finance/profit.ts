@@ -41,6 +41,8 @@ export type OrderFact = {
   returned: boolean;
   /** Produits du catalogue qu'elle contient. */
   productIds: string[];
+  /** Transporteur qui l'a prise. */
+  carrier?: string;
   /** Encaisse a la remise, arrondi comme l'application l'affiche. */
   revenue: number;
 };
@@ -209,6 +211,19 @@ function concerne(fact: OrderFact, productId?: string): boolean {
 }
 
 /**
+ * La charge vise-t-elle le transporteur de cette commande ?
+ *
+ * Une charge sans transporteur les vise tous les deux : c'est le cas
+ * courant, et l'etat de toutes celles saisies avant qu'il y en ait
+ * deux. Une commande sans transporteur enregistre est partie chez
+ * ForceLog, le premier.
+ */
+function concerneTransporteur(fact: OrderFact, carrier?: string): boolean {
+  if (!carrier) return true;
+  return (fact.carrier ?? "forcelog") === carrier;
+}
+
+/**
  * Ce qu'une charge a coute sur la periode.
  *
  * Trois regimes, parce que trois natures de depense :
@@ -247,6 +262,7 @@ export function expenseOnPeriod(
     const orders = facts.filter((f) => {
       if (!matchesStatus(f, applies)) return false;
       if (!concerne(f, expense.productId)) return false;
+      if (!concerneTransporteur(f, expense.appliesToCarrier)) return false;
       const j = dayOf(f);
       return j >= from && j <= to && j >= debut && j <= fin;
     }).length;
@@ -391,6 +407,7 @@ export function adResults(
           const n = cohorte.filter((f) => {
             if (!matchesStatus(f, applies)) return false;
             if (!concerne(f, charge.productId)) return false;
+            if (!concerneTransporteur(f, charge.appliesToCarrier)) return false;
             const j = dayOf(f);
             return j >= charge.startDate && j <= chargeFin;
           }).length;

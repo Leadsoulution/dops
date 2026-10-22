@@ -56,6 +56,11 @@ function detail(e: Expense): string {
   if (e.type === "par_commande" && e.appliesToStatus) {
     bouts.push(`sur commandes ${e.appliesToStatus}s`.replace("toutess", "toutes"));
   }
+  // Le transporteur vise se lit dans la liste : deux charges du meme
+  // nom, l'une a 33 et l'autre a 25, ne se distinguent que par lui.
+  if (e.appliesToCarrier) {
+    bouts.push(e.appliesToCarrier === "speedaf" ? "Speedaf" : "ForceLog");
+  }
   if (e.periodicity) bouts.push(e.periodicity);
   if (e.platform) bouts.push(e.platform);
   if (e.productName) bouts.push(e.productName);

@@ -4,11 +4,13 @@ import { useState } from "react";
 import { AlertCircle, Loader2, Receipt, X } from "lucide-react";
 import SelectDropdown from "./SelectDropdown";
 import {
+  APPLIES_CARRIER,
   APPLIES_TO,
   EXPENSE_CATEGORIES,
   EXPENSE_TYPES,
   PLATFORMS,
   toMad,
+  type AppliesCarrier,
   type AppliesTo,
   type Expense,
   type ExpenseInput,
@@ -63,6 +65,9 @@ export default function AddExpenseModal({
   const [appliesTo, setAppliesTo] = useState<AppliesTo>(
     expense?.appliesToStatus ?? "livree"
   );
+  const [appliesCarrier, setAppliesCarrier] = useState<AppliesCarrier | "">(
+    expense?.appliesToCarrier ?? ""
+  );
   const [periodicity, setPeriodicity] = useState<Periodicity>(
     expense?.periodicity ?? "mensuelle"
   );
@@ -99,6 +104,7 @@ export default function AddExpenseModal({
         currency: pub ? currency : "MAD",
         exchangeRate: pub ? taux : 1,
         appliesToStatus: parCommande ? appliesTo : undefined,
+        appliesToCarrier: appliesCarrier || null,
         periodicity: recurrente ? periodicity : undefined,
         platform: pub ? (platform ?? undefined) : undefined,
         productId: parCommande || pub ? productId : null,
@@ -249,6 +255,37 @@ export default function AddExpenseModal({
               </div>
             </Champ>
           )}
+
+          {/*
+            Le transporteur vise.
+            Les deux ne facturent pas pareil — trente-trois dirhams de
+            livraison chez l'un, vingt-cinq chez l'autre — et certains
+            frais n'existent que chez l'un des deux.
+          */}
+          <Champ label="Transporteur concerne">
+            <div className="space-y-1">
+              {APPLIES_CARRIER.map((c) => (
+                <button
+                  key={c.value || "tous"}
+                  onClick={() => setAppliesCarrier(c.value)}
+                  className={`flex w-full items-baseline gap-2 rounded-lg border px-2.5 py-1.5 text-left text-[12.5px] ${
+                    appliesCarrier === c.value
+                      ? "border-blue-500 bg-blue-50 text-blue-800"
+                      : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                  }`}
+                >
+                  <span className="font-medium">{c.label}</span>
+                </button>
+              ))}
+            </div>
+            {!parCommande && appliesCarrier && (
+              <p className="mt-1 text-[11.5px] text-gray-500">
+                Sur une charge qui ne se compte pas par commande, le
+                transporteur sert a retrouver la depense, pas a filtrer un
+                calcul.
+              </p>
+            )}
+          </Champ>
 
           {recurrente && (
             <Champ label="Periodicite *">

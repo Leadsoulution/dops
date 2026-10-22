@@ -54,6 +54,7 @@ type LeadRow = {
   tracking_number: string | null;
   delivery_status_code: string | null;
   delivery_date: string | null;
+  carrier: string | null;
 };
 
 type ProductRow = { id: string; name: string; forcelog_ref: string | null };
@@ -118,6 +119,7 @@ function toFact(
     delivered,
     returned: FAILED.has(code),
     productIds: produitsDe(row, catalogue),
+    carrier: row.carrier ?? "forcelog",
     /*
      * Le prix de la commande, tel qu'il a ete vendu.
      *
@@ -150,7 +152,7 @@ export async function getFinanceOverview(
       supabase
         .from("leads")
         .select(
-          "created_at,status,amount,product_name,stock_items,tracking_number,delivery_status_code,delivery_date"
+          "created_at,status,amount,product_name,stock_items,tracking_number,delivery_status_code,delivery_date,carrier"
         )
         .order("created_at", { ascending: true })
     ),

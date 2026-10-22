@@ -28,6 +28,7 @@ type Row = {
   exchange_rate: string | number;
   amount_mad: string | number;
   applies_to_status: Expense["appliesToStatus"] | null;
+  applies_to_carrier: Expense["appliesToCarrier"] | null;
   product_id: string | null;
   periodicity: Expense["periodicity"] | null;
   platform: string | null;
@@ -40,7 +41,7 @@ type Row = {
 
 const CHAMPS =
   "id,type,label,category,note,amount,currency,exchange_rate,amount_mad," +
-  "applies_to_status,product_id,periodicity,platform,start_date,end_date," +
+  "applies_to_status,applies_to_carrier,product_id,periodicity,platform,start_date,end_date," +
   "is_active,created_by,created_at";
 
 const nombre = (v: string | number) => Number(v) || 0;
@@ -70,6 +71,7 @@ function toExpense(row: Row, produits: Map<string, string>): Expense {
     exchangeRate: nombre(row.exchange_rate),
     amountMad: nombre(row.amount_mad),
     appliesToStatus: row.applies_to_status ?? undefined,
+    appliesToCarrier: row.applies_to_carrier ?? undefined,
     productId: row.product_id ?? undefined,
     productName: row.product_id ? produits.get(row.product_id) : undefined,
     periodicity: row.periodicity ?? undefined,
@@ -117,6 +119,10 @@ function champsDuType(input: ExpenseInput) {
   const { type } = input;
   return {
     applies_to_status: type === "par_commande" ? (input.appliesToStatus ?? "livree") : null,
+    // Le transporteur vise, quelle que soit la nature : une charge
+    // peut ne concerner qu'un seul des deux, par commande comme au
+    // mois.
+    applies_to_carrier: input.appliesToCarrier || null,
     product_id:
       type === "par_commande" || type === "publicite" ? (input.productId ?? null) : null,
     periodicity:

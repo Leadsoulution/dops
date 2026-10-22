@@ -1,5 +1,7 @@
 import { getSupabaseServerClient } from "./server";
 import { imageOfOrder, productImageIndex } from "@/lib/product-image";
+import { getCarrierRouting } from "./carriers";
+import { carrierOfLead } from "@/lib/carriers/registry";
 import { fetchAll } from "./page";
 import { emit } from "@/lib/webhooks/send";
 import { cityKey, tariffByCityForm } from "./cities";
@@ -275,18 +277,27 @@ async function withProductImages(leads: Lead[]): Promise<Lead[]> {
 async function withCityTariffs(leads: Lead[]): Promise<Lead[]> {
   if (!leads.some((l) => !l.tarif && l.ville)) return leads;
 
-  let tariffs: Map<string, number>;
-  try {
-    tariffs = await tariffByCityForm();
-  } catch {
-    // Dictionnaire indisponible : afficher les commandes sans tarif vaut
-    // mieux que ne pas les afficher du tout.
-    return leads;
-  }
+  /*
+   * Le tarif depend d'abord du transporteur.
+   *
+   * Les deux ne facturent pas la meme livraison : vingt-cinq dirhams
+   * chez l'un, trente-trois chez l'autre, partout au Maroc. Le
+   * dictionnaire des villes, lui, porte les tarifs de ForceLog, ville
+   * par ville — il reste la reference quand aucun tarif de
+   * transporteur n'est connu.
+   */
+  const [tariffs, routing] = await Promise.all([
+    tariffByCityForm().catch(() => null),
+    getCarrierRouting().catch(() => null),
+  ]);
+  // Dictionnaire et reglages indisponibles : afficher les commandes
+  // sans tarif vaut mieux que ne pas les afficher du tout.
+  if (!tariffs && !routing) return leads;
 
   return leads.map((lead) => {
     if (lead.tarif || !lead.ville) return lead;
-    const tariff = tariffs.get(cityKey(lead.ville));
+    const parTransporteur = routing?.tariffs?.[carrierOfLead(lead.carrier)];
+    const tariff = parTransporteur ?? tariffs?.get(cityKey(lead.ville));
     return tariff === undefined ? lead : { ...lead, tarif: `${tariff} MAD` };
   });
 }

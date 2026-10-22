@@ -81,6 +81,22 @@ export const APPLIES_TO: { value: AppliesTo; label: string; hint: string }[] = [
   { value: "toutes", label: "Toutes les commandes", hint: "y compris les faux numeros" },
 ];
 
+/**
+ * Le transporteur vise par une charge.
+ *
+ * Les deux ne coutent pas la meme chose : trente-trois dirhams de
+ * livraison chez l'un, vingt-cinq chez l'autre, et des frais que l'un
+ * facture quand l'autre non. Une charge sans transporteur vise les
+ * deux — c'est le cas courant, et l'etat d'avant.
+ */
+export type AppliesCarrier = "forcelog" | "speedaf";
+
+export const APPLIES_CARRIER: { value: AppliesCarrier | ""; label: string }[] = [
+  { value: "", label: "Les deux transporteurs" },
+  { value: "forcelog", label: "ForceLog seulement" },
+  { value: "speedaf", label: "Speedaf seulement" },
+];
+
 export type Periodicity = "mensuelle" | "annuelle";
 
 export const PLATFORMS = ["Facebook", "Instagram", "TikTok", "Google", "Snapchat", "Autre"];
@@ -108,6 +124,8 @@ export type Expense = {
   exchangeRate: number;
   amountMad: number;
   appliesToStatus?: AppliesTo;
+  /** Transporteur vise. Absent : les deux. */
+  appliesToCarrier?: AppliesCarrier;
   productId?: string;
   /** Nom du produit vise, pour l'affichage seul. */
   productName?: string;
@@ -130,6 +148,7 @@ export type ExpenseInput = {
   currency?: string;
   exchangeRate?: number;
   appliesToStatus?: AppliesTo;
+  appliesToCarrier?: AppliesCarrier | null;
   productId?: string | null;
   periodicity?: Periodicity;
   platform?: string;

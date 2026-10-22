@@ -21,7 +21,11 @@ import { actualShares, normalizeShares } from "@/lib/carriers/routing";
  * envois echouaient.
  */
 
-type Routing = { default: CarrierId; shares: Record<CarrierId, number> };
+type Routing = {
+  default: CarrierId;
+  shares: Record<CarrierId, number>;
+  tariffs: Record<CarrierId, number>;
+};
 
 type ProduitRouting = {
   id: string;
@@ -226,6 +230,30 @@ export default function CarrierRoutingPanel() {
                     <Star className={`h-3 w-3 ${estDefaut ? "fill-white" : ""}`} />
                     {estDefaut ? "Par defaut" : "Definir par defaut"}
                   </button>
+
+                  {/* Ce que coute une livraison chez lui : c'est ce
+                      tarif qui s'affiche sur la commande. */}
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.5"
+                      value={routing.tariffs?.[c.id] ?? 0}
+                      onChange={(e) =>
+                        setRouting({
+                          ...routing,
+                          tariffs: {
+                            ...routing.tariffs,
+                            [c.id]: Math.max(0, Number(e.target.value) || 0),
+                          },
+                        })
+                      }
+                      onBlur={() => void enregistrer(routing)}
+                      title="Tarif de livraison, affiche sur la commande"
+                      className="w-16 rounded-md border border-gray-200 px-2 py-1 text-center font-mono text-[12.5px] text-gray-800 focus:border-blue-400 focus:outline-none"
+                    />
+                    <span className="text-[12.5px] text-gray-500">DH</span>
+                  </div>
 
                   <div className="flex shrink-0 items-center gap-1.5">
                     <input

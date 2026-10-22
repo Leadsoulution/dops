@@ -464,3 +464,88 @@ describe("resolveAdWindows", () => {
     expect(jour1.expenses).toBe(200);
   });
 });
+
+describe("charges par transporteur", () => {
+  /*
+   * Les deux transporteurs ne facturent pas pareil : 33 dirhams de
+   * livraison chez l'un, 25 chez l'autre. Une charge peut donc ne
+   * viser que l'un des deux, et une charge sans transporteur les vise
+   * tous les deux — l'etat de toutes celles saisies avant qu'il y en
+   * ait deux.
+   */
+  const chezForcelog = commande({
+    createdDay: "2026-10-20",
+    delivered: true,
+    confirmed: true,
+    revenue: 200,
+    carrier: "forcelog",
+  });
+  const chezSpeedaf = { ...chezForcelog, carrier: "speedaf" };
+  const periode = ["2026-10-01", "2026-10-31"] as const;
+
+  it("ne compte une charge ForceLog que sur les colis ForceLog", () => {
+    const ligne = expenseOnPeriod(
+      charge({
+        type: "par_commande",
+        amountMad: 33,
+        appliesToStatus: "livree",
+        appliesToCarrier: "forcelog",
+        startDate: "2026-10-01",
+      }),
+      [chezForcelog, chezSpeedaf, chezSpeedaf],
+      ...periode
+    );
+    expect(ligne).toMatchObject({ orders: 1, amount: 33 });
+  });
+
+  it("compte la charge Speedaf sur ses seuls colis", () => {
+    const ligne = expenseOnPeriod(
+      charge({
+        type: "par_commande",
+        amountMad: 25,
+        appliesToStatus: "livree",
+        appliesToCarrier: "speedaf",
+        startDate: "2026-10-01",
+      }),
+      [chezForcelog, chezSpeedaf, chezSpeedaf],
+      ...periode
+    );
+    expect(ligne).toMatchObject({ orders: 2, amount: 50 });
+  });
+
+  it("vise les deux quand aucun transporteur n'est choisi", () => {
+    const ligne = expenseOnPeriod(
+      charge({
+        type: "par_commande",
+        amountMad: 10,
+        appliesToStatus: "livree",
+        startDate: "2026-10-01",
+      }),
+      [chezForcelog, chezSpeedaf],
+      ...periode
+    );
+    expect(ligne).toMatchObject({ orders: 2, amount: 20 });
+  });
+
+  it("range une commande sans transporteur chez ForceLog", () => {
+    // Les 1 100 commandes d'avant n'en portent pas : elles sont toutes
+    // parties chez le premier transporteur.
+    const ancienne = commande({
+      createdDay: "2026-10-20",
+      delivered: true,
+      revenue: 200,
+    });
+    const ligne = expenseOnPeriod(
+      charge({
+        type: "par_commande",
+        amountMad: 33,
+        appliesToStatus: "livree",
+        appliesToCarrier: "forcelog",
+        startDate: "2026-10-01",
+      }),
+      [ancienne],
+      ...periode
+    );
+    expect(ligne).toMatchObject({ orders: 1, amount: 33 });
+  });
+});

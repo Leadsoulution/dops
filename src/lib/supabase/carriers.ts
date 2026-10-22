@@ -33,11 +33,20 @@ export type CarrierRouting = {
   default: CarrierId;
   /** Part voulue de chacun, en pourcentage. */
   shares: Record<CarrierId, number>;
+  /**
+   * Ce que coute une livraison chez chacun, en dirhams.
+   *
+   * C'est ce qui s'affiche sur la commande : le tarif depend du
+   * transporteur qui la porte, pas de la ville — 25 chez l'un, 33 chez
+   * l'autre, partout au Maroc.
+   */
+  tariffs: Record<CarrierId, number>;
 };
 
 export const REPARTITION_INITIALE: CarrierRouting = {
   default: CARRIER_PAR_DEFAUT,
   shares: { forcelog: 100, speedaf: 0 },
+  tariffs: { forcelog: 33, speedaf: 25 },
 };
 
 type Stocke = Record<string, string>;
@@ -48,14 +57,17 @@ export async function getCarrierRouting(): Promise<CarrierRouting> {
   if (!brut || Object.keys(brut).length === 0) return REPARTITION_INITIALE;
 
   const shares = { ...REPARTITION_INITIALE.shares };
+  const tariffs = { ...REPARTITION_INITIALE.tariffs };
   for (const c of CARRIERS) {
     const valeur = Number(brut[`share:${c.id}`]);
     if (Number.isFinite(valeur) && valeur >= 0) shares[c.id] = valeur;
+    const tarif = Number(brut[`tariff:${c.id}`]);
+    if (Number.isFinite(tarif) && tarif >= 0) tariffs[c.id] = tarif;
   }
   const defaut = CARRIERS.some((c) => c.id === brut.default)
     ? (brut.default as CarrierId)
     : CARRIER_PAR_DEFAUT;
-  return { default: defaut, shares };
+  return { default: defaut, shares, tariffs };
 }
 
 export async function saveCarrierRouting(
@@ -66,6 +78,12 @@ export async function saveCarrierRouting(
     const part = routing.shares[c.id];
     settings[`share:${c.id}`] = String(
       Number.isFinite(part) && part > 0 ? Math.round(part) : 0
+    );
+    const tarif = routing.tariffs?.[c.id];
+    settings[`tariff:${c.id}`] = String(
+      Number.isFinite(tarif) && tarif >= 0
+        ? tarif
+        : REPARTITION_INITIALE.tariffs[c.id]
     );
   }
   await saveIntegrationSettings(CLE, settings);
