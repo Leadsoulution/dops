@@ -135,6 +135,8 @@ export type ImportResult = {
   regions: number;
   rapprochees: number;
   sansCorrespondance: string[];
+  /** Villes qui ont quitte leur liste et ne sont plus proposees. */
+  retirees?: number;
 };
 
 /**
@@ -159,14 +161,8 @@ export async function importSpeedafCities(): Promise<ImportResult> {
   }
   if (villes.length === 0) throw new Error("Speedaf n'a rendu aucune ville.");
 
-  // Notre dictionnaire, et les correspondances deja tranchees.
   const nos = await fetchAll<{ key: string; name: string; aliases: string[] | null }>(
     () => supabase.from("cities").select("key,name,aliases").eq("active", true)
-  );
-  const dejaPosees = new Map(
-    (await listCarrierCities("speedaf"))
-      .filter((v) => v.cityKey)
-      .map((v) => [v.code, v.cityKey as string])
   );
 
   const { matched, sansCorrespondance } = matchCities(
@@ -183,7 +179,15 @@ export async function importSpeedafCities(): Promise<ImportResult> {
     name: v.name,
     parent_code: regions.find((r) => r.name === v.parentName)?.code ?? null,
     parent_name: v.parentName ?? null,
-    city_key: parCode.get(v.code) ?? dejaPosees.get(v.code) ?? null,
+    /*
+     * La correspondance est refaite a chaque import, jamais heritee.
+     *
+     * Une ville rapprochee lors d'un import precedent peut ne plus
+     * l'etre : le bac a sable et la production ne nomment pas toujours
+     * la meme reference pareil, et garder l'ancienne cle ferait partir
+     * un colis vers une ville que personne n'a choisie.
+     */
+    city_key: parCode.get(v.code) ?? null,
     active: true,
     updated_at: new Date().toISOString(),
   }));
@@ -196,10 +200,38 @@ export async function importSpeedafCities(): Promise<ImportResult> {
     if (error) throw new Error(error.message);
   }
 
+  /*
+   * Ce qui n'est plus dans leur liste cesse d'etre livrable.
+   *
+   * La table est un miroir : une ville retiree de chez eux — ou
+   * heritee d'un autre environnement, le bac a sable et la production
+   * n'ayant pas les memes codes — resterait sinon proposee, et le
+   * colis serait refuse a la creation. On la desactive plutot que de
+   * l'effacer : elle explique encore les commandes deja parties.
+   */
+  const vivants = new Set(villes.map((v) => v.code));
+  const anciens = await fetchAll<{ code: string }>(() =>
+    supabase
+      .from("carrier_cities")
+      .select("code")
+      .eq("carrier", "speedaf")
+      .eq("active", true)
+  );
+  const retirees = anciens.map((a) => a.code).filter((c) => !vivants.has(c));
+  for (let i = 0; i < retirees.length; i += 200) {
+    const { error } = await supabase
+      .from("carrier_cities")
+      .update({ active: false, updated_at: new Date().toISOString() })
+      .eq("carrier", "speedaf")
+      .in("code", retirees.slice(i, i + 200));
+    if (error) throw new Error(error.message);
+  }
+
   return {
     villes: villes.length,
     regions: regions.length,
     rapprochees: matched.size,
     sansCorrespondance,
+    retirees: retirees.length,
   };
 }
