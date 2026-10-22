@@ -22,6 +22,7 @@ import {
   type Expense,
   type ExpenseType,
 } from "@/lib/finance/expense-types";
+import { carrierInfo } from "@/lib/carriers/registry";
 
 /**
  * Les charges, en liste.
@@ -51,16 +52,38 @@ const TYPE_COULEURS: Record<Expense["type"], string> = {
 
 const TOUS = "Tous";
 
+/**
+ * Le transporteur que la charge concerne.
+ *
+ * Deux charges du meme nom, l'une a 33 et l'autre a 25, ne se
+ * distinguent que par lui : il lui faut sa colonne, pas une mention
+ * perdue sous le libelle. Une charge sans transporteur vise pese sur
+ * les deux — c'est le cas courant, et il se lit sans avoir a deviner
+ * qu'une case vide veut dire "partout".
+ */
+function CarrierCell({ carrier }: { carrier?: string | null }) {
+  if (!carrier) {
+    return (
+      <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[11.5px] font-medium text-gray-500">
+        Les deux
+      </span>
+    );
+  }
+  const { name, logo } = carrierInfo(carrier);
+  return (
+    <span
+      className={`rounded-md px-2 py-0.5 text-[11.5px] font-medium ${logo.bg} ${logo.fg}`}
+    >
+      {name}
+    </span>
+  );
+}
+
 /** Ce qui distingue une charge des autres du meme type. */
 function detail(e: Expense): string {
   const bouts: string[] = [];
   if (e.type === "par_commande" && e.appliesToStatus) {
     bouts.push(`sur commandes ${e.appliesToStatus}s`.replace("toutess", "toutes"));
-  }
-  // Le transporteur vise se lit dans la liste : deux charges du meme
-  // nom, l'une a 33 et l'autre a 25, ne se distinguent que par lui.
-  if (e.appliesToCarrier) {
-    bouts.push(e.appliesToCarrier === "speedaf" ? "Speedaf" : "ForceLog");
   }
   if (e.periodicity) bouts.push(e.periodicity);
   if (e.platform) bouts.push(e.platform);
@@ -315,11 +338,12 @@ export default function ExpensesTab({
 
       {expenses && liste.length > 0 && (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[840px] text-left">
+          <table className="w-full min-w-[940px] text-left">
             <thead>
               <tr className="border-b border-gray-100 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                 <th className="px-5 py-3">Libelle</th>
                 <th className="px-3 py-3">Type</th>
+                <th className="px-3 py-3">Transporteur</th>
                 <th className="px-3 py-3 text-right">Montant</th>
                 <th className="px-3 py-3">Equivalent</th>
                 <th className="px-3 py-3">Periode</th>
@@ -346,6 +370,9 @@ export default function ExpensesTab({
                     >
                       {TYPE_LABELS[e.type]}
                     </span>
+                  </td>
+                  <td className="px-3 py-3">
+                    <CarrierCell carrier={e.appliesToCarrier} />
                   </td>
                   <td className="px-3 py-3 text-right font-mono font-medium text-gray-900">
                     {nf.format(e.amountMad)}
