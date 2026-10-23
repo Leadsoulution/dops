@@ -14,6 +14,7 @@ import {
   User,
   Tag,
   Megaphone,
+  Building2,
   Package,
   Wallet,
   Inbox,
@@ -91,8 +92,13 @@ import DateRangeCalendar from "./DateRangeCalendar";
  * transporteur ni numero de suivi n'est partie chez personne : elle
  * n'affiche rien plutot qu'un nom devine.
  */
+function carrierLabel(lead: Lead): string | undefined {
+  if (!lead.trackingNumber && !lead.carrier) return undefined;
+  return carrierInfo(carrierOfLead(lead.carrier)).name;
+}
+
 function CarrierBadge({ lead, compact }: { lead: Lead; compact?: boolean }) {
-  if (!lead.trackingNumber && !lead.carrier) {
+  if (!carrierLabel(lead)) {
     return compact ? (
       <span />
     ) : (
@@ -266,6 +272,7 @@ export default function LeadsCommandesPage() {
     agents: [] as string[],
     confirmation: [] as string[],
     livraison: [] as string[],
+    transporteur: [] as string[],
     paiement: [] as string[],
   });
   const [searchQuery, setSearchQuery] = useState("");
@@ -516,6 +523,7 @@ export default function LeadsCommandesPage() {
     agents: uniqueValues((l) => assigneeName(l.lastModifiedBy)),
     confirmation: uniqueValues((l) => l.status),
     livraison: uniqueValues((l) => l.deliveryStatus),
+    transporteur: uniqueValues(carrierLabel),
     paiement: uniqueValues((l) => l.paymentStatus),
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -540,6 +548,13 @@ export default function LeadsCommandesPage() {
       filters.confirmation.includes(lead.status)) &&
     (filters.livraison.length === 0 ||
       filters.livraison.includes(lead.deliveryStatus ?? "")) &&
+    /*
+     * Une commande que personne n'a prise n'appartient a aucun
+     * transporteur : demander Speedaf ne doit pas la ramener au
+     * pretexte que ForceLog est le defaut du calcul.
+     */
+    (filters.transporteur.length === 0 ||
+      filters.transporteur.includes(carrierLabel(lead) ?? "")) &&
     (filters.paiement.length === 0 ||
       filters.paiement.includes(lead.paymentStatus ?? ""));
 
@@ -555,6 +570,7 @@ export default function LeadsCommandesPage() {
       agents: [],
       confirmation: [],
       livraison: [],
+      transporteur: [],
       paiement: [],
       platform: [],
       campagne: [],
@@ -1119,6 +1135,17 @@ export default function LeadsCommandesPage() {
           options={filterOptions.livraison}
           multi
           onMultiChange={(v) => setFilters((f) => ({ ...f, livraison: v }))}
+        />
+        <SelectDropdown
+          key={`transporteur-${filtersResetKey}`}
+          variant="chip"
+          icon={Building2}
+          panelTitle="Transporteur"
+          pinnedLabel="Transporteur"
+          allLabel="Tous les transporteurs"
+          options={filterOptions.transporteur}
+          multi
+          onMultiChange={(v) => setFilters((f) => ({ ...f, transporteur: v }))}
         />
         <SelectDropdown
           key={`paiement-${filtersResetKey}`}
