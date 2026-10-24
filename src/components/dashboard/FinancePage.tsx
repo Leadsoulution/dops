@@ -18,6 +18,7 @@ import {
 import Sparkline from "./Sparkline";
 import CashflowChart from "./CashflowChart";
 import ExpensesTab from "./ExpensesTab";
+import CapitalTab from "./CapitalTab";
 import CarrierFloatCard from "./CarrierFloatCard";
 import PeriodFilter from "./PeriodFilter";
 import AdsSpendTab, { AdsSpendLoading, type AdResult } from "./AdsSpendTab";
@@ -203,6 +204,7 @@ type Onglet =
   | "variable"
   | "ponctuelle"
   | "depenses"
+  | "capital"
   | "rentabilite";
 
 const ONGLETS: { key: Onglet; label: string }[] = [
@@ -213,6 +215,7 @@ const ONGLETS: { key: Onglet; label: string }[] = [
   { key: "variable", label: "Variables" },
   { key: "ponctuelle", label: "Ponctuelles" },
   { key: "depenses", label: "Toutes les charges" },
+  { key: "capital", label: "Capital" },
   { key: "rentabilite", label: "Rentabilite" },
 ];
 
@@ -631,6 +634,13 @@ export default function FinancePage() {
       {activeTab === "depenses" && (
         <ExpensesTab onChanged={() => setVersion((v) => v + 1)} />
       )}
+
+      {/*
+        Le capital ne suit pas le filtre de periode : un solde est un
+        etat a l'instant, pas un total de mois. Le restreindre a
+        octobre afficherait un compte en banque faux.
+      */}
+      {activeTab === "capital" && <CapitalTab />}
 
       {activeTab === "rentabilite" && (
         <div className="rounded-xl border border-gray-200 bg-white p-4">
