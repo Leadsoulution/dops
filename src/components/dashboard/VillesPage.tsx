@@ -16,6 +16,17 @@ import {
   X,
 } from "lucide-react";
 import type { City, TariffSource } from "@/lib/supabase/cities";
+import { CARRIERS, carrierInfo } from "@/lib/carriers/registry";
+import AnchoredMenu from "./AnchoredMenu";
+
+/**
+ * Une ville, et qui la dessert.
+ *
+ * La couverture n'est pas stockee : elle se deduit du code ForceLog
+ * pose sur la ville et de la liste de Speedaf, et le serveur la joint
+ * a la lecture.
+ */
+type VilleListee = City & { carriers?: string[] };
 import CityModal from "./CityModal";
 import CityAliasesModal from "./CityAliasesModal";
 
@@ -41,7 +52,8 @@ function formatUpdatedAt(iso: string) {
 }
 
 export default function VillesPage() {
-  const [cities, setCities] = useState<City[]>([]);
+  const [cities, setCities] = useState<VilleListee[]>([]);
+  const [importMenu, setImportMenu] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -51,6 +63,7 @@ export default function VillesPage() {
   const [editCity, setEditCity] = useState<City | "new" | null>(null);
   const [aliasCity, setAliasCity] = useState<City | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const importBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     void load();
@@ -232,15 +245,22 @@ export default function VillesPage() {
     }
   }
 
-  async function importCarrier() {
+  async function importCarrier(carrier: string) {
     setBusy("transporteur");
+    setImportMenu(false);
     setError(null);
     try {
-      const res = await fetch("/api/cities/import-carrier", { method: "POST" });
+      const res = await fetch("/api/cities/import-carrier", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ carrier }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setNotice(
-        `${data.total} ville(s) ForceLog : ${data.inserted} ajoutee(s), ${data.updated} mise(s) a jour.`
+        carrier === "speedaf"
+          ? `${data.ajoutees} ville(s) Speedaf ajoutee(s) au dictionnaire, ${data.deja} deja connue(s).`
+          : `${data.total} ville(s) ForceLog : ${data.inserted} ajoutee(s), ${data.updated} mise(s) a jour.`
       );
       await load();
     } catch (err) {
@@ -341,7 +361,8 @@ export default function VillesPage() {
           </button>
 
           <button
-            onClick={importCarrier}
+            ref={importBtnRef}
+            onClick={() => setImportMenu((v) => !v)}
             disabled={busy !== null}
             className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
           >
@@ -352,6 +373,45 @@ export default function VillesPage() {
             )}
             Importer d&apos;un transporteur
           </button>
+          {/*
+            Deux transporteurs, deux listes : celle de ForceLog porte
+            ses tarifs par ville, celle de Speedaf n'apporte que les
+            villes qui manquent. Le choix se fait ici plutot que par un
+            second bouton, pour qu'un troisieme transporteur ne
+            s'ajoute pas a la barre.
+          */}
+          <AnchoredMenu
+            open={importMenu}
+            anchorRef={importBtnRef}
+            onClose={() => setImportMenu(false)}
+            width={232}
+          >
+            <div className="py-1">
+              {CARRIERS.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => void importCarrier(c.id)}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-gray-50"
+                >
+                  <span
+                    className={`flex h-6 w-6 items-center justify-center rounded-md text-[10px] font-bold ${c.logo.bg} ${c.logo.fg}`}
+                  >
+                    {c.logo.letter}
+                  </span>
+                  <span>
+                    <span className="block text-[13px] text-gray-700">
+                      Villes {c.name}
+                    </span>
+                    <span className="block text-[11.5px] text-gray-400">
+                      {c.id === "speedaf"
+                        ? "Ajoute celles qui manquent"
+                        : "Villes et tarifs"}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </AnchoredMenu>
 
           <button
             onClick={() => setEditCity("new")}
@@ -398,6 +458,7 @@ export default function VillesPage() {
                   />
                 </th>
                 <th className="px-3 py-3">Ville canonique</th>
+                <th className="px-3 py-3">Transporteurs</th>
                 <th className="px-3 py-3">Tarif de livraison</th>
                 <th className="px-3 py-3">Commandes</th>
                 <th className="px-3 py-3">Etat</th>
@@ -408,7 +469,7 @@ export default function VillesPage() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center">
+                  <td colSpan={8} className="px-5 py-12 text-center">
                     <div className="flex flex-col items-center gap-2 text-gray-400">
                       <Loader2 className="h-6 w-6 animate-spin" />
                       <p className="text-[13px]">Chargement des villes...</p>
@@ -418,7 +479,7 @@ export default function VillesPage() {
               )}
               {!loading && visibleCities.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center">
+                  <td colSpan={8} className="px-5 py-12 text-center">
                     <div className="flex flex-col items-center gap-2 text-gray-400">
                       <MapPin className="h-6 w-6" />
                       <p className="text-[13px]">
@@ -456,6 +517,26 @@ export default function VillesPage() {
                     <p className="font-mono text-[12px] text-gray-400">
                       {city.key}
                     </p>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3">
+                    <div className="flex items-center gap-1">
+                      {(city.carriers ?? []).length === 0 ? (
+                        <span className="text-[12px] text-gray-300">&mdash;</span>
+                      ) : (
+                        (city.carriers ?? []).map((id) => {
+                          const { name, logo } = carrierInfo(id);
+                          return (
+                            <span
+                              key={id}
+                              title={name}
+                              className={`rounded-md px-1.5 py-0.5 text-[10.5px] font-bold ${logo.bg} ${logo.fg}`}
+                            >
+                              {logo.letter}
+                            </span>
+                          );
+                        })
+                      )}
+                    </div>
                   </td>
                   <td className="whitespace-nowrap px-3 py-3">
                     <p className="font-mono text-[13px] font-semibold text-gray-900">

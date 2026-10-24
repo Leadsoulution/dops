@@ -172,6 +172,16 @@ export async function deliverableCities(): Promise<Map<string, CarrierCity>> {
   const supabase = getSupabaseServerClient();
   // Meme raison qu'au-dessus : une ville absente de la reponse fait
   // refuser la commande qui la porte.
+  /*
+   * Seules les villes qui portent un code ForceLog.
+   *
+   * Le dictionnaire accueille desormais aussi les villes que seul
+   * Speedaf dessert — il y en a plus de cinq cents. Les rendre
+   * "livrables" ferait accepter chez ForceLog une commande qu'il ne
+   * sait pas router : le colis partirait avec un nom de ville au lieu
+   * d'un code, et se perdrait. Le code est precisement ce qui prouve
+   * qu'il la dessert.
+   */
   const data = await fetchAll<
     Pick<CityRow, "key" | "name" | "aliases" | "carrier_code">
   >(() =>
@@ -179,6 +189,7 @@ export async function deliverableCities(): Promise<Map<string, CarrierCity>> {
       .from("cities")
       .select("key,name,aliases,carrier_code")
       .eq("active", true)
+      .not("carrier_code", "is", null)
   );
 
   const cities = new Map<string, CarrierCity>();

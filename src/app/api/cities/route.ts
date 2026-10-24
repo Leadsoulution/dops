@@ -6,6 +6,7 @@ import {
   upsertCities,
 } from "@/lib/supabase/cities";
 import { isSupabaseServerConfigured } from "@/lib/supabase/server";
+import { deliverableKeys } from "@/lib/supabase/carrier-cities";
 
 /**
  * Dictionnaire des villes canoniques.
@@ -20,7 +21,31 @@ export async function GET() {
     return NextResponse.json({ error: "Supabase non configure." }, { status: 500 });
   }
   try {
-    return NextResponse.json({ cities: await listCities() });
+    /*
+     * Qui dessert quoi, pose a cote de chaque ville.
+     *
+     * Le dictionnaire melange desormais les villes des deux
+     * transporteurs. Sans cette indication, une ville ajoutee pour
+     * Speedaf se lirait comme une ville livrable par tout le monde, et
+     * la premiere commande partirait chez celui qui ne la connait pas.
+     *
+     * Le code ForceLog suffit pour lui ; Speedaf passe par le
+     * rapprochement de sa liste, qui sait qu'une de ses zones peut en
+     * couvrir deux des notres.
+     */
+    const [cities, chezSpeedaf] = await Promise.all([
+      listCities(),
+      deliverableKeys("speedaf").catch(() => new Set<string>()),
+    ]);
+    return NextResponse.json({
+      cities: cities.map((city) => ({
+        ...city,
+        carriers: [
+          ...(city.carrierCode ? ["forcelog"] : []),
+          ...(chezSpeedaf.has(city.key) ? ["speedaf"] : []),
+        ],
+      })),
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Erreur inattendue." },
