@@ -13,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import ConfirmDialog from "./ConfirmDialog";
+import InfoTip, { Formule } from "./InfoTip";
 import CapitalMovementModal from "./CapitalMovementModal";
 import {
   CAPITAL_DEPUIS,
@@ -119,11 +120,34 @@ export default function CapitalTab() {
 
   const cartes = [
     {
-      titre: "Solde en banque",
+      titre: "Reste en banque",
       valeur: total.solde,
-      aide: "Entrees moins sorties, depuis le premier mouvement",
-      couleur: total.solde < 0 ? "text-red-600" : "text-gray-900",
+      aide: `${lignes.length} mouvement${lignes.length > 1 ? "s" : ""}`,
+      // Le chiffre que l'ecran existe pour donner : plus gros et plus
+      // gras que les deux autres, qui ne servent qu'a l'expliquer.
+      fort: true,
       icone: Landmark,
+      tip: (
+        <InfoTip title="Reste en banque">
+          <p>
+            Ce qui reste sur le compte : tout ce qui y est entre, moins tout
+            ce qui en est sorti. <b>Aucun lien avec le profit</b> — une
+            societe rentable peut avoir un compte vide, et l&apos;inverse
+            arrive aussi.
+          </p>
+          <Formule>reste = entrees - sorties</Formule>
+          <p>
+            Les sorties comprennent les budgets publicitaires engages a
+            partir du {jour(CAPITAL_DEPUIS)}, repris automatiquement de la
+            section Publicite. Ceux d&apos;avant sont deja compris dans le
+            solde saisi au depart.
+          </p>
+          <p>
+            Le filtre de periode en haut de page ne s&apos;y applique pas :
+            un solde est un etat du jour, pas un total de mois.
+          </p>
+        </InfoTip>
+      ),
     },
     {
       titre: "Entrees",
@@ -131,6 +155,20 @@ export default function CapitalTab() {
       aide: "Apports et versements encaisses",
       couleur: "text-emerald-600",
       icone: ArrowUpRight,
+      tip: (
+        <InfoTip title="Entrees">
+          <p>
+            Tout ce que vous avez saisi en entree : le capital de depart, les
+            apports, et les versements recus du transporteur.
+          </p>
+          <p>
+            Rien n&apos;arrive tout seul. Une commande livree n&apos;augmente
+            pas ce chiffre : le transporteur garde l&apos;argent plusieurs
+            semaines, et le compter avant le virement donnerait un solde que
+            la banque dementirait.
+          </p>
+        </InfoTip>
+      ),
     },
     {
       titre: "Sorties",
@@ -138,6 +176,22 @@ export default function CapitalTab() {
       aide: `dont ${nf.format(total.sortiesPublicite)} DH de publicite`,
       couleur: "text-red-600",
       icone: ArrowDownRight,
+      tip: (
+        <InfoTip title="Sorties">
+          <p>
+            Les achats saisis ici — stock, emballage, materiel, retraits — et
+            les budgets publicitaires engages a partir du{" "}
+            {jour(CAPITAL_DEPUIS)}.
+          </p>
+          <Formule>sorties = achats saisis + budgets publicitaires</Formule>
+          <p>
+            Une publicite quitte la banque <b>en une fois</b> le jour ou elle
+            est engagee, alors que le profit l&apos;etale sur la duree de la
+            campagne. Les deux lectures sont justes : elles ne repondent pas
+            a la meme question.
+          </p>
+        </InfoTip>
+      ),
     },
   ];
 
@@ -146,22 +200,40 @@ export default function CapitalTab() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {cartes.map((c) => {
           const Icone = c.icone;
+          const negatif = c.valeur < 0;
           return (
             <div
               key={c.titre}
-              className="rounded-xl border border-gray-200 bg-white p-4"
+              className="overflow-hidden rounded-xl border border-gray-200 bg-white p-3.5"
             >
-              <p className="flex items-center gap-1.5 text-[12.5px] text-gray-500">
-                <Icone className="h-3.5 w-3.5 text-gray-400" />
-                {c.titre}
-              </p>
-              <p
-                className={`mt-1 font-mono text-[22px] font-semibold ${c.couleur}`}
-              >
-                {nf.format(c.valeur)}{" "}
-                <span className="text-[13px] font-medium text-gray-400">DH</span>
-              </p>
-              <p className="text-[11.5px] text-gray-400">{c.aide}</p>
+              <div className="mb-2 flex items-start justify-between gap-1.5">
+                <p className="truncate text-[10.5px] font-semibold uppercase tracking-wide text-gray-400">
+                  {c.titre}
+                </p>
+                <span className="flex shrink-0 items-center gap-1">
+                  {c.tip}
+                  <Icone className="h-4 w-4 text-gray-300" />
+                </span>
+              </div>
+              {!movements ? (
+                <p className="flex h-[26px] items-center">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-gray-300" />
+                </p>
+              ) : (
+                <p
+                  className={`truncate font-mono ${
+                    c.fort
+                      ? "text-[24px] font-bold"
+                      : "text-[19px] font-semibold"
+                  } ${negatif ? "text-red-600" : c.couleur ?? "text-gray-900"}`}
+                >
+                  {nf.format(c.valeur)}{" "}
+                  <span className="text-[13px] font-medium text-gray-400">
+                    DH
+                  </span>
+                </p>
+              )}
+              <p className="mb-1 text-[11px] text-gray-400">{c.aide}</p>
             </div>
           );
         })}
