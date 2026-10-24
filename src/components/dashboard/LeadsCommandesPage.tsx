@@ -280,6 +280,8 @@ export default function LeadsCommandesPage() {
   const [sendingToForceLog, setSendingToForceLog] = useState<Set<string>>(new Set());
   const [modal, setModal] = useState<ModalState>(null);
   const [confirmDelete, setConfirmDelete] = useState<Lead | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState<Lead | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [deleting, setDeleting] = useState(false);
   /**
@@ -767,6 +769,34 @@ export default function LeadsCommandesPage() {
     }
   }
 
+  /**
+   * Annule le colis chez Speedaf, puis vide le suivi de la commande.
+   *
+   * Rien n'est modifie a l'avance ici : c'est le transporteur qui dit
+   * si le colis peut encore etre annule, et une ligne qui se viderait
+   * avant sa reponse mentirait a chaque refus.
+   */
+  async function cancelShipment(lead: Lead) {
+    setCancelling(true);
+    try {
+      const res = await fetch(`/api/leads/${lead.id}/shipment`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setLeadsState((prev) =>
+        prev.map((l) => (l.id === lead.id ? (data.lead as Lead) : l))
+      );
+      setConfirmCancel(null);
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "Annulation impossible."
+      );
+    } finally {
+      setCancelling(false);
+    }
+  }
+
   async function deleteLead(id: string) {
     const previous = leadsState;
     setLeadsState((prev) => prev.filter((l) => l.id !== id));
@@ -858,6 +888,17 @@ export default function LeadsCommandesPage() {
       onChangeStatus: () => setModal({ type: "status", leadIds: [lead.id] }),
       onDelete: isAdmin ? () => setConfirmDelete(lead) : undefined,
       onSendToForceLog: () => sendToForceLog(lead),
+      /*
+       * Seuls les colis Speedaf s'annulent d'ici : ForceLog detient la
+       * marchandise et nous ne savons pas encore ce que son API fait du
+       * stock. Reserve aux administrateurs, comme la suppression.
+       */
+      onCancelShipment:
+        isAdmin &&
+        lead.trackingNumber &&
+        carrierOfLead(lead.carrier) === "speedaf"
+          ? () => setConfirmCancel(lead)
+          : undefined,
     };
   }
 
@@ -1787,6 +1828,34 @@ export default function LeadsCommandesPage() {
             }
           }}
           onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+
+      {confirmCancel && (
+        <ConfirmDialog
+          title="Annuler l'envoi"
+          message={
+            <>
+              Demander a Speedaf d&apos;annuler le colis{" "}
+              <span className="font-mono font-medium text-gray-700">
+                {confirmCancel.trackingNumber}
+              </span>{" "}
+              de{" "}
+              <span className="font-medium text-gray-700">
+                {confirmCancel.client}
+              </span>{" "}
+              ?
+              <span className="mt-1.5 block text-amber-600">
+                La commande reste, son numero de suivi disparait. Speedaf
+                refusera si le colis est deja ramasse.
+              </span>
+            </>
+          }
+          confirmLabel="Annuler l'envoi"
+          danger
+          pending={cancelling}
+          onConfirm={() => cancelShipment(confirmCancel)}
+          onCancel={() => setConfirmCancel(null)}
         />
       )}
 

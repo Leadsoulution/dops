@@ -366,6 +366,42 @@ export async function updateLeads(
   return (data as LeadRow[]).map((r) => toLead(r));
 }
 
+/**
+ * Efface la trace d'un colis que le transporteur a annule.
+ *
+ * Passe par la ligne plutot que par `updateLead` : cote application,
+ * les champs de suivi se remplacent mais ne se vident jamais, et il
+ * faut pourtant les rendre vides ici. Sans quoi la commande
+ * continuerait d'afficher un numero que le transporteur ne reconnait
+ * plus, et la synchronisation irait le relire tous les quarts d'heure.
+ *
+ * Le transporteur, lui, reste inscrit : la commande repart chez le
+ * meme, c'est le sens de l'annulation.
+ */
+export async function clearTracking(id: string): Promise<Lead> {
+  const supabase = getSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("leads")
+    .update({
+      tracking_number: null,
+      tracking_error: null,
+      delivery_status: null,
+      delivery_status_code: null,
+      deliverer: null,
+      deliverer_phone: null,
+      delivery_date: null,
+      // Plus de colis, plus d'argent en attente chez le transporteur :
+      // laisser "Non Paye" le ferait compter dans ce qu'il nous doit.
+      payment_status: null,
+    })
+    .eq("id", id)
+    .select(COLUMNS)
+    .single();
+
+  if (error) throw new Error(error.message);
+  return toLead(data as LeadRow);
+}
+
 export async function deleteLead(id: string): Promise<void> {
   const supabase = getSupabaseServerClient();
   const { error } = await supabase.from("leads").delete().eq("id", id);

@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Trash2,
   Truck,
+  PackageX,
 } from "lucide-react";
 import AnchoredMenu from "./AnchoredMenu";
 
@@ -26,6 +27,11 @@ type RowActionsMenuProps = {
   /** Absente pour qui n'a pas le droit de supprimer. */
   onDelete?: () => void;
   onSendToForceLog?: () => void;
+  /**
+   * Absente tant qu'il n'y a rien a annuler : pas de colis, pas encore
+   * d'envoi, ou un transporteur dont l'API ne sait pas le faire.
+   */
+  onCancelShipment?: () => void;
 };
 
 export default function RowActionsMenu({
@@ -38,6 +44,7 @@ export default function RowActionsMenu({
   onChangeStatus,
   onDelete,
   onSendToForceLog,
+  onCancelShipment,
 }: RowActionsMenuProps) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -55,6 +62,15 @@ export default function RowActionsMenu({
       { label: "Changer statut", icon: RefreshCw, onClick: onChangeStatus },
       ...(onSendToForceLog
         ? [{ label: "Envoyer vers ForceLog", icon: Truck, onClick: onSendToForceLog }]
+        : []),
+      ...(onCancelShipment
+        ? [
+            {
+              label: "Annuler l'envoi Speedaf",
+              icon: PackageX,
+              onClick: onCancelShipment,
+            },
+          ]
         : []),
     ],
   ];

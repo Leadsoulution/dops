@@ -665,6 +665,27 @@ export default function EditOrderModal({
           </div>
         </div>
 
+        {/*
+          Le colis est deja chez Speedaf, qui ne sait pas le modifier :
+          l'enregistrement l'annulera et en creera un autre. Le numero
+          de suivi change, et le client a peut-etre deja l'ancien — il
+          vaut mieux le lire avant d'enregistrer qu'apres.
+        */}
+        {lead.trackingNumber && carrierOfLead(lead.carrier) === "speedaf" && (
+          <p className="mx-5 mb-1 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] leading-relaxed text-amber-800">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              Colis{" "}
+              <span className="font-mono font-medium">
+                {lead.trackingNumber}
+              </span>{" "}
+              deja chez Speedaf. Corriger le client, le telephone,
+              l&apos;adresse, la ville, le montant ou les produits annulera ce
+              colis et en creera un nouveau : le numero de suivi changera.
+            </span>
+          </p>
+        )}
+
         {error && (
           <p className="mx-5 mb-1 flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12.5px] text-red-700">
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
