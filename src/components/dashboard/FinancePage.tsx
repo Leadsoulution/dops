@@ -19,7 +19,6 @@ import Sparkline from "./Sparkline";
 import CashflowChart from "./CashflowChart";
 import ExpensesTab from "./ExpensesTab";
 import CapitalTab from "./CapitalTab";
-import CarrierFloatCard from "./CarrierFloatCard";
 import PeriodFilter from "./PeriodFilter";
 import AdsSpendTab, { AdsSpendLoading, type AdResult } from "./AdsSpendTab";
 import InfoTip, { Formule } from "./InfoTip";
@@ -443,10 +442,6 @@ export default function FinancePage() {
           {error}
         </p>
       )}
-
-      <div className="mb-4">
-        <CarrierFloatCard />
-      </div>
 
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {kpis.map((kpi) => {
