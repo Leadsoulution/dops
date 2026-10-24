@@ -15,6 +15,7 @@ import {
 import ConfirmDialog from "./ConfirmDialog";
 import CapitalMovementModal from "./CapitalMovementModal";
 import {
+  CAPITAL_DEPUIS,
   capitalLines,
   capitalSummary,
   type CapitalMovement,
@@ -39,6 +40,12 @@ const nf = new Intl.NumberFormat("fr-FR", {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
+
+/** "2026-10-24" se lit "24/10/2026" partout ailleurs dans l'ecran. */
+function jour(iso: string): string {
+  const [a, m, j] = iso.split("-");
+  return `${j}/${m}/${a}`;
+}
 
 export default function CapitalTab() {
   const [movements, setMovements] = useState<CapitalMovement[] | null>(null);
@@ -189,8 +196,11 @@ export default function CapitalTab() {
           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>
             Ces mouvements n&apos;entrent dans aucun calcul de profit. Les
-            budgets publicitaires descendent automatiquement de la section
-            Publicite : ne les ressaisissez pas ici.
+            budgets publicitaires engages a partir du{" "}
+            <span className="font-mono">{jour(CAPITAL_DEPUIS)}</span>{" "}
+            descendent automatiquement de la section Publicite : ne les
+            ressaisissez pas ici. Ceux d&apos;avant sont deja dans le solde
+            que vous saisissez au depart.
           </span>
         </p>
 

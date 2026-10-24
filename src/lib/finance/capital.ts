@@ -12,6 +12,16 @@
  * ne repondent qu'a une question : combien reste-t-il en banque.
  */
 
+/**
+ * Premier jour ou une publicite sort du capital.
+ *
+ * Les budgets anterieurs ont deja ete payes : ils sont dans le solde
+ * qu'on saisit en ouvrant le carnet. Les redescendre les compterait
+ * une seconde fois, et le compte paraitrait vide alors qu'il ne l'est
+ * pas.
+ */
+export const CAPITAL_DEPUIS = "2026-10-24";
+
 export type Direction = "entree" | "sortie";
 
 /** Les natures de mouvement, pour s'y retrouver dans le carnet. */
@@ -81,11 +91,15 @@ type Publicite = {
  * calculs ne peuvent pas partager la meme ligne.
  *
  * Une campagne desactivee reste comptee : elle a ete payee, et la
- * desactiver n'a pas rendu l'argent.
+ * desactiver n'a pas rendu l'argent. Celles engagees avant l'ouverture
+ * du carnet, en revanche, ne le sont pas : elles sont deja dans le
+ * solde saisi au depart.
  */
 export function capitalLines(
   movements: CapitalMovement[],
-  publicites: Publicite[]
+  publicites: Publicite[],
+  /** Parametre pour que les tests ne dependent pas du jour reel. */
+  depuis: string = CAPITAL_DEPUIS
 ): CapitalLine[] {
   const lignes: CapitalLine[] = [
     ...movements.map((m) => ({
@@ -97,15 +111,17 @@ export function capitalLines(
       amount: m.amountMad,
       source: "manuel" as const,
     })),
-    ...publicites.map((p) => ({
-      id: `pub:${p.id}`,
-      date: p.startDate,
-      label: p.label,
-      detail: p.platform ?? "Publicite",
-      direction: "sortie" as const,
-      amount: p.amountMad,
-      source: "publicite" as const,
-    })),
+    ...publicites
+      .filter((p) => p.startDate >= depuis)
+      .map((p) => ({
+        id: `pub:${p.id}`,
+        date: p.startDate,
+        label: p.label,
+        detail: p.platform ?? "Publicite",
+        direction: "sortie" as const,
+        amount: p.amountMad,
+        source: "publicite" as const,
+      })),
   ];
   // A egalite de date, les sorties d'abord : c'est l'ordre qui montre
   // le solde le plus bas du jour, celui qui decide si le cheque passe.

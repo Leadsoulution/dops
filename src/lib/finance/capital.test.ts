@@ -29,7 +29,7 @@ const pub = (o: Partial<{ id: string; label: string; platform: string; amountMad
 
 describe("capitalLines", () => {
   it("melange les mouvements saisis et les budgets publicitaires", () => {
-    const lignes = capitalLines([mouvement()], [pub()]);
+    const lignes = capitalLines([mouvement()], [pub()], "2026-10-01");
     expect(lignes.map((l) => l.source)).toEqual(["publicite", "manuel"]);
     expect(lignes[0].direction).toBe("sortie");
   });
@@ -40,7 +40,11 @@ describe("capitalLines", () => {
    * lectures sont justes, et c'est pour cela qu'elles sont separees.
    */
   it("date la publicite au jour de son engagement, pour son montant entier", () => {
-    const [ligne] = capitalLines([], [pub({ amountMad: 3000, startDate: "2026-10-01" })]);
+    const [ligne] = capitalLines(
+      [],
+      [pub({ amountMad: 3000, startDate: "2026-10-01" })],
+      "2026-10-01"
+    );
     expect(ligne.date).toBe("2026-10-01");
     expect(ligne.amount).toBe(3000);
   });
@@ -57,6 +61,42 @@ describe("capitalLines", () => {
   });
 });
 
+describe("publicites et date d'ouverture", () => {
+  /*
+   * Les budgets d'avant l'ouverture du carnet ont deja ete payes : ils
+   * sont compris dans le solde saisi au depart, et les redescendre
+   * viderait un compte qui ne l'est pas.
+   */
+  it("ignore les publicites engagees avant l'ouverture", () => {
+    const lignes = capitalLines(
+      [],
+      [
+        pub({ id: "vieille", startDate: "2026-10-01", amountMad: 9000 }),
+        pub({ id: "nouvelle", startDate: "2026-10-24", amountMad: 500 }),
+      ],
+      "2026-10-24"
+    );
+    expect(lignes.map((l) => l.id)).toEqual(["pub:nouvelle"]);
+    expect(capitalSummary(lignes).sortiesPublicite).toBe(500);
+  });
+
+  it("compte celle du jour meme de l'ouverture", () => {
+    const lignes = capitalLines([], [pub({ startDate: "2026-10-24" })], "2026-10-24");
+    expect(lignes).toHaveLength(1);
+  });
+
+  it("laisse les mouvements saisis en dehors de cette regle", () => {
+    // Saisi a la main, donc voulu : une correction datee d'avant garde
+    // sa place dans le carnet.
+    const lignes = capitalLines(
+      [mouvement({ happenedOn: "2026-09-01" })],
+      [],
+      "2026-10-24"
+    );
+    expect(lignes).toHaveLength(1);
+  });
+});
+
 describe("capitalSummary", () => {
   it("fait le solde des entrees et des sorties", () => {
     const total = capitalSummary(
@@ -65,7 +105,8 @@ describe("capitalSummary", () => {
           mouvement({ id: "a", direction: "entree", amountMad: 10000 }),
           mouvement({ id: "b", direction: "sortie", amountMad: 1200 }),
         ],
-        [pub({ amountMad: 500 })]
+        [pub({ amountMad: 500 })],
+        "2026-10-01"
       )
     );
     expect(total).toEqual({
