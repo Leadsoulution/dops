@@ -2,7 +2,7 @@ import type { AddParcelParams } from "./types";
 import { roundToTen } from "@/lib/amount";
 
 /**
- * Minimal shape this mapping needs from a Lead2Door lead/order — kept
+ * Minimal shape this mapping needs from an Orderly lead/order — kept
  * decoupled from the full `Lead` type in `leads-data.ts` so this module
  * has no dependency on the dashboard component tree and stays easy to
  * unit test in isolation.
@@ -40,7 +40,7 @@ function parseAmount(amount: string): number | undefined {
 }
 
 /**
- * Maps a Lead2Door order to ForceLog's `AddParcel` payload.
+ * Maps an Orderly order to ForceLog's `AddParcel` payload.
  *
  * - COD (cash to collect) comes from the order's `amount`.
  * - CITY/ADDRESS fall back to placeholders when missing on the order so

@@ -130,7 +130,7 @@ export const integrations: Integration[] = [
     lastSync: null,
     connectedAt: null,
     description:
-      "Creez des colis, suivez les livraisons et recuperez les etiquettes directement depuis Lead2Door.",
+      "Creez des colis, suivez les livraisons et recuperez les etiquettes directement depuis Orderly.",
     logo: { letter: "FL", bg: "bg-orange-50", fg: "text-orange-600" },
   },
   {

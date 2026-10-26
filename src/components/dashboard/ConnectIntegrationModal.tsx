@@ -64,7 +64,7 @@ function ForceLogConnectModal({
             </h2>
             <p className="mt-0.5 max-w-sm text-[12.5px] text-gray-500">
               Creez des colis et suivez vos livraisons ForceLog directement
-              depuis Lead2Door.
+              depuis Orderly.
             </p>
           </div>
           <button

@@ -209,7 +209,7 @@ export default function ParametresPage() {
               Parametres
             </h1>
             <p className="text-[13px] text-gray-500">
-              Configuration de votre espace Lead2Door
+              Configuration de votre espace Orderly
             </p>
           </div>
         </div>
@@ -261,7 +261,7 @@ export default function ParametresPage() {
                 </label>
                 <input
                   type="text"
-                  defaultValue="Lead2Door Demo Maroc"
+                  defaultValue="Orderly Demo Maroc"
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
                 />
               </div>
@@ -272,7 +272,7 @@ export default function ParametresPage() {
                   </label>
                   <input
                     type="email"
-                    defaultValue="support@lead2door.ma"
+                    defaultValue="support@orderly.ma"
                     className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
                   />
                 </div>

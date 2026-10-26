@@ -20,7 +20,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Lead2Door",
+  title: "Orderly",
   description: "Digital Order Profit System",
 };
 

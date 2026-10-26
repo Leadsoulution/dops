@@ -166,7 +166,7 @@ export type AgentPerformance = {
 export const agentPerformance: AgentPerformance[] = [
   {
     name: "Fatima Zahra",
-    email: "agent@lead2door.com",
+    email: "agent@orderly.com",
     active: true,
     avatarColor: "bg-emerald-500",
     confirmRate: 83,
@@ -180,7 +180,7 @@ export const agentPerformance: AgentPerformance[] = [
   },
   {
     name: "Hamza Berrada",
-    email: "agent@lead2door.com",
+    email: "agent@orderly.com",
     active: true,
     avatarColor: "bg-blue-500",
     confirmRate: 77,
@@ -194,7 +194,7 @@ export const agentPerformance: AgentPerformance[] = [
   },
   {
     name: "Imane Lahlou",
-    email: "agent@lead2door.com",
+    email: "agent@orderly.com",
     active: true,
     avatarColor: "bg-violet-500",
     confirmRate: 74,
@@ -208,7 +208,7 @@ export const agentPerformance: AgentPerformance[] = [
   },
   {
     name: "Karim El Mansouri",
-    email: "agent@lead2door.com",
+    email: "agent@orderly.com",
     active: true,
     avatarColor: "bg-orange-500",
     confirmRate: 66,
@@ -222,7 +222,7 @@ export const agentPerformance: AgentPerformance[] = [
   },
   {
     name: "Nadia El Fassi",
-    email: "agent@lead2door.com",
+    email: "agent@orderly.com",
     active: false,
     avatarColor: "bg-pink-500",
     confirmRate: 48,
@@ -236,7 +236,7 @@ export const agentPerformance: AgentPerformance[] = [
   },
   {
     name: "Omar Tazi",
-    email: "agent@lead2door.com",
+    email: "agent@orderly.com",
     active: true,
     avatarColor: "bg-cyan-500",
     confirmRate: 82,
@@ -250,7 +250,7 @@ export const agentPerformance: AgentPerformance[] = [
   },
   {
     name: "Salma Bennani",
-    email: "agent@lead2door.com",
+    email: "agent@orderly.com",
     active: true,
     avatarColor: "bg-rose-500",
     confirmRate: 70,
@@ -264,7 +264,7 @@ export const agentPerformance: AgentPerformance[] = [
   },
   {
     name: "soufiane imil",
-    email: "agent@lead2door.com",
+    email: "agent@orderly.com",
     active: false,
     avatarColor: "bg-gray-400",
     confirmRate: 0,
@@ -278,7 +278,7 @@ export const agentPerformance: AgentPerformance[] = [
   },
   {
     name: "Youssef Idrissi",
-    email: "agent@lead2door.com",
+    email: "agent@orderly.com",
     active: true,
     avatarColor: "bg-indigo-500",
     confirmRate: 62,
