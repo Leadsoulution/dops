@@ -89,13 +89,20 @@ describe("createStockOrder", () => {
   };
 
   function capture(reponse: unknown) {
-    const appels: { url: string; corps: Record<string, unknown> }[] = [];
+    const appels: {
+      url: string;
+      corps: Record<string, unknown>;
+      chaine: boolean;
+    }[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: URL, init: { body: string }) => {
+        const brut = JSON.parse(init.body).data;
         appels.push({
           url: url.toString(),
-          corps: JSON.parse(init.body).data,
+          // La forme documentee envoie `data` en chaine echappee.
+          corps: typeof brut === "string" ? JSON.parse(brut) : brut,
+          chaine: typeof brut === "string",
         });
         return new Response(
           JSON.stringify({ success: true, error: null, data: reponse })
@@ -170,6 +177,64 @@ describe("createStockOrder", () => {
       customOrderNo: "REFERENCE-BEAUCOUP-TROP-LONGUE",
     });
     expect(appels[0].corps.customOrderNo).toBe("REFERENCE-BEAUCO");
+    vi.unstubAllGlobals();
+  });
+
+  it("envoie data en chaine echappee, comme leur documentation", async () => {
+    const appels = capture({ billCode: "X" });
+    const { createStockOrder } = await import("./client");
+    await createStockOrder(config, commande);
+    expect(appels[0].chaine).toBe(true);
+    vi.unstubAllGlobals();
+  });
+
+  /*
+   * Leur doc annonce une chaine, l'express accepte l'objet, et
+   * l'interface nous est fermee : impossible de trancher avant le
+   * premier vrai appel. Un refus de format fait donc retenter sous
+   * l'autre forme plutot que de perdre un colis.
+   */
+  it("retente en objet si le serveur refuse le format", async () => {
+    const formes: boolean[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: URL, init: { body: string }) => {
+        const brut = JSON.parse(init.body).data;
+        formes.push(typeof brut === "string");
+        return new Response(
+          JSON.stringify(
+            formes.length === 1
+              ? { success: false, error: { code: "70001", message: "Invalid request data format" } }
+              : { success: true, error: null, data: { billCode: "MA999" } }
+          )
+        );
+      })
+    );
+    const { createStockOrder } = await import("./client");
+    await expect(createStockOrder(config, commande)).resolves.toMatchObject({
+      billCode: "MA999",
+    });
+    expect(formes).toEqual([true, false]);
+    vi.unstubAllGlobals();
+  });
+
+  it("ne retente pas quand le refus vient du metier", async () => {
+    let appels = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        appels++;
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: { code: "70801", message: "No permission" },
+          })
+        );
+      })
+    );
+    const { createStockOrder } = await import("./client");
+    await expect(createStockOrder(config, commande)).rejects.toThrow("No permission");
+    expect(appels).toBe(1);
     vi.unstubAllGlobals();
   });
 

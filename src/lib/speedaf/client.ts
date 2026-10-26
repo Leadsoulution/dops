@@ -67,7 +67,17 @@ export function speedafConfig(): SpeedafConfig | null {
 async function call<T>(
   config: SpeedafConfig,
   path: string,
-  data: unknown
+  data: unknown,
+  /**
+   * Comment `data` voyage.
+   *
+   * Leur documentation le decrit comme une chaine JSON echappee, et
+   * c'est ce que montre leur exemple curl. L'express, lui, accepte
+   * l'objet tel quel — c'est verifie, il tourne ainsi depuis le
+   * debut. Les deux formes coexistent donc, chacune la ou elle est
+   * prouvee.
+   */
+  encodage: "objet" | "chaine" = "objet"
 ): Promise<T> {
   const url = new URL(path, config.baseUrl);
   url.searchParams.set("appCode", config.appCode);
@@ -78,7 +88,9 @@ async function call<T>(
     res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
-      body: JSON.stringify({ data }),
+      body: JSON.stringify({
+        data: encodage === "chaine" ? JSON.stringify(data) : data,
+      }),
     });
   } catch {
     throw new SpeedafError("Impossible de joindre Speedaf (erreur reseau).");
@@ -303,6 +315,33 @@ export type SpeedafStockOrder = {
   items: { sku: string; quantity: number }[];
 };
 
+/** Codes renvoyes quand le corps n'a pas la forme attendue. */
+const FORMAT_REFUSE = new Set(["70001", "70101"]);
+
+/**
+ * Un appel OMS, dans la forme que decrit leur documentation.
+ *
+ * Elle annonce `data` en chaine echappee ; l'express accepte l'objet.
+ * Impossible de verifier laquelle vaut ici tant que l'interface nous
+ * est fermee, alors on envoie la forme documentee et on retente avec
+ * l'autre si le serveur se plaint du format. Une seule des deux peut
+ * etre juste, et ce n'est pas a l'utilisateur de le decouvrir.
+ */
+async function callOms<T>(
+  config: SpeedafConfig,
+  path: string,
+  data: unknown
+): Promise<T> {
+  try {
+    return await call<T>(config, path, data, "chaine");
+  } catch (error) {
+    if (error instanceof SpeedafError && error.code && FORMAT_REFUSE.has(error.code)) {
+      return call<T>(config, path, data, "objet");
+    }
+    throw error;
+  }
+}
+
 export async function createStockOrder(
   config: SpeedafConfig,
   order: SpeedafStockOrder
@@ -343,7 +382,7 @@ export async function createStockOrder(
     })),
   };
 
-  const reponse = await call<{
+  const reponse = await callOms<{
     billCode?: string;
     customerOrderNo?: string;
     message?: string | null;
@@ -378,7 +417,7 @@ export async function inventoryInquiry(
   if (!config.warehouseCode) {
     throw new SpeedafError("Code d'entrepot Speedaf non configure.");
   }
-  const lignes = await call<SpeedafStockItem[]>(
+  const lignes = await callOms<SpeedafStockItem[]>(
     config,
     "/open-api/oms/express/inventory/inquiry",
     { customCode: config.customerCode, warehouseCode: config.warehouseCode }
