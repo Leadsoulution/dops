@@ -34,6 +34,7 @@ type Reglages = {
   senderProvince: string;
   senderDistrict: string;
   weight: number;
+  warehouseCode: string;
 };
 
 const VIDE: Reglages = {
@@ -48,6 +49,7 @@ const VIDE: Reglages = {
   senderProvince: "",
   senderDistrict: "",
   weight: 0.5,
+  warehouseCode: "",
 };
 
 export default function SpeedafConnectModal({ onClose }: { onClose: () => void }) {
@@ -295,6 +297,28 @@ export default function SpeedafConnectModal({ onClose }: { onClose: () => void }
                 <span className="font-mono"> CASABLANCA - SETTAT</span>, district
                 le quartier (<span className="font-mono">Sbata</span>,
                 <span className="font-mono"> MAARIF</span>...).
+              </p>
+
+              <Champ label="Code entrepot (colis de stock)">
+                <input
+                  value={form.warehouseCode}
+                  onChange={(e) => maj("warehouseCode", e.target.value)}
+                  placeholder="212"
+                  name="speedaf-entrepot"
+                  autoComplete="off"
+                  className={champ}
+                />
+              </Champ>
+              {/*
+                Sans ce code, rien ne casse : les colis partent du
+                depot comme aujourd'hui. C'est ce que dit la phrase,
+                pour qu'un champ vide ne ressemble pas a une panne.
+              */}
+              <p className="-mt-1 text-[11px] text-gray-400">
+                Fourni par Speedaf. Rempli, les produits marques
+                <span className="font-mono"> stock</span> au catalogue sont
+                preleves dans leur entrepot au lieu de partir du notre.
+                Laisse vide, tous les colis partent du depot.
               </p>
 
               <Champ label="Poids par defaut d'un colis (kg)">

@@ -78,3 +78,114 @@ describe("deballage des reponses", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("createStockOrder", () => {
+  const config = {
+    baseUrl: "https://x",
+    appCode: "a",
+    customerCode: "MA005200",
+    platformSource: "Orderly",
+    warehouseCode: "212",
+  };
+
+  function capture(reponse: unknown) {
+    const appels: { url: string; corps: Record<string, unknown> }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: URL, init: { body: string }) => {
+        appels.push({
+          url: url.toString(),
+          corps: JSON.parse(init.body).data,
+        });
+        return new Response(
+          JSON.stringify({ success: true, error: null, data: reponse })
+        );
+      })
+    );
+    return appels;
+  }
+
+  const commande = {
+    customOrderNo: "WC-2042",
+    acceptName: "Client",
+    acceptMobile: "0600000000",
+    acceptAddress: "Rue 1",
+    acceptProvinceName: "CASABLANCA - SETTAT",
+    acceptCityName: "CASABLANCA",
+    codFee: 299,
+    items: [{ sku: "LOR-ROSE", quantity: 2 }],
+  };
+
+  it("appelle l'interface OMS, qui n'a pas de /v2/", async () => {
+    const appels = capture({ billCode: "MA020000026718" });
+    const { createStockOrder } = await import("./client");
+    await createStockOrder(config, commande);
+    expect(appels[0].url).toContain("/open-api/oms/express/order/createOrder");
+    vi.unstubAllGlobals();
+  });
+
+  it("envoie l'entrepot, les references et le montant a encaisser", async () => {
+    const appels = capture({ billCode: "MA020000026718" });
+    const { createStockOrder } = await import("./client");
+    const colis = await createStockOrder(config, commande);
+    expect(colis.billCode).toBe("MA020000026718");
+    expect(appels[0].corps).toMatchObject({
+      warehouseCode: "212",
+      codFee: 299,
+      acceptCountryCode: "MA",
+      productList: [{ sku: "LOR-ROSE", quantity: 2 }],
+    });
+    vi.unstubAllGlobals();
+  });
+
+  /*
+   * Leur tableau des champs dit `customerCode`, tous leurs exemples
+   * envoient `customCode`. Les deux partent : celui qui ne sert pas
+   * est ignore, celui qui manquerait ferait refuser le colis.
+   */
+  it("envoie le code client sous les deux noms que leur doc emploie", async () => {
+    const appels = capture({ billCode: "X" });
+    const { createStockOrder } = await import("./client");
+    await createStockOrder(config, commande);
+    expect(appels[0].corps.customCode).toBe("MA005200");
+    expect(appels[0].corps.customerCode).toBe("MA005200");
+    vi.unstubAllGlobals();
+  });
+
+  it("n'envoie ni prix ni devise : l'entrepot a les siens", async () => {
+    const appels = capture({ billCode: "X" });
+    const { createStockOrder } = await import("./client");
+    await createStockOrder(config, commande);
+    const ligne = (appels[0].corps.productList as Record<string, unknown>[])[0];
+    expect(ligne).not.toHaveProperty("goodsValue");
+    expect(ligne).not.toHaveProperty("currencyType");
+    vi.unstubAllGlobals();
+  });
+
+  it("coupe la reference a seize caracteres, leur limite", async () => {
+    const appels = capture({ billCode: "X" });
+    const { createStockOrder } = await import("./client");
+    await createStockOrder(config, {
+      ...commande,
+      customOrderNo: "REFERENCE-BEAUCOUP-TROP-LONGUE",
+    });
+    expect(appels[0].corps.customOrderNo).toBe("REFERENCE-BEAUCO");
+    vi.unstubAllGlobals();
+  });
+
+  it("refuse de partir sans entrepot : il n'y aurait rien a prelever", async () => {
+    const { createStockOrder } = await import("./client");
+    await expect(
+      createStockOrder({ ...config, warehouseCode: undefined }, commande)
+    ).rejects.toThrow(/entrepot/i);
+  });
+
+  it("signale un refus plutot que de rendre un colis sans numero", async () => {
+    capture({ message: "SKU introuvable dans l'entrepot" });
+    const { createStockOrder } = await import("./client");
+    await expect(createStockOrder(config, commande)).rejects.toThrow(
+      "SKU introuvable dans l'entrepot"
+    );
+    vi.unstubAllGlobals();
+  });
+});

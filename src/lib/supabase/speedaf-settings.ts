@@ -54,6 +54,8 @@ export type SpeedafSettingsInput = {
   senderProvince?: string;
   senderDistrict?: string;
   weight?: number;
+  /** Entrepot Speedaf, pour les colis preleves sur notre stock. */
+  warehouseCode?: string;
 };
 
 type Stocke = Record<string, string>;
@@ -97,6 +99,8 @@ export async function getSpeedafSettings(): Promise<SpeedafSettings | null> {
       districtName: s.senderDistrict || env("SPEEDAF_SENDER_DISTRICT") || senderCity,
     },
     weight: Number(s.weight) || Number(env("SPEEDAF_DEFAULT_WEIGHT")) || 0.5,
+    warehouseCode:
+      s.warehouseCode || env("SPEEDAF_WAREHOUSE_CODE") || undefined,
     secretHint: secretKey ? `****${secretKey.slice(-4)}` : undefined,
   };
 }
@@ -131,6 +135,7 @@ export async function saveSpeedafSettings(
     senderProvince: (input.senderProvince || input.senderCity).trim(),
     senderDistrict: (input.senderDistrict || input.senderCity).trim(),
     weight: String(input.weight && input.weight > 0 ? input.weight : 0.5),
+    warehouseCode: (input.warehouseCode ?? "").trim(),
   };
 
   // Une cle laissee vide ne vide pas la cle : on ne redemande pas un

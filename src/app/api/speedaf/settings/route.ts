@@ -55,6 +55,7 @@ export async function GET() {
       senderProvince: s.sender.provinceName,
       senderDistrict: s.sender.districtName,
       weight: s.weight,
+      warehouseCode: s.warehouseCode ?? "",
     },
     ready: manquePourExpedier(s) === null,
     missing: manquePourExpedier(s),

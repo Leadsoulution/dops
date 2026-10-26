@@ -38,6 +38,13 @@ export type SpeedafConfig = {
   platformSource: string;
   /** Cle de signature des notifications, fournie par Speedaf. */
   secretKey?: string;
+  /**
+   * L'entrepot Speedaf ou dort notre marchandise, fourni par eux.
+   *
+   * Absent : aucun colis de stock n'est possible, puisqu'il n'y a
+   * nulle part ou prelever.
+   */
+  warehouseCode?: string;
 };
 
 export const SPEEDAF_PROD = "https://apis.speedaf.com";
@@ -261,6 +268,126 @@ export async function cancelOrder(
   if (ligne && !ligne.success) {
     throw new SpeedafError(ligne.message ?? "Annulation refusee.");
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* OMS : les colis preleves sur notre stock chez Speedaf               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Un colis de stock.
+ *
+ * Rien a voir avec le colis express : pas d'expediteur, pas de poids,
+ * pas de codes de service. C'est logique — la marchandise est deja
+ * chez eux, ils la prelevent, l'emballent et la pesent. Nous ne
+ * disons que trois choses : quel entrepot, pour qui, et quelles
+ * references en quelle quantite.
+ *
+ * Le chemin n'a pas de `/v2/` : c'est une autre famille d'API, celle
+ * de leur systeme de commandes, et non celle de l'express.
+ */
+export type SpeedafStockOrder = {
+  /** Notre reference. Speedaf la limite a 16 caracteres. */
+  customOrderNo: string;
+  acceptName: string;
+  acceptMobile: string;
+  acceptAddress: string;
+  acceptProvinceName: string;
+  acceptCityName: string;
+  acceptDistrictName?: string;
+  /** Montant a encaisser, en dirhams. 0 pour un colis deja paye. */
+  codFee: number;
+  remark?: string;
+  allowOpen?: boolean;
+  /** Une ligne par reference : Speedaf refuse deux fois la meme. */
+  items: { sku: string; quantity: number }[];
+};
+
+export async function createStockOrder(
+  config: SpeedafConfig,
+  order: SpeedafStockOrder
+): Promise<SpeedafParcel> {
+  if (!config.warehouseCode) {
+    throw new SpeedafError("Code d'entrepot Speedaf non configure.");
+  }
+
+  const data = {
+    // Leur documentation se contredit : le tableau des champs dit
+    // `customerCode`, tous leurs exemples envoient `customCode`. Les
+    // deux partent, et celui qui sert est le leur.
+    customCode: config.customerCode,
+    customerCode: config.customerCode,
+    customOrderNo: order.customOrderNo.slice(0, 16),
+    warehouseCode: config.warehouseCode,
+    isAllowOpen: order.allowOpen ? 1 : 0,
+    acceptName: order.acceptName.slice(0, 100),
+    acceptMobile: order.acceptMobile.slice(0, 20),
+    acceptAddress: order.acceptAddress.slice(0, 500),
+    acceptCountryName: "Morocco",
+    acceptCountryCode: "MA",
+    acceptProvinceName: order.acceptProvinceName,
+    acceptProvinceCode: "",
+    acceptCityName: order.acceptCityName,
+    acceptCityCode: "",
+    acceptDistrictName: order.acceptDistrictName ?? "",
+    acceptDistrictCode: "",
+    codFee: order.codFee,
+    remark: (order.remark ?? "").slice(0, 200),
+    // Ni prix ni devise : laisses de cote, Speedaf reprend ceux de sa
+    // fiche d'entrepot. Les envoyer ferait diverger deux verites sur
+    // la valeur d'un meme article, et la leur est celle qui compte au
+    // moment du prelevement.
+    productList: order.items.map((i) => ({
+      sku: i.sku.slice(0, 64),
+      quantity: i.quantity,
+    })),
+  };
+
+  const reponse = await call<{
+    billCode?: string;
+    customerOrderNo?: string;
+    message?: string | null;
+  }>(config, "/open-api/oms/express/order/createOrder", data);
+
+  if (!reponse?.billCode) {
+    throw new SpeedafError(
+      reponse?.message ?? "Colis de stock refuse par Speedaf."
+    );
+  }
+  return {
+    billCode: reponse.billCode,
+    labelUrl: null,
+    customerOrderNo: reponse.customerOrderNo,
+  };
+}
+
+export type SpeedafStockItem = {
+  productCode: string;
+  sku: string;
+  name: string;
+  unitPrice: number;
+  /** Quantite disponible dans l'entrepot. */
+  stockNum: number;
+  currency: string;
+};
+
+/** L'etat du stock que Speedaf detient pour nous. */
+export async function inventoryInquiry(
+  config: SpeedafConfig
+): Promise<SpeedafStockItem[]> {
+  if (!config.warehouseCode) {
+    throw new SpeedafError("Code d'entrepot Speedaf non configure.");
+  }
+  const lignes = await call<SpeedafStockItem[]>(
+    config,
+    "/open-api/oms/express/inventory/inquiry",
+    { customCode: config.customerCode, warehouseCode: config.warehouseCode }
+  );
+  return (lignes ?? []).map((l) => ({
+    ...l,
+    stockNum: Number(l.stockNum) || 0,
+    unitPrice: Number(l.unitPrice) || 0,
+  }));
 }
 
 export type SpeedafTrack = {
