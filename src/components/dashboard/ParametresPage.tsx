@@ -39,6 +39,10 @@ import WhatsappPhotosPanel from "./WhatsappPhotosPanel";
 import WebhooksPanel from "./WebhooksPanel";
 import NotificationSettings from "./NotificationSettings";
 import { currentProfile } from "@/lib/session";
+import type {
+  MediaStorage,
+  WorkspaceSettings,
+} from "@/lib/workspace-settings";
 import {
   leadStatuses,
   shippingStatuses,
@@ -160,11 +164,17 @@ export default function ParametresPage() {
     Object.fromEntries(shippingStatuses.map((s) => [s.code, s.active]))
   );
 
+  const [shopName, setShopName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [currency, setCurrency] = useState(currencyOptions[0]);
   const [timezone, setTimezone] = useState(timezoneOptions[0]);
   const [language, setLanguage] = useState(languageOptions[0]);
-  const [mediaStorage, setMediaStorage] = useState<"local" | "s3">("local");
-  const [saveState, setSaveState] = useState<"idle" | "saved">("idle");
+  const [mediaStorage, setMediaStorage] = useState<MediaStorage>("local");
+  const [saveState, setSaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
   // Les messages ne sont modifiables que par un administrateur ; le
   // serveur refuse de toute facon l'ecriture aux autres.
   const [isAdmin, setIsAdmin] = useState(false);
@@ -178,14 +188,68 @@ export default function ParametresPage() {
       cancelled = true;
     };
   }, []);
+
+  // Les reglages enregistres reprennent leur place dans les champs :
+  // sans cette lecture, la page repartirait des valeurs par defaut a
+  // chaque visite et donnerait l'impression de ne rien retenir.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/settings/workspace")
+      .then((r) => r.json())
+      .then((body) => {
+        if (cancelled || !body?.settings) return;
+        const s = body.settings as WorkspaceSettings;
+        setShopName(s.shopName);
+        setEmail(s.email);
+        setPhone(s.phone);
+        setCurrency(s.currency);
+        setTimezone(s.timezone);
+        setLanguage(s.language);
+        setMediaStorage(s.mediaStorage);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [leadSyncState, setLeadSyncState] = useState<"idle" | "syncing" | "done">("idle");
   const [shippingSyncState, setShippingSyncState] = useState<"idle" | "syncing" | "done">(
     "idle"
   );
 
-  function handleSave() {
-    setSaveState("saved");
-    setTimeout(() => setSaveState("idle"), 2000);
+  /**
+   * Le bouton disait "Enregistre" sans rien ecrire nulle part. Il
+   * attend maintenant la reponse du serveur : un echec se voit, et
+   * ce qui est affiche en vert a vraiment ete range en base.
+   */
+  async function handleSave() {
+    setSaveState("saving");
+    setSaveError(null);
+    try {
+      const settings: WorkspaceSettings = {
+        shopName,
+        email,
+        phone,
+        currency,
+        timezone,
+        language,
+        mediaStorage,
+      };
+      const res = await fetch("/api/settings/workspace", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settings }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Enregistrement refuse.");
+      setSaveState("saved");
+      setTimeout(() => setSaveState("idle"), 2000);
+    } catch (err) {
+      setSaveState("error");
+      setSaveError(
+        err instanceof Error ? err.message : "Enregistrement impossible."
+      );
+    }
   }
 
   function runStatusSync(setter: (s: "idle" | "syncing" | "done") => void) {
@@ -214,15 +278,38 @@ export default function ParametresPage() {
           </div>
         </div>
 
-        <button
-          onClick={handleSave}
-          className={`flex w-full items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-medium text-white sm:w-auto ${
-            saveState === "saved" ? "bg-emerald-600" : "bg-gray-900 hover:bg-gray-800"
-          }`}
-        >
-          <Save className="h-3.5 w-3.5" />
-          {saveState === "saved" ? "Enregistre" : "Enregistrer"}
-        </button>
+        <div className="flex flex-col items-stretch gap-1 sm:items-end">
+          <button
+            onClick={handleSave}
+            disabled={saveState === "saving"}
+            className={`flex w-full items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-medium text-white disabled:opacity-60 sm:w-auto ${
+              saveState === "saved"
+                ? "bg-emerald-600"
+                : saveState === "error"
+                  ? "bg-red-600"
+                  : "bg-gray-900 hover:bg-gray-800"
+            }`}
+          >
+            {saveState === "saving" ? (
+              <Loader className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Save className="h-3.5 w-3.5" />
+            )}
+            {saveState === "saving"
+              ? "Enregistrement..."
+              : saveState === "saved"
+                ? "Enregistre"
+                : "Enregistrer"}
+          </button>
+          {/*
+            L'echec se dit, avec sa raison : un non-administrateur
+            doit comprendre que le refus vient du serveur et non de sa
+            saisie.
+          */}
+          {saveError && (
+            <p className="text-right text-[11.5px] text-red-600">{saveError}</p>
+          )}
+        </div>
       </div>
 
       <div className="mb-5 flex items-center gap-6 overflow-x-auto border-b border-gray-200">
@@ -261,7 +348,9 @@ export default function ParametresPage() {
                 </label>
                 <input
                   type="text"
-                  defaultValue="Orderly Demo Maroc"
+                  value={shopName}
+                  onChange={(e) => setShopName(e.target.value)}
+                  placeholder="Orderly Demo Maroc"
                   className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
                 />
               </div>
@@ -272,7 +361,9 @@ export default function ParametresPage() {
                   </label>
                   <input
                     type="email"
-                    defaultValue="support@orderly.ma"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="support@orderly.ma"
                     className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
                   />
                 </div>
@@ -282,7 +373,9 @@ export default function ParametresPage() {
                   </label>
                   <input
                     type="text"
-                    defaultValue="+212522981010"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+212522981010"
                     className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] text-gray-800 focus:border-blue-400 focus:outline-none"
                   />
                 </div>
