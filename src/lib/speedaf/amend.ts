@@ -67,7 +67,10 @@ export type Annulation = { ok: true } | { ok: false; raison: string };
  * erreur generique, il reessaie.
  */
 export async function cancelSpeedafParcel(
-  lead: Pick<Lead, "trackingNumber" | "carrier" | "deliveryStatusCode">,
+  lead: Pick<
+    Lead,
+    "trackingNumber" | "carrier" | "deliveryStatusCode" | "parcelType"
+  >,
   raison: string
 ): Promise<Annulation> {
   if (!lead.trackingNumber) {
@@ -95,12 +98,25 @@ export async function cancelSpeedafParcel(
     await cancelOrder(config, lead.trackingNumber, raison);
     return { ok: true };
   } catch (error) {
+    const message =
+      error instanceof SpeedafError
+        ? error.message
+        : "Speedaf n'a pas repondu a la demande d'annulation.";
+    /*
+     * Un colis de stock ne s'annule pas par l'API.
+     *
+     * Leur OMS n'expose que la creation et l'inventaire — verifie :
+     * cinq chemins d'annulation repondent 404, et la voie express
+     * refuse le colis d'un "Order not allow cancel!". L'agent lirait
+     * cet anglais sans savoir quoi en faire ; on lui dit donc ou
+     * aller, puisqu'il reste le portail.
+     */
     return {
       ok: false,
       raison:
-        error instanceof SpeedafError
-          ? error.message
-          : "Speedaf n'a pas repondu a la demande d'annulation.",
+        lead.parcelType === "stock"
+          ? `${message} — un colis de stock ne s'annule pas depuis l'application : faites-le dans le portail Speedaf.`
+          : message,
     };
   }
 }

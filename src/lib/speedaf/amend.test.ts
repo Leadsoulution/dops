@@ -144,3 +144,44 @@ describe("cancelSpeedafParcel", () => {
     expect(cancelOrder).not.toHaveBeenCalled();
   });
 });
+
+describe("refus d'annulation d'un colis de stock", () => {
+  beforeEach(() => {
+    cancelOrder.mockReset();
+    getSpeedafSettings.mockReset();
+    getSpeedafSettings.mockResolvedValue({
+      appCode: "MA005200",
+      customerCode: "MA005200",
+      secretKey: "x",
+      platformSource: "Loora",
+      warehouseCode: "212009",
+    });
+  });
+
+  /*
+   * Leur OMS ne sait que creer et compter : cinq chemins d'annulation
+   * repondent 404, et la voie express rejette le colis. L'agent lit
+   * donc ou aller plutot qu'un message anglais sans suite.
+   */
+  it("renvoie l'agent vers le portail", async () => {
+    cancelOrder.mockRejectedValue(new SpeedafError("Order not allow cancel!"));
+    const r = await cancelSpeedafParcel(
+      lead({ parcelType: "stock" }),
+      "Corrigee"
+    );
+    expect(r).toEqual({
+      ok: false,
+      raison: expect.stringContaining("portail Speedaf"),
+    });
+    expect(r.ok === false && r.raison).toContain("Order not allow cancel!");
+  });
+
+  it("laisse le message brut pour un colis simple", async () => {
+    cancelOrder.mockRejectedValue(new SpeedafError("Order not allow cancel!"));
+    const r = await cancelSpeedafParcel(
+      lead({ parcelType: "simple" }),
+      "Corrigee"
+    );
+    expect(r).toEqual({ ok: false, raison: "Order not allow cancel!" });
+  });
+});
