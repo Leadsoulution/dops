@@ -176,6 +176,8 @@ export async function dispatchToSpeedaf(
           acceptDistrictName: lead.quartier?.trim() || undefined,
           codFee: montant,
           remark: lead.customerNote?.trim() || undefined,
+          // Ouvrable : voir [1].
+          allowOpen: true,
           items: [...parSku].map(([sku, quantity]) => ({ sku, quantity })),
         })
       : await createOrder(config, expediteur, {
@@ -191,6 +193,17 @@ export async function dispatchToSpeedaf(
           codFee: montant,
           parcelWeight: config.weight,
           remark: lead.customerNote?.trim() || undefined,
+          /*
+           * [1] Le client peut ouvrir avant de payer.
+           *
+           * En paiement a la livraison, c'est le refus sur le pas de
+           * la porte qui coute : le client qui ne peut pas voir ce
+           * qu'il achete renvoie le colis, et le retour se paie deux
+           * fois. Les deux familles de colis portent la meme regle,
+           * sinon un meme client aurait droit de regard ou non selon
+           * l'entrepot d'ou part sa commande.
+           */
+          allowOpen: true,
           items: lignes.map((l) => ({
             sku: skuDe(l),
             goodsName: l.name,

@@ -169,6 +169,14 @@ describe("createStockOrder", () => {
     vi.unstubAllGlobals();
   });
 
+  it("transmet l'autorisation d'ouvrir le colis", async () => {
+    const appels = capture({ billCode: "X" });
+    const { createStockOrder } = await import("./client");
+    await createStockOrder(config, { ...commande, allowOpen: true });
+    expect(appels[0].corps.isAllowOpen).toBe(1);
+    vi.unstubAllGlobals();
+  });
+
   it("coupe la reference a seize caracteres, leur limite", async () => {
     const appels = capture({ billCode: "X" });
     const { createStockOrder } = await import("./client");
