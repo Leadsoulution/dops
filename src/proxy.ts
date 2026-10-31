@@ -23,6 +23,10 @@ const PUBLIC_PATHS = [
   "/api/forcelog/webhook",
   "/api/speedaf/webhook",
   "/api/woocommerce/webhook",
+  // Une page HTML posee chez un hebergeur quelconque n'a pas de
+  // session a presenter : cette entree-la se garde par sa cle et par
+  // l'origine declaree, pas par un cookie.
+  "/api/forms/order",
 ];
 
 /**

@@ -7,6 +7,7 @@ import SpeedafConnectModal from "./SpeedafConnectModal";
 import type { Integration } from "./integrations-data";
 import WooCommerceConnectModal from "./WooCommerceConnectModal";
 import GoogleSheetsConnectModal from "./GoogleSheetsConnectModal";
+import WebFormConnectModal from "./WebFormConnectModal";
 
 const platformCopy: Record<
   string,
@@ -162,6 +163,13 @@ export default function ConnectIntegrationModal({
 
   if (integration.id === "forcelog") {
     return <ForceLogConnectModal integration={integration} onClose={onClose} />;
+  }
+
+  // Un site ecrit a la main n'a rien a installer : il poste sur une
+  // adresse. Son ecran n'a donc ni jeton a tester ni boutique a
+  // joindre, et ne ressemble a aucun des autres.
+  if (integration.id === "landing-pages") {
+    return <WebFormConnectModal onClose={onClose} />;
   }
 
   if (integration.id === "speedaf") {
