@@ -73,8 +73,8 @@ export const integrations: Integration[] = [
   },
   {
     id: "landing-pages",
-    name: "Site web / Formulaire",
-    subtitle: "Page HTML ecrite a la main",
+    name: "Formulaires Web",
+    subtitle: "Site HTML, landing page",
     category: "leads",
     status: "Configuration en attente",
     health: "Aucun run",
