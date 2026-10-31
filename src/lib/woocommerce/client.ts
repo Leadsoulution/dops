@@ -70,6 +70,84 @@ export type WooCredentials = {
 };
 
 /**
+ * Une boutique branchee.
+ *
+ * `id` est son nom de domaine : stable, lisible dans une liste, et
+ * deja porte par chaque commande importee. Un identifiant invente
+ * aurait demande une table de correspondance pour savoir d'ou venait
+ * la commande 2085.
+ */
+export type WooStore = {
+  id: string;
+  name: string;
+  url: string;
+  key: string;
+  secret: string;
+};
+
+type StoreStocke = {
+  name?: string;
+  url?: string;
+  key?: string;
+  secret?: string;
+};
+
+/** Le domaine, qui sert d'identifiant. */
+export function storeId(url: string): string {
+  try {
+    return new URL(url).host.replace(/^www\./, "");
+  } catch {
+    return url.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  }
+}
+
+/**
+ * Les boutiques branchees, dans l'ordre ou elles ont ete ajoutees.
+ *
+ * L'ancien reglage ne connaissait qu'une boutique, posee a plat dans
+ * `{url, key, secret}`. Il est relu tel quel et compte pour la
+ * premiere : une installation deja en service ne doit rien resaisir
+ * pour que la suivante s'ajoute a cote.
+ */
+export async function getWooStores(): Promise<WooStore[]> {
+  const stored = await getIntegrationSettings<Record<string, unknown>>(
+    "woocommerce"
+  );
+
+  const brut: StoreStocke[] = Array.isArray(stored.stores)
+    ? (stored.stores as StoreStocke[])
+    : [];
+
+  // Forme d'avant, ou variables d'environnement : une seule boutique.
+  if (brut.length === 0) {
+    const seule = await getWooCredentials();
+    if (!seule.url || !seule.key || !seule.secret) return [];
+    return [
+      {
+        id: storeId(seule.url),
+        name: storeId(seule.url),
+        url: seule.url,
+        key: seule.key,
+        secret: seule.secret,
+      },
+    ];
+  }
+
+  return brut
+    .filter((b) => b.url && b.key && b.secret)
+    .map((b) => {
+      const url = String(b.url).replace(/\/+$/, "");
+      return {
+        id: storeId(url),
+        name: b.name?.trim() || storeId(url),
+        url,
+        key: String(b.key),
+        secret: String(b.secret),
+      };
+    });
+}
+
+/**
  * Identifiants de la boutique.
  *
  * Ceux saisis dans l'application priment sur les variables
@@ -98,15 +176,11 @@ export async function isWooConfigured(): Promise<boolean> {
 }
 
 async function wooRequest<T>(
+  store: WooStore,
   path: string,
   query: Record<string, string | number> = {}
 ): Promise<T> {
-  const { url, key, secret } = await getWooCredentials();
-  if (!url || !key || !secret) {
-    throw new WooCommerceError(
-      "WooCommerce non configure : adresse de la boutique et cles API requises."
-    );
-  }
+  const { url, key, secret } = store;
 
   const target = new URL(`${url}/wp-json/wc/v3${path}`);
   for (const [name, value] of Object.entries(query)) {
@@ -163,11 +237,13 @@ async function wooRequest<T>(
  * WooCommerce plafonne a 100 par page et ne dit pas combien il en reste :
  * on avance jusqu'a une page incomplete.
  */
-export async function listAllProducts(): Promise<WooProduct[]> {
+export async function listAllProducts(
+  store: WooStore
+): Promise<WooProduct[]> {
   const all: WooProduct[] = [];
   const perPage = 100;
   for (let page = 1; page <= 50; page++) {
-    const batch = await wooRequest<WooProduct[]>("/products", {
+    const batch = await wooRequest<WooProduct[]>(store, "/products", {
       per_page: perPage,
       page,
       status: "publish",
@@ -178,8 +254,11 @@ export async function listAllProducts(): Promise<WooProduct[]> {
   return all;
 }
 
-export async function listRecentOrders(after?: string): Promise<WooOrder[]> {
-  return wooRequest<WooOrder[]>("/orders", {
+export async function listRecentOrders(
+  store: WooStore,
+  after?: string
+): Promise<WooOrder[]> {
+  return wooRequest<WooOrder[]>(store, "/orders", {
     per_page: 50,
     orderby: "date",
     order: "desc",
@@ -188,7 +267,11 @@ export async function listRecentOrders(after?: string): Promise<WooOrder[]> {
 }
 
 /** Verifie que les identifiants ouvrent bien la boutique. */
-export async function checkConnection(): Promise<{ products: number }> {
-  const probe = await wooRequest<WooProduct[]>("/products", { per_page: 1 });
+export async function checkConnection(
+  store: WooStore
+): Promise<{ products: number }> {
+  const probe = await wooRequest<WooProduct[]>(store, "/products", {
+    per_page: 1,
+  });
   return { products: Array.isArray(probe) ? probe.length : 0 };
 }

@@ -15,8 +15,23 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 let commandes: WooOrder[] = [];
+let boutiqueDemandee: string | null = null;
+const BOUTIQUE = {
+  id: "elialuxe.shop",
+  name: "elialuxe.shop",
+  url: "https://elialuxe.shop",
+  key: "ck",
+  secret: "cs",
+};
+let boutiques = [BOUTIQUE];
+let parBoutique: Record<string, WooOrder[]> = {};
+const injoignables = new Set<string>();
 vi.mock("./client", () => ({
-  listRecentOrders: () => Promise.resolve(commandes),
+  getWooStores: () => Promise.resolve(boutiques),
+  listRecentOrders: (store: { id: string }) =>
+    injoignables.has(store.id)
+      ? Promise.reject(new Error("cles refusees"))
+      : Promise.resolve(parBoutique[store.id] ?? commandes),
 }));
 
 vi.mock("@/lib/push", () => ({ sendPushToAll: () => Promise.resolve() }));
@@ -57,6 +72,10 @@ let dejaLa = new Set<number>();
 function stub() {
   demandes = null;
   posees = [];
+  boutiqueDemandee = null;
+  boutiques = [BOUTIQUE];
+  parBoutique = {};
+  injoignables.clear();
   from.mockImplementation((table: string) => {
     if (table === "products") {
       const chain = {
@@ -67,14 +86,19 @@ function stub() {
     }
     return {
       select: (colonnes: string) => ({
-        in: (_col: string, valeurs: number[]) => {
-          demandes = valeurs;
-          return Promise.resolve({
-            data: valeurs
-              .filter((v) => dejaLa.has(v))
-              .map((v) => ({ woo_order_id: v })),
-            error: null,
-          });
+        eq: (_col: string, valeur: string) => {
+          boutiqueDemandee = valeur;
+          return {
+            in: (_c: string, valeurs: number[]) => {
+              demandes = valeurs;
+              return Promise.resolve({
+                data: valeurs
+                  .filter((v) => dejaLa.has(v))
+                  .map((v) => ({ woo_order_id: v })),
+                error: null,
+              });
+            },
+          };
         },
         // Une lecture sans borne ne doit plus exister dans ce chemin.
         not: () => {
@@ -155,7 +179,7 @@ describe("importWooOrders", () => {
       }
       return {
         select: () => ({
-          in: () => Promise.resolve({ data: [], error: null }),
+          eq: () => ({ in: () => Promise.resolve({ data: [], error: null }) }),
         }),
         insert: (rows: Record<string, unknown> | Record<string, unknown>[]) => {
           const lot = Array.isArray(rows) ? rows : [rows];
@@ -240,5 +264,74 @@ describe("importWooOrders", () => {
     const r = await importWooOrders();
     expect(r.importees).toBe(0);
     expect(posees).toEqual([]);
+  });
+});
+
+describe("plusieurs boutiques", () => {
+  const LOORA = {
+    id: "loora.ma",
+    name: "LOORA",
+    url: "https://loora.ma",
+    key: "ck",
+    secret: "cs",
+  };
+
+  /*
+   * Le piege que la migration existe pour fermer.
+   *
+   * Les deux boutiques numerotent a partir de un. Si la question
+   * "ce numero est-il deja connu ?" ne nomme pas la boutique, la
+   * commande 1801 de la seconde passe pour celle de la premiere, deja
+   * importee, et disparait sans une erreur nulle part.
+   */
+  it("demande les numeros deja vus boutique par boutique", async () => {
+    commandes = [commande(1801)];
+    stub();
+    await importWooOrders();
+    expect(boutiqueDemandee).toBe("elialuxe.shop");
+  });
+
+  it("marque chaque commande de sa boutique", async () => {
+    commandes = [commande(1801)];
+    stub();
+    await importWooOrders();
+    expect(posees[0].woo_store).toBe("elialuxe.shop");
+  });
+
+  it("laisse entrer le meme numero venu de deux boutiques", async () => {
+    stub();
+    boutiques = [BOUTIQUE, LOORA];
+    parBoutique = {
+      "elialuxe.shop": [commande(2085)],
+      "loora.ma": [commande(2085)],
+    };
+    const r = await importWooOrders();
+    expect(r.importees).toBe(2);
+    expect(posees.map((p) => p.woo_store)).toEqual([
+      "elialuxe.shop",
+      "loora.ma",
+    ]);
+  });
+
+  /*
+   * Une cle expiree d'un cote ne doit pas emporter les ventes de
+   * l'autre : c'est tout l'interet d'avoir deux boutiques.
+   */
+  it("importe la boutique qui repond quand l'autre est injoignable", async () => {
+    stub();
+    boutiques = [BOUTIQUE, LOORA];
+    injoignables.add("elialuxe.shop");
+    parBoutique = { "loora.ma": [commande(1801)] };
+    const r = await importWooOrders();
+    expect(r.importees).toBe(1);
+    expect(posees[0].woo_store).toBe("loora.ma");
+  });
+
+  it("signale l'echec quand aucune boutique ne repond", async () => {
+    stub();
+    boutiques = [BOUTIQUE, LOORA];
+    injoignables.add("elialuxe.shop");
+    injoignables.add("loora.ma");
+    await expect(importWooOrders()).rejects.toThrow(/cles refusees/);
   });
 });

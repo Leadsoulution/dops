@@ -9,7 +9,7 @@ import { getSupabaseServerClient, isSupabaseServerConfigured } from "./server";
  * les enverrait au navigateur. L'import echoue alors a la compilation.
  */
 
-export async function getIntegrationSettings<T extends Record<string, string>>(
+export async function getIntegrationSettings<T extends Record<string, unknown>>(
   id: string
 ): Promise<Partial<T>> {
   if (!isSupabaseServerConfigured) return {};
@@ -24,7 +24,7 @@ export async function getIntegrationSettings<T extends Record<string, string>>(
 
 export async function saveIntegrationSettings(
   id: string,
-  settings: Record<string, string>
+  settings: Record<string, unknown>
 ): Promise<void> {
   const supabase = getSupabaseServerClient();
   const { error } = await supabase

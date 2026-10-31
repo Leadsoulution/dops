@@ -133,6 +133,13 @@ export type Lead = {
   restockedAt?: string;
   /** Identifiant de la commande dans la boutique WooCommerce. */
   wooOrderId?: number;
+  /**
+   * La boutique d'ou vient la commande, par son domaine.
+   *
+   * Deux boutiques numerotent chacune a partir de un : sans ce champ,
+   * la commande 2085 de l'une se confondrait avec la 2085 de l'autre.
+   */
+  wooStore?: string;
   /** Auteur de la derniere modification : une personne ou un automate. */
   lastModifiedBy?: string;
   lastModifiedAt?: string;

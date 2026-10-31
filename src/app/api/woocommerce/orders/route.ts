@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { importWooOrders } from "@/lib/woocommerce/import";
-import { isWooConfigured, WooCommerceError } from "@/lib/woocommerce/client";
+import { getWooStores, WooCommerceError } from "@/lib/woocommerce/client";
 
 /** Reprend les commandes recentes de la boutique. */
 export async function POST() {
-  if (!(await isWooConfigured())) {
+  if ((await getWooStores()).length === 0) {
     return NextResponse.json(
       { error: "Aucune boutique WooCommerce connectee." },
       { status: 400 }

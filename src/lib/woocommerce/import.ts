@@ -1,6 +1,11 @@
 import "server-only";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { listRecentOrders, type WooOrder } from "./client";
+import {
+  getWooStores,
+  listRecentOrders,
+  type WooOrder,
+  type WooStore,
+} from "./client";
 import type { Lead } from "@/components/dashboard/leads-data";
 import { sendPushToAll } from "@/lib/push";
 import { recordLeadCreated } from "@/lib/supabase/lead-events";
@@ -101,8 +106,40 @@ async function inserer(
   return posees;
 }
 
+/**
+ * Relit toutes les boutiques branchees.
+ *
+ * Une boutique injoignable n'arrete pas les autres : son erreur est
+ * gardee de cote et les commandes des voisines entrent quand meme.
+ * Sinon une cle expiree d'un cote ferait disparaitre les ventes de
+ * l'autre, sans que rien ne dise pourquoi.
+ */
 export async function importWooOrders(): Promise<WooImportResult> {
-  const orders = await listRecentOrders();
+  const stores = await getWooStores();
+  const total: WooImportResult = { importees: 0, deja: 0, sansProduit: [] };
+  const erreurs: string[] = [];
+
+  for (const store of stores) {
+    try {
+      const r = await importStore(store);
+      total.importees += r.importees;
+      total.deja += r.deja;
+      total.sansProduit.push(...r.sansProduit);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "erreur";
+      console.error(`[woocommerce] ${store.id} : ${message}`);
+      erreurs.push(`${store.id} : ${message}`);
+    }
+  }
+
+  if (erreurs.length > 0 && erreurs.length === stores.length) {
+    throw new Error(erreurs.join(" | "));
+  }
+  return total;
+}
+
+async function importStore(store: WooStore): Promise<WooImportResult> {
+  const orders = await listRecentOrders(store);
   if (orders.length === 0) return { importees: 0, deja: 0, sansProduit: [] };
 
   const supabase = getSupabaseServerClient();
@@ -142,10 +179,19 @@ export async function importWooOrders(): Promise<WooImportResult> {
    * On ne demande donc que les numeros qu'on s'apprete a traiter : la
    * reponse ne peut plus depasser la page lue chez la boutique.
    */
+  /*
+   * La boutique entre dans la question.
+   *
+   * Deux boutiques numerotent chacune a partir de un : la commande
+   * 2085 de l'une n'a rien a voir avec la 2085 de l'autre. Sans ce
+   * filtre, la seconde serait prise pour deja importee et disparaitrait
+   * sans un mot.
+   */
   const numeros = orders.map((o) => o.id);
   const { data: knownRows } = await supabase
     .from("leads")
     .select("woo_order_id")
+    .eq("woo_store", store.id)
     .in("woo_order_id", numeros);
   const known = new Set(
     ((knownRows ?? []) as { woo_order_id: number }[]).map((r) => r.woo_order_id)
@@ -160,7 +206,7 @@ export async function importWooOrders(): Promise<WooImportResult> {
     if (["cancelled", "refunded", "failed", "trash"].includes(order.status)) {
       continue;
     }
-    nouvelles.push(toLead(order, catalogue, sansProduit));
+    nouvelles.push({ ...toLead(order, catalogue, sansProduit), wooStore: store.id });
   }
 
   let importees = 0;
@@ -348,6 +394,7 @@ function toRow(lead: Partial<Lead>) {
     parcel_type: lead.parcelType,
     stock_items: lead.stockItems ?? null,
     woo_order_id: lead.wooOrderId,
+    woo_store: lead.wooStore ?? null,
     utm_source: lead.utmSource ?? null,
     utm_medium: lead.utmMedium ?? null,
     utm_campaign: lead.utmCampaign ?? null,

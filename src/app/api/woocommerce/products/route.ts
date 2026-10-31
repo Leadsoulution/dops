@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { listAllProducts, WooCommerceError } from "@/lib/woocommerce/client";
+import {
+  getWooStores,
+  listAllProducts,
+  WooCommerceError,
+} from "@/lib/woocommerce/client";
 import { linkWooProducts } from "@/lib/supabase/products";
 
 /**
@@ -13,7 +17,17 @@ import { linkWooProducts } from "@/lib/supabase/products";
  */
 export async function POST() {
   try {
-    const products = await listAllProducts();
+    /*
+     * Les catalogues de toutes les boutiques, mis bout a bout.
+     *
+     * Un SKU porte par deux boutiques designe le meme article du
+     * depot : c'est le meme produit vendu deux fois. Le rapprochement
+     * le reconnaitra a son SKU, comme avant.
+     */
+    const stores = await getWooStores();
+    const products = (
+      await Promise.all(stores.map((s) => listAllProducts(s)))
+    ).flat();
     const withSku = products.filter((p) => p.sku?.trim());
     const result = await linkWooProducts(
       withSku.map((p) => ({
