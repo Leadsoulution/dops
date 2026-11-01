@@ -5,6 +5,7 @@ import { receptionCommande } from "@/lib/web-forms";
 import {
   getWebFormsSettings,
   origineAutorisee,
+  recordWebFormCall,
 } from "@/lib/supabase/web-forms-settings";
 
 /**
@@ -78,8 +79,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  /*
+   * La cle, par l'un des trois chemins possibles.
+   *
+   * L'en-tete est le plus propre, mais une plateforme qui se contente
+   * d'un champ "adresse du webhook" ne sait pas en poser : LOORA, par
+   * exemple, n'offre qu'une URL. L'adresse reste donc acceptee, parce
+   * qu'une integration impossible vaut moins qu'une cle dans une URL
+   * — laquelle, de toute facon, n'est pas un secret ici.
+   */
   const cle =
-    request.headers.get("x-orderly-key") ??
+    request.headers.get("x-orderly-key") ||
+    request.nextUrl.searchParams.get("key") ||
     (typeof brut.key === "string" ? brut.key : "");
   if (cle !== reglages.token) {
     return NextResponse.json(
@@ -94,8 +105,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  /*
+   * Les noms des champs recus sont notes, quoi qu'il arrive.
+   *
+   * Une plateforme tierce poste sans jamais montrer ce qu'elle
+   * envoie : sans cette trace, une commande refusee parce que le
+   * champ s'appelle "customer_name" ne laisserait aucun indice.
+   */
+  const champs = Object.keys(brut).filter((c) => c !== "key");
+
   const reception = receptionCommande(brut);
   if (!reception.ok) {
+    await recordWebFormCall(champs, false, reception.erreur);
     return NextResponse.json(
       { ok: false, error: reception.erreur },
       { status: 400, headers: entetes }
@@ -104,6 +125,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const lead = await createLead(reception.lead);
+    await recordWebFormCall(champs, true);
     return NextResponse.json(
       { ok: true, reference: lead.reference },
       { status: 201, headers: entetes }
@@ -112,6 +134,7 @@ export async function POST(request: NextRequest) {
     // La commande est perdue pour le client s'il ne la repasse pas :
     // elle part au moins dans les journaux du serveur.
     console.error("[formulaire web] commande refusee :", error);
+    await recordWebFormCall(champs, false, "Enregistrement impossible.");
     return NextResponse.json(
       { ok: false, error: "Enregistrement impossible." },
       { status: 500, headers: entetes }

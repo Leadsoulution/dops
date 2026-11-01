@@ -17,15 +17,35 @@ export const WEB_FORMS_SETTINGS_ID = "web-forms";
 
 /** Les noms acceptes pour chaque champ, du plus precis au plus vague. */
 const ALIAS = {
-  client: ["client", "name", "nom", "fullname", "full_name", "customer", "nom_complet"],
-  phone: ["phone", "tel", "telephone", "gsm", "mobile", "numero", "phone_number"],
-  ville: ["ville", "city", "town"],
-  adresse: ["adresse", "address", "address1", "address_1", "rue"],
-  productName: ["product", "produit", "productname", "product_name", "article", "offre"],
+  client: [
+    "client", "name", "nom", "fullname", "full_name", "customer",
+    "nom_complet", "customer_name", "client_name", "billing_name",
+    "nom_client", "prenom_nom",
+  ],
+  phone: [
+    "phone", "tel", "telephone", "gsm", "mobile", "numero",
+    "phone_number", "customer_phone", "billing_phone", "tel_client",
+    "numero_telephone",
+  ],
+  ville: ["ville", "city", "town", "shipping_city", "billing_city", "ville_client"],
+  adresse: [
+    "adresse", "address", "address1", "address_1", "rue",
+    "shipping_address", "billing_address", "adresse_livraison",
+  ],
+  productName: [
+    "product", "produit", "productname", "product_name", "article",
+    "offre", "item", "nom_produit",
+  ],
   quantite: ["quantity", "qty", "quantite", "qte", "nombre"],
-  montant: ["amount", "montant", "price", "prix", "total", "cod"],
+  montant: [
+    "amount", "montant", "price", "prix", "total", "cod",
+    "order_total", "total_amount", "total_price", "prix_total",
+  ],
   note: ["note", "notes", "message", "remarque", "commentaire", "comment"],
-  reference: ["reference", "ref", "order_id", "orderid", "commande"],
+  reference: [
+    "reference", "ref", "order_id", "orderid", "commande",
+    "order_number", "numero_commande",
+  ],
   quartier: ["quartier", "district", "zone"],
 } as const;
 

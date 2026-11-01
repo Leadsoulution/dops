@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import {
   AlertCircle,
+  CheckCircle2,
   Code2,
   Copy,
   Loader2,
@@ -20,7 +21,18 @@ import {
  * qu'une documentation a interpreter.
  */
 
-type Reglages = { token: string; origin: string };
+type DernierAppel = {
+  at: string;
+  ok: boolean;
+  error?: string;
+  champs: string[];
+};
+
+type Reglages = {
+  token: string;
+  origin: string;
+  lastCall?: DernierAppel;
+};
 
 function Ligne({
   label,
@@ -185,6 +197,19 @@ export default function WebFormConnectModal({
                 aide="Votre site poste ici, en JSON ou en formulaire."
               />
 
+              {/*
+                Une plateforme qui n'offre qu'un champ "adresse du
+                webhook" ne peut pas poser d'en-tete : la cle doit
+                alors tenir dans l'adresse. C'est le cas de LOORA.
+              */}
+              {reglages.token && (
+                <Ligne
+                  label="Adresse avec la cle incluse (pour LOORA, Make, Zapier...)"
+                  valeur={`${url}?key=${reglages.token}`}
+                  aide="A coller telle quelle quand la plateforme ne propose qu'une adresse, sans en-tete."
+                />
+              )}
+
               <div>
                 <Ligne
                   label="2. Cle du site"
@@ -272,6 +297,33 @@ export default function WebFormConnectModal({
             </>
           )}
         </div>
+
+        {reglages?.lastCall && (
+          <div className="mx-5 mb-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+            <p className="flex items-center gap-1.5 text-[12px] font-medium text-gray-700">
+              {reglages.lastCall.ok ? (
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+              ) : (
+                <AlertCircle className="h-3.5 w-3.5 text-red-500" />
+              )}
+              Dernier appel recu &mdash;{" "}
+              {new Date(reglages.lastCall.at).toLocaleString("fr-FR")}
+            </p>
+            {reglages.lastCall.error && (
+              <p className="mt-1 text-[11.5px] text-red-600">
+                {reglages.lastCall.error}
+              </p>
+            )}
+            {/*
+              Les noms des champs, et eux seuls : c'est ce qui permet
+              de voir qu'une plateforme envoie "customer_name" la ou
+              on attend un nom. Les valeurs n'ont rien a faire ici.
+            */}
+            <p className="mt-1 font-mono text-[11px] leading-relaxed text-gray-500">
+              champs : {reglages.lastCall.champs.join(", ") || "aucun"}
+            </p>
+          </div>
+        )}
 
         <div className="flex justify-end border-t border-gray-100 px-5 py-4">
           <button

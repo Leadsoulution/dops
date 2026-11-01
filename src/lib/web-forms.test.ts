@@ -135,3 +135,49 @@ describe("referenceWeb", () => {
     expect(a).not.toBe(b);
   });
 });
+
+describe("noms de champs des plateformes tierces", () => {
+  /*
+   * LOORA, Make, Zapier et les autres postent sans montrer ce qu'ils
+   * envoient. Chaque forme courante reconnue d'avance est une
+   * integration qui marche du premier coup au lieu d'un aller-retour.
+   */
+  it("reconnait les noms longs a l'anglaise", () => {
+    const r = receptionCommande(
+      {
+        customer_name: "Amine",
+        customer_phone: "0612345678",
+        shipping_city: "Casablanca",
+        shipping_address: "Rue 1",
+        order_total: "299",
+        order_number: "LR-7",
+      },
+      LE_JOUR
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.lead).toMatchObject({
+      client: "Amine",
+      phone: "0612345678",
+      ville: "Casablanca",
+      adresse: "Rue 1",
+      amount: "299 MAD",
+      reference: "LR-7",
+    });
+  });
+
+  it("reconnait les noms longs a la francaise", () => {
+    const r = receptionCommande(
+      {
+        nom_client: "Sara",
+        numero_telephone: "0612345678",
+        ville_client: "Rabat",
+        prix_total: "150",
+      },
+      LE_JOUR
+    );
+    expect(r.ok && r.lead.client).toBe("Sara");
+    expect(r.ok && r.lead.ville).toBe("Rabat");
+    expect(r.ok && r.lead.amount).toBe("150 MAD");
+  });
+});
