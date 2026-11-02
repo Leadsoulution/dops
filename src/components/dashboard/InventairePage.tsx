@@ -7,9 +7,7 @@ import {
   Boxes,
   Check,
   Loader2,
-  PackageCheck,
   RefreshCw,
-  RotateCcw,
   Send,
   Truck,
   Warehouse,
@@ -49,7 +47,6 @@ export default function InventairePage() {
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
-  const [showDone, setShowDone] = useState(false);
 
   async function load() {
     try {
@@ -77,14 +74,25 @@ export default function InventairePage() {
   }, []);
 
   /** Enregistre le stock recu, puis relit : le reel en depend. */
-  async function saveReceived(product: ProductStock, value: number) {
+  /**
+   * Enregistre une quantite saisie sur la ligne.
+   *
+   * Les deux colonnes saisissables passent par ici : elles ne
+   * different que par le champ envoye, et deux fonctions jumelles
+   * auraient diverge a la premiere correction.
+   */
+  async function saveQuantite(
+    product: ProductStock,
+    champ: "stockSent" | "stockPurchased",
+    value: number
+  ) {
     setSavingId(product.id);
     setError(null);
     try {
       const res = await fetch(`/api/products/${product.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stockSent: value }),
+        body: JSON.stringify({ [champ]: value }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? "Enregistrement refuse.");
@@ -98,28 +106,12 @@ export default function InventairePage() {
     }
   }
 
-  async function setRestocked(parcel: ReturnedParcel, done: boolean) {
-    setSavingId(parcel.id);
-    setError(null);
-    try {
-      const res = await fetch(`/api/leads/${parcel.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ restockedAt: done ? new Date().toISOString() : null }),
-      });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? "Enregistrement refuse.");
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur inattendue.");
-    } finally {
-      setSavingId(null);
-    }
+  async function saveReceived(product: ProductStock, value: number) {
+    await saveQuantite(product, "stockSent", value);
   }
 
+
   const t = data?.totals;
-  const aRentrer = (data?.returns ?? []).filter((r) => !r.restockedAt);
-  const dejaRentres = (data?.returns ?? []).filter((r) => r.restockedAt);
 
   return (
     <main className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
@@ -241,88 +233,12 @@ export default function InventairePage() {
             </p>
           )}
 
-          {/* Les retours a pointer. */}
-          {(aRentrer.length > 0 || dejaRentres.length > 0) && (
-            <section className="mb-5 rounded-xl border-2 border-orange-300 bg-white p-4">
-              <p className="mb-1 flex items-center gap-2 text-[12px] font-semibold tracking-wide text-orange-700">
-                <RotateCcw className="h-4 w-4" />
-                RETOURS A REMETTRE EN STOCK
-              </p>
-              <p className="mb-3 text-[12px] text-gray-500">
-                {aRentrer.length === 0
-                  ? "Aucun retour en attente : tout a ete remis en stock."
-                  : `${aRentrer.length} colis en attente. Verifiez aupres du transporteur, puis pointez.`}
-              </p>
-
-              <div className="space-y-1.5">
-                {(showDone ? data.returns : aRentrer).map((r) => (
-                  <div
-                    key={r.id}
-                    className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2 text-[12.5px] ${
-                      r.restockedAt
-                        ? "border-gray-100 bg-gray-50/70"
-                        : "border-orange-200"
-                    }`}
-                  >
-                    <span className="font-mono text-[11.5px] text-gray-500">
-                      {r.trackingNumber}
-                    </span>
-                    <span
-                      className={`rounded-md px-1.5 py-0.5 text-[11.5px] font-medium ${
-                        r.restockedAt
-                          ? "bg-gray-100 text-gray-500"
-                          : "bg-orange-50 text-orange-700"
-                      }`}
-                    >
-                      {r.status}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-gray-700">
-                      {r.client} &mdash;{" "}
-                      <span className="text-gray-500">{r.productName}</span>
-                    </span>
-                    <span className="font-mono text-gray-600">x{r.units}</span>
-                    <button
-                      onClick={() => void setRestocked(r, !r.restockedAt)}
-                      disabled={savingId === r.id}
-                      className={`flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[11.5px] font-medium disabled:opacity-60 ${
-                        r.restockedAt
-                          ? "text-emerald-700 hover:bg-emerald-50"
-                          : "border border-orange-300 text-orange-700 hover:bg-orange-50"
-                      }`}
-                    >
-                      {savingId === r.id ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : r.restockedAt ? (
-                        <PackageCheck className="h-3.5 w-3.5" />
-                      ) : (
-                        <Check className="h-3.5 w-3.5" />
-                      )}
-                      {r.restockedAt ? "Remis en stock" : "Marquer remis"}
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              {dejaRentres.length > 0 && (
-                <button
-                  onClick={() => setShowDone((v) => !v)}
-                  className="mt-2.5 text-[12px] font-medium text-gray-500 hover:text-gray-700"
-                >
-                  {showDone
-                    ? "Masquer les retours deja remis en stock"
-                    : `Voir les ${dejaRentres.length} retour${
-                        dejaRentres.length > 1 ? "s" : ""
-                      } deja remis en stock`}
-                </button>
-              )}
-            </section>
-          )}
-
           <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white">
             <table className="w-full min-w-[840px] text-[12.5px]">
               <thead className="border-b border-gray-200 text-left text-gray-500">
                 <tr>
                   <th className="px-3 py-3 font-medium">Produit</th>
+                  <th className="px-3 py-3 font-medium">Qte achetee</th>
                   <th className="px-3 py-3 font-medium">Stock recu</th>
                   <th className="px-3 py-3 font-medium">Stock livre</th>
                   <th className="px-3 py-3 font-medium">Stock reel</th>
@@ -367,6 +283,14 @@ export default function InventairePage() {
                     </td>
                     <td className="px-3 py-2.5">
                       <QuantityInput
+                        value={p.purchased}
+                        onCommit={(v) =>
+                          void saveQuantite(p, "stockPurchased", v)
+                        }
+                      />
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <QuantityInput
                         value={p.received}
                         onCommit={(v) => void saveReceived(p, v)}
                       />
@@ -408,6 +332,8 @@ export default function InventairePage() {
           </div>
 
           <p className="mt-3 text-[11.5px] text-gray-400">
+            <span className="text-gray-500">Qte achetee</span> se saisit aussi :
+            aucune facture fournisseur ne passe par l&apos;application.{" "}
             <span className="text-gray-500">Stock recu</span> se saisit : personne
             d&apos;autre ne sait ce que vous avez remis au transporteur.{" "}
             <span className="text-gray-500">Stock livre</span> compte les unites

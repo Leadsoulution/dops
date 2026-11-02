@@ -30,6 +30,14 @@ export type ProductStock = {
   forcelogRef?: string;
   name: string;
   image?: string;
+  /**
+   * Ce qui a ete achete au fournisseur, saisi a la main.
+   *
+   * Rien ne permet de le deviner : une facture d'achat ne passe pas
+   * par l'application. C'est pourtant le point de depart de tout le
+   * reste — sans lui, "il me reste combien" n'a pas de reponse.
+   */
+  purchased: number;
   /** Ce qui a ete remis au transporteur, saisi a la main. */
   received: number;
   /** Unites effectivement remises aux clients. */
@@ -47,6 +55,7 @@ export type ProductStock = {
 };
 
 export type InventoryTotals = {
+  purchased: number;
   received: number;
   delivered: number;
   real: number;
@@ -64,6 +73,7 @@ type ProductRow = {
   image: string | null;
   quantity: number;
   stock_sent: number;
+  stock_purchased: number | null;
   status: string;
 };
 
@@ -109,7 +119,9 @@ export async function getInventory(): Promise<{
     fetchAll<ProductRow>(() =>
       supabase
         .from("products")
-        .select("id,ref,name,forcelog_ref,image,quantity,stock_sent,status")
+        .select(
+          "id,ref,name,forcelog_ref,image,quantity,stock_sent,stock_purchased,status"
+        )
         .order("name", { ascending: true })
     ),
     fetchAll<LeadRow>(() =>
@@ -231,6 +243,7 @@ export async function getInventory(): Promise<{
       forcelogRef: p.forcelog_ref ?? undefined,
       name: p.name,
       image: p.image ?? undefined,
+      purchased: p.stock_purchased ?? 0,
       received: p.stock_sent,
       delivered: livre,
       real,
@@ -247,6 +260,7 @@ export async function getInventory(): Promise<{
   return {
     products: rows,
     totals: {
+      purchased: somme((r) => r.purchased),
       received: somme((r) => r.received),
       delivered: somme((r) => r.delivered),
       real: somme((r) => r.real),

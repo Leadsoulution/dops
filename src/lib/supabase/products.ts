@@ -124,6 +124,7 @@ export type ProductInput = {
   stockInitial?: number;
   /** Total confie au transporteur depuis le debut. */
   stockSent?: number;
+  stockPurchased?: number;
 };
 
 function toRow(input: Partial<ProductInput>) {
@@ -158,6 +159,10 @@ function toRow(input: Partial<ProductInput>) {
     row.stock_initial = Math.max(0, Math.trunc(input.stockInitial));
   if (input.stockSent !== undefined)
     row.stock_sent = Math.max(0, Math.trunc(input.stockSent));
+  // Une quantite achetee negative ou a virgule n'existe pas : on
+  // n'enregistre pas ce qu'aucun bon de commande ne pourrait porter.
+  if (input.stockPurchased !== undefined)
+    row.stock_purchased = Math.max(0, Math.trunc(input.stockPurchased));
   return row;
 }
 

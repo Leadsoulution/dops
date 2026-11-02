@@ -7,7 +7,8 @@ import { getInventory } from "./inventory";
 
 type P = {
   id: string; ref: string; name: string; forcelog_ref: string | null;
-  image: string | null; quantity: number; stock_sent: number; status: string;
+  image: string | null; quantity: number; stock_sent: number;
+  stock_purchased: number | null; status: string;
 };
 type L = {
   id: string; reference: string; client: string;
@@ -19,7 +20,7 @@ type L = {
 
 const produit = (o: Partial<P>): P => ({
   id: "p1", ref: "R1", name: "Bague", forcelog_ref: "1FKGUA", image: null,
-  quantity: 0, stock_sent: 0, status: "Actif", ...o,
+  quantity: 0, stock_sent: 0, stock_purchased: 0, status: "Actif", ...o,
 });
 
 let n = 0;
@@ -160,5 +161,34 @@ describe("getInventory", () => {
     const { products, totals } = await getInventory();
     expect(products).toHaveLength(0);
     expect(totals.received).toBe(0);
+  });
+});
+
+describe("quantite achetee", () => {
+  /*
+   * Elle ne se deduit de rien : aucune facture fournisseur n'entre
+   * dans l'application. Lue telle qu'elle a ete saisie, ou zero.
+   */
+  it("rend ce qui a ete saisi", async () => {
+    stub([produit({ stock_purchased: 500, stock_sent: 220 })], []);
+    const { products, totals } = await getInventory();
+    expect(products[0].purchased).toBe(500);
+    expect(totals.purchased).toBe(500);
+  });
+
+  it("compte zero quand la colonne est vide", async () => {
+    // La colonne vient d'etre ajoutee : les anciennes lignes la
+    // portent a null, et null n'est pas une quantite.
+    stub([produit({ stock_purchased: null })], []);
+    const { products } = await getInventory();
+    expect(products[0].purchased).toBe(0);
+  });
+
+  it("ne touche pas au calcul du stock reel", async () => {
+    // Achete et recu disent deux choses differentes : ce qui a ete
+    // paye au fournisseur, et ce qui est parti chez le transporteur.
+    stub([produit({ stock_purchased: 1000, stock_sent: 10 })], []);
+    const { totals } = await getInventory();
+    expect(totals.real).toBe(10);
   });
 });
