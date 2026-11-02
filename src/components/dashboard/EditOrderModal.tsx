@@ -178,6 +178,17 @@ export default function EditOrderModal({
   const [carrierInitial, setCarrierInitial] = useState<CarrierId>(
     carrierOfLead(lead.carrier)
   );
+  /*
+   * Sortir de la liste du transporteur, en connaissance de cause.
+   *
+   * Verifie sur leur API : Speedaf cree sans broncher un colis pour
+   * une ville absente de son propre referentiel — leur liste
+   * sous-estime leur couverture, et leur portail en propose plus
+   * qu'elle. S'y tenir strictement reviendrait a refuser des clients
+   * qu'ils savent livrer. La liste du transporteur reste donc le
+   * defaut, et l'agent peut l'elargir d'un clic.
+   */
+  const [toutesLesVilles, setToutesLesVilles] = useState(false);
   const [villesDuTransporteur, setVillesDuTransporteur] = useState<Set<string> | null>(
     null
   );
@@ -401,7 +412,7 @@ export default function EditOrderModal({
    * rouge, lui, continue de la signaler.
    */
   const villesProposees = useMemo(() => {
-    if (!villesDuTransporteur) return cityOptions;
+    if (toutesLesVilles || !villesDuTransporteur) return cityOptions;
     const servies = cityOptions.filter((n) =>
       villesDuTransporteur.has(normalizeCity(n))
     );
@@ -410,7 +421,13 @@ export default function EditOrderModal({
     return actuelle && !servies.includes(actuelle)
       ? [actuelle, ...servies]
       : servies;
-  }, [cityOptions, villesDuTransporteur, ville]);
+  }, [cityOptions, villesDuTransporteur, ville, toutesLesVilles]);
+
+  /** Combien de villes la liste du transporteur laisse de cote. */
+  const villesMasquees =
+    villesDuTransporteur && !toutesLesVilles
+      ? cityOptions.length - villesProposees.length
+      : 0;
 
   const filteredProducts = productQuery
     ? catalogProducts.filter((p) =>
@@ -553,10 +570,30 @@ export default function EditOrderModal({
                     searchPlaceholder="Rechercher une ville..."
                   />
                   {villeRefusee && (
-                    <p className="mt-1 flex items-start gap-1.5 text-[11.5px] font-medium text-red-600">
+                    <p className="mt-1 flex items-start gap-1.5 text-[11.5px] font-medium text-amber-700">
                       <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
-                      {transporteur.name} ne dessert pas {ville}.
+                      {ville} n&apos;est pas dans la liste de{" "}
+                      {transporteur.name}. Le colis peut passer quand meme,
+                      mais verifiez avant d&apos;expedier.
                     </p>
+                  )}
+                  {villesMasquees > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setToutesLesVilles(true)}
+                      className="mt-1 text-[11.5px] text-gray-500 underline-offset-2 hover:text-gray-700 hover:underline"
+                    >
+                      Voir les {villesMasquees} autres villes du dictionnaire
+                    </button>
+                  )}
+                  {toutesLesVilles && villesDuTransporteur && (
+                    <button
+                      type="button"
+                      onClick={() => setToutesLesVilles(false)}
+                      className="mt-1 text-[11.5px] text-gray-500 underline-offset-2 hover:text-gray-700 hover:underline"
+                    >
+                      Revenir aux villes de {transporteur.name}
+                    </button>
                   )}
                 </div>
                 <div>
