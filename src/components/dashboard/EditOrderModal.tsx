@@ -166,6 +166,18 @@ export default function EditOrderModal({
    * n'apparaitrait qu'apres la confirmation. Elle s'affiche ici.
    */
   const [carrier, setCarrier] = useState<CarrierId>(carrierOfLead(lead.carrier));
+  /*
+   * Le transporteur affiche a l'ouverture.
+   *
+   * Il sert de reference a l'enregistrement : seul un choix
+   * reellement different part au serveur. Comparer au transporteur de
+   * la commande ne suffit plus, puisqu'une commande sans transporteur
+   * ouvre desormais sur celui par defaut — la simple ouverture de la
+   * fenetre l'aurait alors fige, et aurait fausse la repartition.
+   */
+  const [carrierInitial, setCarrierInitial] = useState<CarrierId>(
+    carrierOfLead(lead.carrier)
+  );
   const [villesDuTransporteur, setVillesDuTransporteur] = useState<Set<string> | null>(
     null
   );
@@ -184,6 +196,33 @@ export default function EditOrderModal({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /*
+   * Une commande sans transporteur ouvre sur celui par defaut.
+   *
+   * Le defaut est un reglage, pas une constante : il est a Speedaf
+   * aujourd'hui. La fenetre affichait pourtant ForceLog, donc ses
+   * villes, et l'agent choisissait dans une liste qui n'etait pas
+   * celle du transporteur qui allait reellement prendre le colis.
+   */
+  useEffect(() => {
+    if (lead.carrier) return;
+    let cancelled = false;
+    fetch("/api/carriers")
+      .then((r) => r.json())
+      .then((d) => {
+        const defaut = d?.routing?.default;
+        if (cancelled || (defaut !== "speedaf" && defaut !== "forcelog")) return;
+        setCarrier(defaut);
+        setCarrierInitial(defaut);
+      })
+      .catch(() => {
+        /* Defaut inconnu : on garde celui du registre. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [lead.carrier]);
 
   // Le catalogue et le dictionnaire des villes viennent de la base : les
   // listes ecrites en dur ne montraient qu'une poignee de choix, sans
@@ -299,7 +338,7 @@ export default function EditOrderModal({
           quartier: quartier.trim(),
           adresse: adresse.trim(),
           amount: `${total.trim() || 0} MAD`,
-          ...(carrier !== carrierOfLead(lead.carrier) ? { carrier } : {}),
+          ...(carrier !== carrierInitial ? { carrier } : {}),
           // Corrige a la main : on enregistre aussi le code, dont
           // dependent la couleur du badge et le calcul des paiements.
           ...(deliveryStatus !== (lead.deliveryStatus ?? "")
@@ -346,6 +385,32 @@ export default function EditOrderModal({
       villesDuTransporteur &&
       !villesDuTransporteur.has(normalizeCity(ville))
   );
+
+  /*
+   * Les villes proposees sont celles du transporteur choisi.
+   *
+   * Les deux listes ne se recouvrent pas. Proposer les 979 villes du
+   * dictionnaire a un agent qui a selectionne Speedaf, puis lui
+   * reprocher son choix en rouge, revient a le laisser se tromper
+   * pour le corriger ensuite. Mieux vaut ne pas offrir le choix.
+   *
+   * Deux garde-fous : une liste illisible ne reduit rien — on ne sait
+   * rien, on ne retranche rien — et la ville deja inscrite reste
+   * offerte meme si elle n'est pas desservie, sinon le champ
+   * paraitrait vide alors qu'il porte une valeur. L'avertissement
+   * rouge, lui, continue de la signaler.
+   */
+  const villesProposees = useMemo(() => {
+    if (!villesDuTransporteur) return cityOptions;
+    const servies = cityOptions.filter((n) =>
+      villesDuTransporteur.has(normalizeCity(n))
+    );
+    if (servies.length === 0) return cityOptions;
+    const actuelle = ville.trim();
+    return actuelle && !servies.includes(actuelle)
+      ? [actuelle, ...servies]
+      : servies;
+  }, [cityOptions, villesDuTransporteur, ville]);
 
   const filteredProducts = productQuery
     ? catalogProducts.filter((p) =>
@@ -481,7 +546,7 @@ export default function EditOrderModal({
                   <SelectDropdown
                     variant="field"
                     pinnedLabel={ville || "Aucune ville"}
-                    options={cityOptions}
+                    options={villesProposees}
                     value={ville || undefined}
                     onSelect={setVille}
                     searchable
