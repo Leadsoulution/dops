@@ -78,3 +78,45 @@ describe("matchCities", () => {
     expect(sansCorrespondance).toEqual(["mireleft"]);
   });
 });
+
+describe("les autres ecritures du transporteur", () => {
+  /*
+   * Speedaf nomme le meme lieu de cinq facons : KELAAT M'GOUNA en
+   * capitales, "Kelaat MGouna" en anglais, "Kelâat M'Gouna" en
+   * francais — c'est celle-la que son application affiche. Ne
+   * comparer que la premiere laissait la ville introuvable.
+   */
+  it("reconnait une ville par une de ses autres ecritures", () => {
+    const { matched } = matchCities(
+      [{ key: "kelaat_mgouna", name: "Kelaat MGouna" }],
+      [
+        {
+          code: "MAA03569",
+          name: "KELAAT M'GOUNA",
+          parentName: "Draa - Tafilalet",
+          autresNoms: ["Kelaat MGouna", "Kelâat M'Gouna"],
+        },
+      ]
+    );
+    expect(matched.get("kelaat_mgouna")?.code).toBe("MAA03569");
+  });
+
+  it("garde l'accent et l'apostrophe hors du calcul", () => {
+    const { matched } = matchCities(
+      [{ key: "kelaat_m_gouna", name: "Kelâat M'Gouna" }],
+      [{ code: "X", name: "KELAAT M'GOUNA" }]
+    );
+    expect(matched.get("kelaat_m_gouna")?.code).toBe("X");
+  });
+
+  it("ne rapproche toujours pas deux noms seulement voisins", () => {
+    // "Kalaat" et "Kelaat" ne sont pas la meme chaine : un colis
+    // envoye a l'a-peu-pres se perd a cent kilometres de la.
+    const { matched, sansCorrespondance } = matchCities(
+      [{ key: "kalaat_mgouna", name: "Kalaat MGouna" }],
+      [{ code: "X", name: "KELAAT M'GOUNA", autresNoms: ["Kelaat MGouna"] }]
+    );
+    expect(matched.size).toBe(0);
+    expect(sansCorrespondance).toEqual(["kalaat_mgouna"]);
+  });
+});

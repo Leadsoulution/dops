@@ -21,6 +21,14 @@ export type CarrierCity = {
   parentName?: string;
   /** Notre cle canonique, quand la correspondance est etablie. */
   cityKey?: string;
+  /**
+   * Les autres ecritures du meme lieu chez le transporteur.
+   *
+   * Speedaf nomme Kelâat M'Gouna de cinq facons selon la langue. Ne
+   * comparer que la premiere laissait la ville introuvable, alors
+   * qu'une des autres correspond a la notre.
+   */
+  autresNoms?: string[];
 };
 
 /** "Beni Mellal", "BENI-MELLAL" et "beni mellal" donnent "beni_mellal". */
@@ -73,7 +81,11 @@ export function matchCities(
 } {
   const parEcriture = new Map<string, CarrierCity>();
   for (const ville of cellesDuTransporteur) {
-    for (const ecriture of cityAliases(ville.name)) {
+    const ecritures = [
+      ...cityAliases(ville.name),
+      ...(ville.autresNoms ?? []).flatMap((n) => cityAliases(n)),
+    ];
+    for (const ecriture of new Set(ecritures)) {
       const existante = parEcriture.get(ecriture);
       if (!existante || ville.name.length < existante.name.length) {
         parEcriture.set(ecriture, ville);

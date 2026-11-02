@@ -504,13 +504,50 @@ export function getArea(
   });
 }
 
-/** L'arbre complet province / ville / district d'un pays. */
-export function getAreaTree(config: SpeedafConfig): Promise<
-  { code: string; name: string; type: number; children?: unknown[] }[]
-> {
-  return call(config, "/open-api/common/area/v2/getTreeByCountryCode", {
-    countryCode: "MA",
-  });
+/**
+ * Un noeud de leur decoupage administratif.
+ *
+ * Il porte le meme lieu sous cinq ecritures : `name` en capitales,
+ * `enName`, `frName` accentue, `trName`, `arName` en arabe. C'est
+ * `frName` que leur propre application affiche — "Kelâat M'Gouna" —
+ * et aucune des cinq ne ressemble forcement a la notre.
+ */
+export type SpeedafArea = {
+  code: string;
+  name: string;
+  enName?: string;
+  frName?: string;
+  trName?: string;
+  arName?: string;
+  /** 1 province, 2 ville, 3 localite. */
+  type: number;
+  children?: SpeedafArea[];
+};
+
+/**
+ * L'arbre complet province / ville / localite.
+ *
+ * A preferer a `getArea`, qui ne rend qu'un niveau a la fois : leurs
+ * 2061 localites de niveau 3 n'y apparaissent qu'au prix de 724
+ * appels, et c'est la que vivent des villes que leur application
+ * propose — Kelâat M'Gouna entre autres.
+ */
+export async function getAreaTree(
+  config: SpeedafConfig
+): Promise<SpeedafArea[]> {
+  const racine = await call<SpeedafArea | SpeedafArea[]>(
+    config,
+    "/open-api/common/area/v2/getTreeByCountryCode",
+    { countryCode: "MA" }
+  );
+  /*
+   * Ils rendent un noeud unique, le pays, et non une liste.
+   *
+   * Verifie sur leur API : la reponse est {code:"MA", ..., children:
+   * [les douze provinces]}. Le prendre pour un tableau faisait
+   * echouer l'import des le premier parcours.
+   */
+  return Array.isArray(racine) ? racine : (racine?.children ?? []);
 }
 
 /** Abonne l'application aux notifications de suivi. */

@@ -4,7 +4,7 @@ import { fetchAll } from "./page";
 import { cityKey, deliverableCities } from "./cities";
 import { getCarrierRouting } from "./carriers";
 import { getSpeedafSettings } from "./speedaf-settings";
-import { getArea } from "@/lib/speedaf/client";
+import { getAreaTree } from "@/lib/speedaf/client";
 import { matchCities, normalizeCity, type CarrierCity } from "@/lib/carriers/city-match";
 import type { CarrierId } from "@/lib/carriers/registry";
 
@@ -31,6 +31,23 @@ type Row = {
   city_key: string | null;
   active: boolean;
 };
+
+/**
+ * Les autres ecritures d'un lieu chez Speedaf.
+ *
+ * Le nom en capitales ne suffit pas : c'est `frName` que leur
+ * application affiche, et c'est parfois lui seul qui ressemble a ce
+ * que nous avons ecrit.
+ */
+function autresEcritures(n: {
+  enName?: string;
+  frName?: string;
+  trName?: string;
+}): string[] {
+  return [n.enName, n.frName, n.trName]
+    .map((x) => (x ?? "").trim())
+    .filter((x) => x.length > 2);
+}
 
 /** Les villes d'un transporteur, telles qu'il les nomme. */
 export async function listCarrierCities(
@@ -153,11 +170,54 @@ export async function importSpeedafCities(): Promise<ImportResult> {
   if (!config) throw new Error("Identifiants Speedaf non configures.");
   const supabase = getSupabaseServerClient();
 
-  const regions = await getArea(config, 1);
+  /*
+   * L'arbre entier, et non un niveau a la fois.
+   *
+   * `getArea` ne rend qu'un etage : les douze provinces, puis les
+   * 724 villes. Leurs 2061 localites de niveau 3 restaient dehors, et
+   * avec elles des villes que leur propre application propose —
+   * Kelâat M'Gouna par exemple, que l'agent voyait refusee alors que
+   * Speedaf la dessert.
+   *
+   * Un seul appel rend les trois etages, ce qui evite aussi les 724
+   * requetes qu'il aurait fallu pour descendre au troisieme.
+   */
+  const arbre = await getAreaTree(config);
+  const regions = arbre.map((r) => ({ code: r.code, name: r.name }));
   const villes: CarrierCity[] = [];
-  for (const region of regions) {
-    for (const v of await getArea(config, 2, region.code)) {
-      villes.push({ code: v.code, name: v.name, parentName: region.name });
+
+  for (const province of arbre) {
+    for (const ville of province.children ?? []) {
+      villes.push({
+        code: ville.code,
+        name: ville.name.trim(),
+        parentName: province.name,
+        autresNoms: autresEcritures(ville),
+      });
+      /*
+       * Une localite garde sa ville et sa province.
+       *
+       * Speedaf attend les trois a la creation du colis. Les perdre
+       * ici ferait partir "Kelâat M'Gouna" sans dire qu'elle depend
+       * de Ouarzazate, et l'adresse serait incomplete.
+       */
+      /*
+       * Une localite entre comme une ville, avec sa province.
+       *
+       * Verifie sur leur API : un colis adresse a "KALAAT MGOUNA"
+       * comme ville, avec l'une ou l'autre province, est accepte. La
+       * distinction ville / localite n'a donc pas besoin d'etre
+       * portee jusqu'a la creation du colis, et deux colonnes de
+       * plus en base ne changeraient rien a ce qui part.
+       */
+      for (const localite of ville.children ?? []) {
+        villes.push({
+          code: localite.code,
+          name: localite.name.trim(),
+          parentName: province.name,
+          autresNoms: autresEcritures(localite),
+        });
+      }
     }
   }
   if (villes.length === 0) throw new Error("Speedaf n'a rendu aucune ville.");
