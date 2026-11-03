@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { cityAliases, matchCities, normalizeCity } from "./city-match";
+import {
+  cityAliases,
+  matchCities,
+  normalizeCity,
+  uneSeuleEcriture,
+} from "./city-match";
 
 /* Les noms viennent du referentiel reel de Speedaf, lu sur leur
  * environnement de test. */
@@ -118,5 +123,47 @@ describe("les autres ecritures du transporteur", () => {
     );
     expect(matched.size).toBe(0);
     expect(sansCorrespondance).toEqual(["kalaat_mgouna"]);
+  });
+});
+
+describe("uneSeuleEcriture", () => {
+  it("ne garde qu'une ecriture par ville", () => {
+    expect(uneSeuleEcriture(["SAFI", "Safi", "safi"])).toEqual(["SAFI"]);
+  });
+
+  it("garde la plus courte quand elles ne different que par la ponctuation", () => {
+    expect(
+      uneSeuleEcriture(["CASABLANCA (VILLE)", "CASABLANCA VILLE"])
+    ).toEqual(["CASABLANCA VILLE"]);
+  });
+
+  it("ne confond pas une ville et son aeroport", () => {
+    // La normalisation les separe : ce sont deux destinations.
+    expect(uneSeuleEcriture(["CASABLANCA AEROPORT", "CASABLANCA"])).toEqual([
+      "CASABLANCA",
+      "CASABLANCA AEROPORT",
+    ]);
+  });
+
+  it("laisse passer deux villes que la normalisation separe", () => {
+    // Speedaf ecrit la meme commune de deux facons que rien ne
+    // rapproche sans deviner : les deux partent chez lui, les deux
+    // restent proposees.
+    expect(uneSeuleEcriture(["EL KELAA MGOUNA", "KELAAT M'GOUNA"])).toEqual([
+      "EL KELAA MGOUNA",
+      "KELAAT M'GOUNA",
+    ]);
+  });
+
+  it("ecarte ce qui ne se normalise en rien", () => {
+    expect(uneSeuleEcriture(["", "  ", "---", "SAFI"])).toEqual(["SAFI"]);
+  });
+
+  it("classe les villes comme on les lit", () => {
+    expect(uneSeuleEcriture(["TANGER", "AGADIR", "MEKNES"])).toEqual([
+      "AGADIR",
+      "MEKNES",
+      "TANGER",
+    ]);
   });
 });

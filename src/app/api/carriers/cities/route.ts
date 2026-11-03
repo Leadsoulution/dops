@@ -3,6 +3,7 @@ import { getSessionProfile } from "@/lib/supabase/auth";
 import { isSupabaseServerConfigured } from "@/lib/supabase/server";
 import {
   deliverableKeys,
+  deliverableNames,
   importSpeedafCities,
 } from "@/lib/supabase/carrier-cities";
 import { CARRIERS, type CarrierId } from "@/lib/carriers/registry";
@@ -10,9 +11,10 @@ import { CARRIERS, type CarrierId } from "@/lib/carriers/registry";
 /**
  * Les villes qu'un transporteur sait livrer.
  *
- * La lecture rend les cles de notre dictionnaire, pas les noms du
- * transporteur : l'ecran compare la ville d'une commande a cette
- * liste, et la ville d'une commande est la notre.
+ * La lecture rend deux choses : les cles de notre dictionnaire qu'il
+ * dessert, pour juger la ville deja inscrite sur une commande, et ses
+ * propres noms, pour que l'agent choisisse dans la liste du
+ * transporteur plutot que dans la notre.
  *
  * L'import, reserve aux administrateurs, va rechercher le referentiel
  * chez le transporteur et le rapproche du notre.
@@ -31,8 +33,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Transporteur inconnu." }, { status: 400 });
   }
   try {
-    const cles = await deliverableKeys(carrier);
-    return NextResponse.json({ carrier, keys: [...cles] });
+    const [cles, noms] = await Promise.all([
+      deliverableKeys(carrier),
+      deliverableNames(carrier),
+    ]);
+    return NextResponse.json({ carrier, keys: [...cles], names: noms });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Erreur inattendue." },

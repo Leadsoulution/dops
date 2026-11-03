@@ -189,7 +189,20 @@ export default function EditOrderModal({
    * defaut, et l'agent peut l'elargir d'un clic.
    */
   const [toutesLesVilles, setToutesLesVilles] = useState(false);
-  const [villesDuTransporteur, setVillesDuTransporteur] = useState<Set<string> | null>(
+  /*
+   * Les villes du transporteur, sous ses propres noms.
+   *
+   * Le dictionnaire connait la meme commune sous trois ecritures
+   * depuis qu'il accueille les deux listes de Speedaf. Proposer le
+   * dictionnaire filtre les montrait toutes les trois sans dire
+   * laquelle part. La liste du transporteur n'en montre qu'une, la
+   * sienne.
+   */
+  const [villesTransporteur, setVillesTransporteur] = useState<string[] | null>(
+    null
+  );
+  /** Les cles de notre dictionnaire qu'il dessert, pour juger l'existant. */
+  const [clesDuTransporteur, setClesDuTransporteur] = useState<Set<string> | null>(
     null
   );
 
@@ -298,11 +311,16 @@ export default function EditOrderModal({
       .then((res) => res.json())
       .then((data) => {
         if (cancelled || !Array.isArray(data.keys)) return;
-        setVillesDuTransporteur(new Set(data.keys as string[]));
+        setClesDuTransporteur(new Set(data.keys as string[]));
+        if (Array.isArray(data.names)) {
+          setVillesTransporteur(data.names as string[]);
+        }
       })
       .catch(() => {
         // Liste indisponible : on n'invente pas un refus.
-        if (!cancelled) setVillesDuTransporteur(null);
+        if (cancelled) return;
+        setClesDuTransporteur(null);
+        setVillesTransporteur(null);
       });
 
     fetch("/api/cities")
@@ -393,8 +411,11 @@ export default function EditOrderModal({
    */
   const villeRefusee = Boolean(
     ville.trim() &&
-      villesDuTransporteur &&
-      !villesDuTransporteur.has(normalizeCity(ville))
+      clesDuTransporteur &&
+      !clesDuTransporteur.has(normalizeCity(ville)) &&
+      !(villesTransporteur ?? []).some(
+        (n) => normalizeCity(n) === normalizeCity(ville)
+      )
   );
 
   /*
@@ -412,21 +433,19 @@ export default function EditOrderModal({
    * rouge, lui, continue de la signaler.
    */
   const villesProposees = useMemo(() => {
-    if (toutesLesVilles || !villesDuTransporteur) return cityOptions;
-    const servies = cityOptions.filter((n) =>
-      villesDuTransporteur.has(normalizeCity(n))
-    );
-    if (servies.length === 0) return cityOptions;
+    if (toutesLesVilles || !villesTransporteur || villesTransporteur.length === 0) {
+      return cityOptions;
+    }
     const actuelle = ville.trim();
-    return actuelle && !servies.includes(actuelle)
-      ? [actuelle, ...servies]
-      : servies;
-  }, [cityOptions, villesDuTransporteur, ville, toutesLesVilles]);
+    return actuelle && !villesTransporteur.includes(actuelle)
+      ? [actuelle, ...villesTransporteur]
+      : villesTransporteur;
+  }, [cityOptions, villesTransporteur, ville, toutesLesVilles]);
 
-  /** Combien de villes la liste du transporteur laisse de cote. */
+  /** Combien de villes du dictionnaire la liste du transporteur laisse de cote. */
   const villesMasquees =
-    villesDuTransporteur && !toutesLesVilles
-      ? cityOptions.length - villesProposees.length
+    villesTransporteur && !toutesLesVilles
+      ? Math.max(0, cityOptions.length - villesProposees.length)
       : 0;
 
   const filteredProducts = productQuery
@@ -586,7 +605,7 @@ export default function EditOrderModal({
                       Voir les {villesMasquees} autres villes du dictionnaire
                     </button>
                   )}
-                  {toutesLesVilles && villesDuTransporteur && (
+                  {toutesLesVilles && villesTransporteur && (
                     <button
                       type="button"
                       onClick={() => setToutesLesVilles(false)}

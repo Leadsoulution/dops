@@ -259,15 +259,7 @@ export default function VillesPage() {
       if (!res.ok) throw new Error(data.error);
       setNotice(
         carrier === "speedaf"
-          ? [
-              data.desservies
-                ? `${data.desservies} ville(s) desservies par Speedaf.`
-                : null,
-              `${data.ajoutees} ajoutee(s) au dictionnaire, ${data.deja} deja connue(s).`,
-              data.avertissement,
-            ]
-              .filter(Boolean)
-              .join(" ")
+          ? `${data.villes} ville(s) desservies par Speedaf, dont ${data.rapprochees} reconnues dans le dictionnaire. Sa liste lui reste propre : elle s'affiche dans la commande quand Speedaf est choisi.`
           : `${data.total} ville(s) ForceLog : ${data.inserted} ajoutee(s), ${data.updated} mise(s) a jour.`
       );
       await load();

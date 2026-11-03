@@ -61,6 +61,28 @@ export function cityAliases(name: string): string[] {
 }
 
 /**
+ * Une seule ecriture par ville, pour une liste a presenter.
+ *
+ * Un transporteur nomme parfois deux fois le meme lieu : Speedaf tient
+ * un arbre de regions et une liste de communes, et "EL KELAA MGOUNA"
+ * y cotoie "KELAAT M'GOUNA". Les montrer toutes les deux a l'agent,
+ * c'est lui demander de deviner laquelle part.
+ *
+ * La plus courte gagne, comme au rapprochement : entre "CASABLANCA"
+ * et "CASABLANCA AEROPORT", c'est la ville qu'on veut.
+ */
+export function uneSeuleEcriture(noms: string[]): string[] {
+  const parEcriture = new Map<string, string>();
+  for (const nom of noms) {
+    const cle = normalizeCity(nom);
+    if (!cle) continue;
+    const vue = parEcriture.get(cle);
+    if (!vue || nom.length < vue.length) parEcriture.set(cle, nom);
+  }
+  return [...parEcriture.values()].sort((a, b) => a.localeCompare(b, "fr"));
+}
+
+/**
  * Rapproche automatiquement les deux listes.
  *
  * Seules les correspondances exactes sont posees : une ville reconnue

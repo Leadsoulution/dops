@@ -2,11 +2,15 @@ import "server-only";
 import { getSupabaseServerClient, isSupabaseServerConfigured } from "./server";
 import { fetchAll } from "./page";
 import { cityKey, deliverableCities } from "./cities";
-import { getCarrierRouting } from "./carriers";
 import { getSpeedafSettings } from "./speedaf-settings";
 import { getAreaTree } from "@/lib/speedaf/client";
 import { villesACompleter } from "@/lib/speedaf/villes-officielles";
-import { matchCities, normalizeCity, type CarrierCity } from "@/lib/carriers/city-match";
+import {
+  matchCities,
+  normalizeCity,
+  uneSeuleEcriture,
+  type CarrierCity,
+} from "@/lib/carriers/city-match";
 import type { CarrierId } from "@/lib/carriers/registry";
 
 /**
@@ -93,6 +97,34 @@ export async function deliverableKeys(
 }
 
 /**
+ * Les villes d'un transporteur, telles qu'il faut les lui ecrire.
+ *
+ * C'est ce que l'agent doit voir quand il a choisi son transporteur.
+ * Lui proposer notre dictionnaire filtre revenait a melanger les
+ * orthographes des deux : la meme commune y figure sous le nom de
+ * ForceLog, sous celui de l'arbre Speedaf et sous celui de leur
+ * feuille, et rien ne disait laquelle choisir.
+ *
+ * ForceLog repond depuis le dictionnaire, ou son code prouve qu'il
+ * dessert la ville ; Speedaf depuis sa propre liste. Deux ecritures
+ * qui se normalisent pareil ne sortent qu'une fois, la plus courte
+ * gagnant — c'est deja la regle du rapprochement.
+ */
+export async function deliverableNames(
+  carrier: CarrierId
+): Promise<string[]> {
+  if (!isSupabaseServerConfigured) return [];
+  const brutes =
+    carrier === "forcelog"
+      ? [...(await deliverableCities().catch(() => new Map<string, CarrierCity>())).values()].map(
+          (v) => v.name
+        )
+      : (await listCarrierCities(carrier)).map((v) => v.name);
+
+  return uneSeuleEcriture(brutes);
+}
+
+/**
  * Le rapprochement entre notre dictionnaire et la liste d'un
  * transporteur, refait a la lecture.
  *
@@ -143,7 +175,21 @@ export async function speedafCityFor(
     };
   }
 
-  // Pas de cle posee : la ville partage peut-etre une zone avec une
+  /*
+   * La ville ecrite est peut-etre la leur.
+   *
+   * L'agent choisit desormais dans la liste du transporteur, donc
+   * sous le nom de Speedaf — un nom qui n'est pas forcement dans
+   * notre dictionnaire, et qui n'a alors aucune cle. Le chercher dans
+   * leur liste est le chemin direct ; sans cela, une ville qu'ils
+   * desservent et que l'ecran vient de proposer serait refusee a
+   * l'expedition.
+   */
+  const leurs = await listCarrierCities("speedaf");
+  const parNom = leurs.find((v) => normalizeCity(v.name) === cle);
+  if (parNom) return parNom;
+
+  // Toujours rien : la ville partage peut-etre une zone avec une
   // autre, qui a pris la ligne. On rejoue le rapprochement.
   const { matched } = await rapprochement("speedaf");
   return matched.get(cle) ?? null;
@@ -321,118 +367,5 @@ export async function importSpeedafCities(): Promise<ImportResult> {
     sansCorrespondance,
     retirees: retirees.length,
     horsArbre,
-  };
-}
-
-export type DictionaryImport = {
-  /** Villes Speedaf versees au dictionnaire. */
-  ajoutees: number;
-  /** Villes qu'il dessert et que nous connaissions deja. */
-  deja: number;
-  /** Villes Speedaf desormais rattachees a une ville du dictionnaire. */
-  rapprochees: number;
-};
-
-/**
- * Verse au dictionnaire les villes que seul Speedaf dessert.
- *
- * Le dictionnaire n'a longtemps connu que les villes de ForceLog, le
- * seul transporteur. Speedaf en dessert cinq cent vingt-neuf autres :
- * tant qu'elles manquent, un client de ces villes-la ne peut pas etre
- * saisi, alors qu'un transporteur sait l'atteindre.
- *
- * L'ajout est strictement additif. Une ville deja connue n'est jamais
- * reecrite — ni son nom, ni son tarif, ni son code ForceLog : elle a
- * peut-etre ete corrigee a la main, et un import ne doit pas effacer
- * une decision. Les nouvelles arrivent sans code ForceLog, ce qui est
- * la verite : il ne les dessert pas.
- */
-export async function addSpeedafCitiesToDictionary(): Promise<DictionaryImport> {
-  const supabase = getSupabaseServerClient();
-  const [leurs, nos, routing] = await Promise.all([
-    listCarrierCities("speedaf"),
-    fetchAll<{ key: string; name: string; aliases: string[] | null }>(() =>
-      supabase.from("cities").select("key,name,aliases")
-    ),
-    getCarrierRouting(),
-  ]);
-  if (leurs.length === 0) {
-    throw new Error("Aucune ville Speedaf importee : lancez d'abord leur import.");
-  }
-
-  const { matched } = matchCities(
-    nos.map((c) => ({ key: c.key, name: c.name, aliases: c.aliases ?? [] })),
-    leurs
-  );
-  const dejaPrises = new Set([...matched.values()].map((v) => v.code));
-
-  /*
-   * Une cle ne peut appartenir qu'a une ville.
-   *
-   * Le rapprochement est exact ; la normalisation, elle, rapproche
-   * davantage — "M'Diq" et "M Diq" donnent la meme cle. Inserer sans
-   * regarder ferait echouer le lot entier sur un doublon, ou pire,
-   * ecraserait la ville existante.
-   */
-  const clesConnues = new Set(nos.map((c) => c.key));
-  const aAjouter: { key: string; name: string; tariff: number }[] = [];
-  for (const ville of leurs) {
-    if (dejaPrises.has(ville.code)) continue;
-    const cle = cityKey(ville.name);
-    if (!cle || clesConnues.has(cle)) continue;
-    clesConnues.add(cle);
-    aAjouter.push({
-      key: cle,
-      name: ville.name,
-      tariff: routing.tariffs.speedaf,
-    });
-  }
-
-  const maintenant = new Date().toISOString();
-  for (let i = 0; i < aAjouter.length; i += 200) {
-    const { error } = await supabase.from("cities").insert(
-      aAjouter.slice(i, i + 200).map((v) => ({
-        key: v.key,
-        name: v.name,
-        aliases: [],
-        // Pas de code ForceLog : il ne dessert pas ces villes-la.
-        carrier_code: null,
-        tariff: v.tariff,
-        tariff_source: "transporteur",
-        active: true,
-        updated_at: maintenant,
-      }))
-    );
-    if (error) throw new Error(error.message);
-  }
-
-  /*
-   * Le rapprochement, refait sur le dictionnaire elargi.
-   *
-   * Sans cela, les villes qu'on vient d'ajouter resteraient sans cle
-   * cote Speedaf et un colis pour l'une d'elles serait refuse a
-   * l'expedition, alors qu'elle figure maintenant dans la liste.
-   */
-  const apres = await fetchAll<{ key: string; name: string; aliases: string[] | null }>(
-    () => supabase.from("cities").select("key,name,aliases").eq("active", true)
-  );
-  const { matched: refait } = matchCities(
-    apres.map((c) => ({ key: c.key, name: c.name, aliases: c.aliases ?? [] })),
-    leurs
-  );
-  for (const ville of refait.values()) {
-    if (dejaPrises.has(ville.code)) continue;
-    const { error } = await supabase
-      .from("carrier_cities")
-      .update({ city_key: ville.cityKey, updated_at: maintenant })
-      .eq("carrier", "speedaf")
-      .eq("code", ville.code);
-    if (error) throw new Error(error.message);
-  }
-
-  return {
-    ajoutees: aAjouter.length,
-    deja: dejaPrises.size,
-    rapprochees: refait.size,
   };
 }
