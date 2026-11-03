@@ -446,14 +446,21 @@ export type SpeedafTrack = {
  * Le suivi de plusieurs colis d'un coup.
  *
  * C'est l'avantage de Speedaf sur ForceLog, qui ne repond que d'un
- * colis a la fois : une synchronisation de cinquante colis tient en un
- * appel. La taille maximale de la liste n'etant pas documentee, on la
- * decoupe par precaution.
+ * colis a la fois.
+ *
+ * Vingt par appel, et pas un de plus : c'est leur limite, absente de
+ * la documentation et apprise de leur refus — "Maximum limit for
+ * querying orders is 20 orders per transaction". Elle ne pardonne
+ * pas, l'appel entier echouant au vingt-et-unieme : une liste trop
+ * longue ne rend pas vingt colis sur trente, elle n'en rend aucun, et
+ * plus personne n'avance.
  */
+const PAR_APPEL = 20;
+
 export async function trackParcels(
   config: SpeedafConfig,
   billCodes: string[],
-  tranche = 50
+  tranche = PAR_APPEL
 ): Promise<Map<string, SpeedafTrack[]>> {
   const out = new Map<string, SpeedafTrack[]>();
   for (let i = 0; i < billCodes.length; i += tranche) {

@@ -3,7 +3,7 @@ import { findLeadByTrackingNumber, updateLead } from "@/lib/supabase/leads";
 import { recordLeadChanges } from "@/lib/supabase/lead-events";
 import { isSupabaseServerConfigured } from "@/lib/supabase/server";
 import { verifyWebhook } from "@/lib/speedaf/client";
-import { latestStatus } from "@/lib/speedaf/status";
+import { enOrdre, latestStatus } from "@/lib/speedaf/status";
 import { delivererFrom } from "@/lib/speedaf/sync";
 
 /**
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     // reception, sinon Speedaf rejouerait l'evenement sans fin.
     if (!lead) return recu(true);
 
-    const tracks = charge.tracks ?? [];
+    const tracks = enOrdre(charge.tracks ?? []);
     const etat = latestStatus(tracks);
     const changes: Record<string, string> = {};
 

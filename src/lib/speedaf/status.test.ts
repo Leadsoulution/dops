@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { latestStatus, NOUVEAU, speedafStatus } from "./status";
+import { enOrdre, latestStatus, NOUVEAU, speedafStatus } from "./status";
 
 describe("speedafStatus", () => {
   it("traduit le trajet normal dans les codes de l'application", () => {
@@ -51,5 +51,39 @@ describe("latestStatus", () => {
 
   it("rend l'etat de depart quand il ne s'est rien passe", () => {
     expect(latestStatus([])).toEqual(NOUVEAU);
+  });
+
+  // C'est l'ordre que Speedaf emploie reellement. Lu a l'envers, un
+  // colis retourne se lisait "ramasse par le transporteur".
+  it("lit aussi une liste rendue du plus recent au plus ancien", () => {
+    expect(
+      latestStatus([
+        { action: "730", time: "2026-10-30 16:22:40" },
+        { action: "3", time: "2026-10-30 10:54:58" },
+        { action: "4", time: "2026-10-29 16:53:40" },
+        { action: "1", time: "2026-10-27 16:22:19" },
+      ]).code
+    ).toBe("RETURNED");
+  });
+});
+
+describe("enOrdre", () => {
+  it("retourne une liste descendante", () => {
+    expect(
+      enOrdre([
+        { time: "2026-10-30 16:22:40" },
+        { time: "2026-10-29 17:49:17" },
+      ]).map((t) => t.time)
+    ).toEqual(["2026-10-29 17:49:17", "2026-10-30 16:22:40"]);
+  });
+
+  it("laisse une liste montante telle quelle", () => {
+    const liste = [{ time: "2026-10-29 17:49:17" }, { time: "2026-10-30 16:22:40" }];
+    expect(enOrdre(liste)).toBe(liste);
+  });
+
+  it("ne touche a rien quand il n'y a pas de quoi comparer", () => {
+    const seul = [{ action: "5", time: "2026-10-30 16:22:40" }];
+    expect(enOrdre(seul)).toBe(seul);
   });
 });

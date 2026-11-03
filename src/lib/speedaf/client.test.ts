@@ -79,6 +79,36 @@ describe("deballage des reponses", () => {
   });
 });
 
+describe("trackParcels", () => {
+  /*
+   * Speedaf refuse plus de vingt colis par appel, et refuse l'appel
+   * entier : trente colis demandes d'un bloc n'en rendent pas vingt,
+   * ils n'en rendent aucun. La synchronisation s'arretait alors pour
+   * tout le monde, sans qu'aucun statut ne bouge.
+   */
+  it("ne demande jamais plus de vingt colis a la fois", async () => {
+    const lots: string[][] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: URL, init: { body: string }) => {
+        lots.push(JSON.parse(init.body).data.mailNoList);
+        return new Response(
+          JSON.stringify({ success: true, error: null, data: [] })
+        );
+      })
+    );
+    const { trackParcels } = await import("./client");
+    const codes = Array.from({ length: 45 }, (_, i) => `MA${i}`);
+    await trackParcels(
+      { baseUrl: "https://x", appCode: "a", customerCode: "c", platformSource: "p" },
+      codes
+    );
+    expect(lots.map((l) => l.length)).toEqual([20, 20, 5]);
+    expect(lots.flat()).toEqual(codes);
+    vi.unstubAllGlobals();
+  });
+});
+
 describe("createStockOrder", () => {
   const config = {
     baseUrl: "https://x",

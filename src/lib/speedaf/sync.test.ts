@@ -59,6 +59,16 @@ describe("delivererFrom", () => {
     ).toEqual({ name: "ABDESSAMAD MELLOUKI", phone: "0676919588" });
   });
 
+  it("prend le dernier livreur d'une liste rendue a l'envers", () => {
+    // L'ordre dans lequel Speedaf rend vraiment ses evenements.
+    expect(
+      delivererFrom([
+        { action: "4", msgEng: "courier is 【SECOND】", time: "2026-10-30 10:00" },
+        { action: "4", msgEng: "courier is 【PREMIER】", time: "2026-10-28 10:00" },
+      ])
+    ).toEqual({ name: "SECOND" });
+  });
+
   it("ne rend rien sans message exploitable", () => {
     expect(delivererFrom([])).toBeUndefined();
     expect(delivererFrom([{ action: "5" }])).toBeUndefined();

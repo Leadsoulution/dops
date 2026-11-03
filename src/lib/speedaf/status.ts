@@ -98,12 +98,34 @@ export function speedafStatus(
   );
 }
 
+/**
+ * Les evenements remis du plus ancien au plus recent.
+ *
+ * Speedaf les renvoie dans l'autre sens, le dernier scan en tete. Lus
+ * tels quels, tous nos colis restaient au premier evenement de leur
+ * vie : "Ramasse par le transporteur", meme une fois livres ou
+ * retournes.
+ *
+ * On regarde les dates plutot que de faire confiance a l'ordre, leur
+ * documentation ne promettant ni l'un ni l'autre. La liste est
+ * retournee d'un bloc quand elle descend, ce qui remet du meme coup
+ * dans le bon sens les evenements partageant la meme seconde — il y
+ * en a : un refus et le retour qui le suit sont parfois scannes
+ * ensemble.
+ */
+export function enOrdre<T extends { time?: string }>(tracks: T[]): T[] {
+  const dates = tracks.map((t) => (t.time ?? "").trim()).filter(Boolean);
+  if (dates.length < 2) return tracks;
+  return dates[0] > dates[dates.length - 1] ? [...tracks].reverse() : tracks;
+}
+
 /** Le dernier evenement connu d'un colis decide de son etat. */
 export function latestStatus(
   tracks: { action?: string | null; subAction?: string | null; time?: string }[]
 ): EtatLivraison {
-  for (let i = tracks.length - 1; i >= 0; i -= 1) {
-    const etat = speedafStatus(tracks[i].action, tracks[i].subAction);
+  const liste = enOrdre(tracks);
+  for (let i = liste.length - 1; i >= 0; i -= 1) {
+    const etat = speedafStatus(liste[i].action, liste[i].subAction);
     if (etat) return etat;
   }
   return NOUVEAU;

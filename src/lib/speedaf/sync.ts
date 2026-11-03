@@ -2,7 +2,7 @@ import "server-only";
 import type { Lead } from "@/components/dashboard/leads-data";
 import { trackParcels, type SpeedafTrack } from "./client";
 import { getSpeedafSettings } from "@/lib/supabase/speedaf-settings";
-import { latestStatus } from "./status";
+import { enOrdre, latestStatus } from "./status";
 
 /**
  * Rafraichir les colis confies a Speedaf.
@@ -29,10 +29,11 @@ const CLOS = new Set(["DELIVERED", "RETURNED", "CANCELED"]);
  * l'equipe en a besoin pour appeler.
  */
 export function delivererFrom(
-  tracks: { action?: string | null; msgEng?: string; message?: string }[]
+  tracks: { action?: string | null; msgEng?: string; message?: string; time?: string }[]
 ): { name: string; phone?: string } | undefined {
-  for (let i = tracks.length - 1; i >= 0; i -= 1) {
-    const t = tracks[i];
+  const liste = enOrdre(tracks);
+  for (let i = liste.length - 1; i >= 0; i -= 1) {
+    const t = liste[i];
     if (t.action !== "4" && t.action !== "5") continue;
     const entre = [...(t.msgEng ?? t.message ?? "").matchAll(/【([^】]+)】/g)].map(
       (m) => m[1].trim()
@@ -88,8 +89,11 @@ export async function collectSpeedafUpdates(leads: Lead[]): Promise<{
   }
 
   for (const lead of suivis) {
-    const tracks = parColis.get(lead.trackingNumber as string);
-    if (!tracks || tracks.length === 0) continue;
+    const bruts = parColis.get(lead.trackingNumber as string);
+    if (!bruts || bruts.length === 0) continue;
+    // Remis dans l'ordre une fois pour toutes : la date de remise et
+    // le livreur se lisent eux aussi par la fin de la liste.
+    const tracks = enOrdre(bruts);
 
     const etat = latestStatus(tracks);
     const changes: Partial<Lead> = {};
