@@ -259,7 +259,15 @@ export default function VillesPage() {
       if (!res.ok) throw new Error(data.error);
       setNotice(
         carrier === "speedaf"
-          ? `${data.ajoutees} ville(s) Speedaf ajoutee(s) au dictionnaire, ${data.deja} deja connue(s).`
+          ? [
+              data.desservies
+                ? `${data.desservies} ville(s) desservies par Speedaf.`
+                : null,
+              `${data.ajoutees} ajoutee(s) au dictionnaire, ${data.deja} deja connue(s).`,
+              data.avertissement,
+            ]
+              .filter(Boolean)
+              .join(" ")
           : `${data.total} ville(s) ForceLog : ${data.inserted} ajoutee(s), ${data.updated} mise(s) a jour.`
       );
       await load();

@@ -5,6 +5,7 @@ import { cityKey, deliverableCities } from "./cities";
 import { getCarrierRouting } from "./carriers";
 import { getSpeedafSettings } from "./speedaf-settings";
 import { getAreaTree } from "@/lib/speedaf/client";
+import { villesACompleter } from "@/lib/speedaf/villes-officielles";
 import { matchCities, normalizeCity, type CarrierCity } from "@/lib/carriers/city-match";
 import type { CarrierId } from "@/lib/carriers/registry";
 
@@ -153,6 +154,8 @@ export type ImportResult = {
   regions: number;
   rapprochees: number;
   sansCorrespondance: string[];
+  /** Villes tenues de la seule liste officielle, sans region connue. */
+  horsArbre?: number;
   /** Villes qui ont quitte leur liste et ne sont plus proposees. */
   retirees?: number;
 };
@@ -221,6 +224,29 @@ export async function importSpeedafCities(): Promise<ImportResult> {
     }
   }
   if (villes.length === 0) throw new Error("Speedaf n'a rendu aucune ville.");
+
+  /*
+   * La liste officielle, par-dessus l'arbre.
+   *
+   * Speedaf tient deux inventaires qui ne se recouvrent pas : l'arbre
+   * des regions, qu'on vient de lire, et la liste des villes qu'ils
+   * remettent a leurs clients. Mille communes de la seconde manquent
+   * au premier, et cent lieux du premier manquent a la seconde.
+   * Choisir l'une des deux ferait perdre d'un cote ce qu'on gagne de
+   * l'autre, donc on prend les deux.
+   *
+   * L'arbre passe en premier et garde la main : une ville qu'il
+   * connait deja vient avec sa region, et la reprendre depuis la
+   * feuille reviendrait a l'oublier. On n'ajoute donc que les noms
+   * qu'aucune de ses ecritures ne couvre.
+   *
+   * Le nom sert de code, faute de mieux : la feuille l'intitule
+   * elle-meme CITY_CODE, et c'est bien le nom que Speedaf attend dans
+   * le champ ville du colis.
+   */
+  const ajouts = villesACompleter(villes);
+  villes.push(...ajouts);
+  const horsArbre = ajouts.length;
 
   const nos = await fetchAll<{ key: string; name: string; aliases: string[] | null }>(
     () => supabase.from("cities").select("key,name,aliases").eq("active", true)
@@ -294,6 +320,7 @@ export async function importSpeedafCities(): Promise<ImportResult> {
     rapprochees: matched.size,
     sansCorrespondance,
     retirees: retirees.length,
+    horsArbre,
   };
 }
 
