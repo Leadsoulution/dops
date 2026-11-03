@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle, CheckCircle2, Info, Loader2, Truck, X } from "lucide-react";
+import {
+  AlertCircle,
+  Bell,
+  CheckCircle2,
+  Info,
+  Loader2,
+  Truck,
+  X,
+} from "lucide-react";
 
 /**
  * Brancher Speedaf.
@@ -58,6 +66,7 @@ export default function SpeedafConnectModal({ onClose }: { onClose: () => void }
   const [chargement, setChargement] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [abonnement, setAbonnement] = useState<"idle" | "envoi">("idle");
   const [resultat, setResultat] = useState<{ ok: boolean; message: string } | null>(
     null
   );
@@ -103,6 +112,39 @@ export default function SpeedafConnectModal({ onClose }: { onClose: () => void }
       setError(err instanceof Error ? err.message : "Erreur inattendue.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  /**
+   * Donne a Speedaf l'adresse a appeler.
+   *
+   * C'est le navigateur qui la fournit : derriere un proxy, ce que le
+   * serveur voit de lui-meme n'est pas le nom de domaine public.
+   */
+  async function abonner() {
+    setAbonnement("envoi");
+    setResultat(null);
+    setError(null);
+    try {
+      const res = await fetch("/api/speedaf/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ origin: window.location.origin }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error);
+      setResultat({
+        ok: true,
+        message: `Speedaf previendra desormais ${d.callbackUrl}`,
+      });
+    } catch (err) {
+      setResultat({
+        ok: false,
+        message:
+          err instanceof Error ? err.message : "Abonnement impossible.",
+      });
+    } finally {
+      setAbonnement("idle");
     }
   }
 
@@ -320,6 +362,36 @@ export default function SpeedafConnectModal({ onClose }: { onClose: () => void }
                 preleves dans leur entrepot au lieu de partir du notre.
                 Laisse vide, tous les colis partent du depot.
               </p>
+
+              {/*
+                Sans cet abonnement, Speedaf ne previent de rien.
+                Les statuts n'avancent alors que lorsqu'un navigateur
+                est ouvert sur l'application, et un colis livre le soir
+                reste "en cours de livraison" jusqu'au lendemain.
+              */}
+              <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+                <p className="text-[12.5px] font-medium text-gray-700">
+                  Notifications de suivi
+                </p>
+                <p className="mt-0.5 text-[11.5px] leading-relaxed text-gray-500">
+                  Abonne Speedaf a notre adresse pour qu&apos;il pousse chaque
+                  changement de statut. Sans cela, les statuts n&apos;avancent
+                  que toutes les deux minutes, et seulement quand
+                  l&apos;application est ouverte.
+                </p>
+                <button
+                  onClick={() => void abonner()}
+                  disabled={abonnement === "envoi"}
+                  className="mt-2 flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[12px] font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                >
+                  {abonnement === "envoi" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Bell className="h-3.5 w-3.5" />
+                  )}
+                  Activer les notifications Speedaf
+                </button>
+              </div>
 
               <Champ label="Poids par defaut d'un colis (kg)">
                 <input
