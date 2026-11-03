@@ -5,6 +5,7 @@ import {
   normalizeShares,
   type CarrierCounts,
 } from "./routing";
+import { carrierFacturant } from "./registry";
 
 const PARTAGE = { forcelog: 70, speedaf: 30 };
 
@@ -96,5 +97,26 @@ describe("actualShares", () => {
 
   it("ne divise pas par zero", () => {
     expect(actualShares({ forcelog: 0, speedaf: 0 })).toEqual({});
+  });
+});
+
+describe("carrierFacturant", () => {
+  it("annonce le defaut sur une commande pas encore partie", () => {
+    // Le transporteur se choisit a la confirmation : c'est celui qui
+    // prendra le colis qui facture, pas l'ancien defaut historique.
+    expect(carrierFacturant({ carrier: null }, "speedaf")).toBe("speedaf");
+  });
+
+  it("laisse ForceLog aux commandes deja parties sans transporteur", () => {
+    // Sept cents colis partis avant que la colonne existe : ils sont
+    // bien passes par ForceLog, et il a bien facture.
+    expect(
+      carrierFacturant({ carrier: null, trackingNumber: "FL123" }, "speedaf")
+    ).toBe("forcelog");
+  });
+
+  it("respecte le transporteur inscrit sur la commande", () => {
+    expect(carrierFacturant({ carrier: "forcelog" }, "speedaf")).toBe("forcelog");
+    expect(carrierFacturant({ carrier: "speedaf" }, "forcelog")).toBe("speedaf");
   });
 });

@@ -1,7 +1,7 @@
 import { getSupabaseServerClient } from "./server";
 import { imageOfOrder, productImageIndex } from "@/lib/product-image";
 import { getCarrierRouting } from "./carriers";
-import { carrierOfLead } from "@/lib/carriers/registry";
+import { carrierFacturant, carrierOfLead } from "@/lib/carriers/registry";
 import { fetchAll } from "./page";
 import { emit } from "@/lib/webhooks/send";
 import { cityKey, tariffByCityForm } from "./cities";
@@ -297,9 +297,22 @@ async function withCityTariffs(leads: Lead[]): Promise<Lead[]> {
   // sans tarif vaut mieux que ne pas les afficher du tout.
   if (!tariffs && !routing) return leads;
 
+  /*
+   * Une commande pas encore partie prend le tarif du transporteur qui
+   * la prendra.
+   *
+   * La colonne vide ne veut pas dire la meme chose avant et apres
+   * l'expedition. Apres, elle dit ForceLog : il etait seul, et c'est
+   * bien lui qui a facture. Avant, elle ne dit rien du tout — le
+   * transporteur se choisit a la confirmation, et c'est le defaut
+   * reglé qui s'appliquera. Lire les deux pareil affichait trente-
+   * trois dirhams sur des commandes neuves que Speedaf livrera pour
+   * vingt-cinq.
+   */
   return leads.map((lead) => {
     if (lead.tarif || !lead.ville) return lead;
-    const parTransporteur = routing?.tariffs?.[carrierOfLead(lead.carrier)];
+    const quel = carrierFacturant(lead, routing?.default ?? carrierOfLead(null));
+    const parTransporteur = routing?.tariffs?.[quel];
     const tariff = parTransporteur ?? tariffs?.get(cityKey(lead.ville));
     return tariff === undefined ? lead : { ...lead, tarif: `${tariff} MAD` };
   });

@@ -56,3 +56,22 @@ export function carrierInfo(id: string | null | undefined): CarrierInfo {
 export function carrierOfLead(carrier: string | null | undefined): CarrierId {
   return carrier === "speedaf" ? "speedaf" : CARRIER_PAR_DEFAUT;
 }
+
+/**
+ * Le transporteur qui facturera une commande.
+ *
+ * Ce n'est pas tout a fait celui de `carrierOfLead`. La colonne vide
+ * ne dit pas la meme chose avant et apres l'expedition : apres, elle
+ * dit ForceLog, qui etait seul et a bien facture ; avant, elle ne dit
+ * rien, le transporteur se choisissant a la confirmation. C'est alors
+ * le defaut regle qui prendra le colis, et c'est son tarif qu'il faut
+ * annoncer — sinon une commande neuve affiche trente-trois dirhams
+ * pour une livraison que Speedaf fera a vingt-cinq.
+ */
+export function carrierFacturant(
+  lead: { carrier?: string | null; trackingNumber?: string | null },
+  defaut: CarrierId
+): CarrierId {
+  if (lead.carrier) return carrierOfLead(lead.carrier);
+  return lead.trackingNumber ? carrierOfLead(null) : defaut;
+}
