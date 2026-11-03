@@ -291,6 +291,49 @@ export default function ConfirmationHome() {
                   <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-gray-300 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-500" />
                 </div>
 
+                {/*
+                  Le meme bandeau, transporteur par transporteur.
+
+                  Pose avant le total plutot qu'apres : le total de
+                  livraison ne veut plus dire grand-chose des que deux
+                  transporteurs se partagent les colis — il moyenne un
+                  bon et un mauvais. C'est la comparaison qu'on vient
+                  chercher, le total ne fait que la resumer.
+                */}
+                {card.carrierRows && (
+                  <div
+                    className={`grid gap-4 border-t pt-4 sm:grid-cols-2 ${a.line}`}
+                  >
+                    {card.carrierRows.map((c) => (
+                      <div key={c.key} className="flex items-center gap-3">
+                        <div className="flex shrink-0 flex-col items-center gap-1.5">
+                          <DonutRing
+                            percent={c.rate}
+                            size={54}
+                            strokeWidth={6}
+                            color={c.rate === 0 ? "#d1d5db" : a.ring}
+                          />
+                          <p className="text-[11px] font-medium text-gray-600">
+                            {c.label}
+                          </p>
+                        </div>
+                        <div className="grid flex-1 grid-cols-3 gap-1.5">
+                          {c.values.map((v, i) => (
+                            <div key={card.columns[i]} className="min-w-0">
+                              <p className="font-mono text-[15px] font-semibold text-gray-900">
+                                {v.toLocaleString("fr-FR")}
+                              </p>
+                              <p className="truncate text-[11px] text-gray-500">
+                                {card.columns[i]}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div className={`flex items-center gap-4 border-t pt-4 ${a.line}`}>
                   <div className="flex shrink-0 flex-col items-center gap-1.5">
                     <DonutRing
@@ -368,19 +411,7 @@ export default function ConfirmationHome() {
                   line={a.line}
                   accent={a.icon}
                 />
-                {/*
-                  Seule la livraison se lit par transporteur : il est
-                  choisi a l'expedition, donc apres la confirmation.
-                */}
-                {card.carrierRows && (
-                  <Breakdown
-                    title="PAR TRANSPORTEUR"
-                    columns={card.columns}
-                    rows={card.carrierRows}
-                    line={a.line}
-                    accent={a.icon}
-                  />
-                )}
+
 
                 <p className="mt-4 text-[12.5px] font-medium text-gray-500 group-hover:text-gray-700">
                   Voir le detail par agent
