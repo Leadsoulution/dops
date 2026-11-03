@@ -30,6 +30,7 @@ type Lead = {
   delivery_status_code?: string | null;
   product_name?: string | null;
   utm_source?: string | null;
+  carrier?: string | null;
 };
 
 type Event = {
@@ -799,5 +800,67 @@ describe("ventilation par plateforme", () => {
     const fb = platforms.find((p) => p.platform === "Facebook");
     expect(fb?.treated).toBe(1);
     expect(fb?.confirmRate).toBe(100);
+  });
+});
+
+describe("livraison par transporteur", () => {
+  /*
+   * Le transporteur est choisi a l'expedition, donc apres la
+   * confirmation : seules les commandes confirmees sont rangees sous
+   * un transporteur, et les autres ne comptent nulle part.
+   */
+  it("separe les colis des deux transporteurs", async () => {
+    stubTables(
+      [ALICE],
+      [
+        { id: "1", reference: "WC-1", phone: "06", status: "Confirme", created_at: at(0),
+          tracking_number: "F-1", delivery_status_code: "DELIVERED", carrier: "forcelog" },
+        { id: "2", reference: "WC-2", phone: "06", status: "Confirme", created_at: at(0),
+          tracking_number: "F-2", delivery_status_code: "RETURNED", carrier: "forcelog" },
+        { id: "3", reference: "WC-3", phone: "06", status: "Confirme", created_at: at(0),
+          tracking_number: "MA-1", delivery_status_code: "DELIVERED", carrier: "speedaf" },
+      ],
+      [
+        statusEvent("1", ALICE, "Confirme", 1),
+        statusEvent("2", ALICE, "Confirme", 1),
+        statusEvent("3", ALICE, "Confirme", 1),
+      ]
+    );
+
+    const { carriers } = await getAgentStats();
+    const fl = carriers.find((c) => c.carrier === "forcelog");
+    const sp = carriers.find((c) => c.carrier === "speedaf");
+    expect(fl?.delivery.shipped).toBe(2);
+    expect(fl?.delivery.delivered).toBe(1);
+    expect(sp?.delivery.shipped).toBe(1);
+    expect(sp?.delivery.delivered).toBe(1);
+    expect(sp?.delivery.rate).toBe(100);
+  });
+
+  /*
+   * Une commande sans transporteur enregistre est partie avec le
+   * defaut : c'est lui qui a pris le colis, et l'ignorer rendrait
+   * ses chiffres faux.
+   */
+  it("compte au defaut les commandes sans transporteur", async () => {
+    stubTables(
+      [ALICE],
+      [
+        { id: "1", reference: "WC-1", phone: "06", status: "Confirme", created_at: at(0),
+          tracking_number: "F-1", delivery_status_code: "DELIVERED" },
+      ],
+      [statusEvent("1", ALICE, "Confirme", 1)]
+    );
+
+    const { carriers } = await getAgentStats();
+    expect(carriers.find((c) => c.carrier === "forcelog")?.delivery.shipped).toBe(1);
+    expect(carriers.find((c) => c.carrier === "speedaf")?.delivery.shipped).toBe(0);
+  });
+
+  it("garde le transporteur qui n'a rien expedie", async () => {
+    // C'est justement ce qu'on vient verifier en branchant le second.
+    stubTables([ALICE], [], []);
+    const { carriers } = await getAgentStats();
+    expect(carriers.map((c) => c.carrier).sort()).toEqual(["forcelog", "speedaf"]);
   });
 });

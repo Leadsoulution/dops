@@ -6,11 +6,13 @@ import { adPlatformOf } from "@/lib/ad-platform";
 import type {
   AgentAction,
   AgentStats,
+  CarrierStats,
   DeliveryStats,
   PlatformStats,
   ProductStats,
   TeamStats,
 } from "@/components/dashboard/confirmation-data";
+import { CARRIERS, carrierOfLead } from "@/lib/carriers/registry";
 
 /**
  * Performance reelle des agents.
@@ -236,6 +238,7 @@ type LeadRow = {
   created_at: string;
   tracking_number: string | null;
   delivery_status_code: string | null;
+  carrier: string | null;
   product_name: string | null;
   utm_source: string | null;
 };
@@ -255,7 +258,7 @@ export async function getAgentStats(
       supabase
         .from("leads")
         .select(
-          "id,reference,phone,status,created_at,tracking_number,delivery_status_code,product_name,utm_source"
+          "id,reference,phone,status,created_at,tracking_number,delivery_status_code,product_name,utm_source,carrier"
         )
     ),
     supabase.from("products").select("name,image").not("image", "is", null),
@@ -610,6 +613,36 @@ export async function getAgentStats(
       return b.treated - a.treated;
     });
 
+  /*
+   * La livraison par transporteur.
+   *
+   * On ne groupe que les commandes confirmees : le transporteur est
+   * choisi a l'expedition, et une commande jamais confirmee n'en a
+   * aucun. Les grouper toutes mettrait le defaut en face de travail
+   * qu'il n'a pas fait.
+   *
+   * Une commande sans transporteur enregistre revient au defaut :
+   * c'est lui qui a reellement pris le colis, et ses chiffres se
+   * liraient faux ailleurs.
+   */
+  const confirmedByCarrier = new Map<string, Set<string>>();
+  for (const id of allConfirmed) {
+    const quel = carrierOfLead(leads.get(id)?.carrier);
+    const set = confirmedByCarrier.get(quel) ?? new Set<string>();
+    set.add(id);
+    confirmedByCarrier.set(quel, set);
+  }
+
+  const carriers: CarrierStats[] = CARRIERS.map((c) => {
+    const ids = confirmedByCarrier.get(c.id) ?? new Set<string>();
+    return {
+      carrier: c.id,
+      label: c.name,
+      confirmed: ids.size,
+      delivery: deliveryOf(ids, leads),
+    };
+  }).sort((a, b) => b.delivery.shipped - a.delivery.shipped);
+
   const imageByProduct = new Map(
     ((productsRes.data ?? []) as { name: string; image: string }[]).map((p) => [
       p.name.trim().toLowerCase(),
@@ -645,6 +678,7 @@ export async function getAgentStats(
     agents,
     products,
     platforms,
+    carriers,
     team: {
       treated: shopAll.size,
       contacted: shopContacted.size,

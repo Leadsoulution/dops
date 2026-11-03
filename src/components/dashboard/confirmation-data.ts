@@ -115,12 +115,32 @@ export type PlatformStats = {
   delivery: DeliveryStats;
 };
 
+/**
+ * La livraison, transporteur par transporteur.
+ *
+ * Seule la livraison y figure, pas la confirmation : le transporteur
+ * n'est choisi qu'au moment d'expedier, donc apres que l'agent a
+ * confirme. Un taux de confirmation "par transporteur" compterait
+ * les memes appels sous un nom qui n'existait pas encore.
+ */
+export type CarrierStats = {
+  /** "forcelog" ou "speedaf". */
+  carrier: string;
+  /** "ForceLog", "Speedaf" : ce que l'ecran affiche. */
+  label: string;
+  /** Commandes confirmees qui lui ont ete confiees. */
+  confirmed: number;
+  delivery: DeliveryStats;
+};
+
 export type TeamStats = {
   agents: AgentStats[];
   /** Du plus traite au moins traite. */
   products: ProductStats[];
   /** Du plus traite au moins traite, "Sans plateforme" toujours en fin. */
   platforms: PlatformStats[];
+  /** Du plus expedie au moins expedie. */
+  carriers: CarrierStats[];
   team: {
     treated: number;
     contacted: number;

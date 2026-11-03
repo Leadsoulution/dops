@@ -179,6 +179,19 @@ export default function ConfirmationHome() {
             p.delivery.returned,
           ],
         })),
+      /*
+       * Les deux transporteurs, meme celui qui n'a rien expedie.
+       *
+       * Contrairement aux produits et aux plateformes, on ne masque
+       * pas celui dont le compteur est a zero : c'est precisement ce
+       * qu'on vient verifier quand on en branche un second.
+       */
+      carrierRows: (stats?.carriers ?? []).map((c) => ({
+        key: c.carrier,
+        label: c.label,
+        rate: c.delivery.rate,
+        values: [c.delivery.shipped, c.delivery.delivered, c.delivery.returned],
+      })),
       platformRows: (stats?.platforms ?? [])
         // Meme regle : une plateforme dont rien n'est parti ne dit
         // rien d'un taux de livraison.
@@ -355,6 +368,19 @@ export default function ConfirmationHome() {
                   line={a.line}
                   accent={a.icon}
                 />
+                {/*
+                  Seule la livraison se lit par transporteur : il est
+                  choisi a l'expedition, donc apres la confirmation.
+                */}
+                {card.carrierRows && (
+                  <Breakdown
+                    title="PAR TRANSPORTEUR"
+                    columns={card.columns}
+                    rows={card.carrierRows}
+                    line={a.line}
+                    accent={a.icon}
+                  />
+                )}
 
                 <p className="mt-4 text-[12.5px] font-medium text-gray-500 group-hover:text-gray-700">
                   Voir le detail par agent
