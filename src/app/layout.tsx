@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { ASSET_RECOVERY_SCRIPT } from "./asset-recovery";
+import { CLARITY_SCRIPT } from "./clarity";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta-sans",
@@ -36,6 +37,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           les fichiers de build ont disparu apres un deploiement.
         */}
         <script dangerouslySetInnerHTML={{ __html: ASSET_RECOVERY_SCRIPT }} />
+        {/*
+          L'enregistrement des sessions. Il demande son masquage
+          Strict cote Clarity : voir le commentaire de ./clarity.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: CLARITY_SCRIPT }} />
       </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
