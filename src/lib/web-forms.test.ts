@@ -2,8 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   normalisePhone,
   phoneValide,
+  produitParCode,
   receptionCommande,
   referenceWeb,
+  type ProduitCatalogue,
 } from "./web-forms";
 
 const LE_JOUR = new Date("2026-10-31T10:00:00Z");
@@ -179,5 +181,53 @@ describe("noms de champs des plateformes tierces", () => {
     expect(r.ok && r.lead.client).toBe("Sara");
     expect(r.ok && r.lead.ville).toBe("Rabat");
     expect(r.ok && r.lead.amount).toBe("150 MAD");
+  });
+});
+
+describe("code article", () => {
+  const CATALOGUE: ProduitCatalogue[] = [
+    { name: "Pack Papillon", ref: "1FKN0G", defaultParcelType: "simple" },
+    {
+      name: "Collier Pourpre",
+      ref: "P-12",
+      forcelogRef: "1FKGUA",
+      wooSku: "LOR-ARJ",
+      defaultParcelType: "stock",
+    },
+  ];
+  const BASE = { nom: "Amine", telephone: "0612345678", produit: "Nom de la page" };
+
+  it("trouve le produit par l'un de ses codes, sans tenir compte de la casse", () => {
+    expect(produitParCode(CATALOGUE, "1fkn0g")?.name).toBe("Pack Papillon");
+    expect(produitParCode(CATALOGUE, "1FKGUA")?.name).toBe("Collier Pourpre");
+    expect(produitParCode(CATALOGUE, "lor-arj")?.name).toBe("Collier Pourpre");
+    expect(produitParCode(CATALOGUE, "")).toBeUndefined();
+  });
+
+  /*
+   * Le nom affiche par la page de vente ne compte plus : c'est celui du
+   * catalogue qui porte la photo.
+   */
+  it("nomme la commande d'apres le catalogue", () => {
+    const r = receptionCommande({ ...BASE, sku: "1FKN0G", quantite: "3" }, LE_JOUR, Math.random, CATALOGUE);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.lead).toMatchObject({ productName: "Pack Papillon", itemCount: 3, parcelType: "simple" });
+    expect(r.lead.stockItems).toBeUndefined();
+  });
+
+  it("prepare un colis de stock avec le code transporteur", () => {
+    const r = receptionCommande({ ...BASE, code_article: "LOR-ARJ", qty: 2 }, LE_JOUR, Math.random, CATALOGUE);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.lead).toMatchObject({ productName: "Collier Pourpre", parcelType: "stock", stockItems: "1FKGUA:2" });
+  });
+
+  it("garde le nom de la page quand le code est inconnu", () => {
+    const r = receptionCommande({ ...BASE, sku: "INCONNU" }, LE_JOUR, Math.random, CATALOGUE);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.lead.productName).toBe("Nom de la page");
+    expect(r.lead.parcelType).toBeUndefined();
   });
 });

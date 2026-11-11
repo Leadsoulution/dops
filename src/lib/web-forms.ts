@@ -47,6 +47,10 @@ const ALIAS = {
     "order_number", "numero_commande",
   ],
   quartier: ["quartier", "district", "zone"],
+  code: [
+    "sku", "code_article", "product_code", "article_code",
+    "ref_article", "product_sku",
+  ],
 } as const;
 
 function lire(corps: Record<string, unknown>, noms: readonly string[]): string {
@@ -125,6 +129,38 @@ function quand(date: Date): string {
   return `${jour}, ${heure}`;
 }
 
+/** Ce qu'il faut savoir d'un produit du catalogue pour y rattacher une commande. */
+export type ProduitCatalogue = {
+  name: string;
+  ref: string;
+  forcelogRef?: string;
+  wooSku?: string;
+  defaultParcelType: "simple" | "stock";
+};
+
+/**
+ * Le produit designe par un code article.
+ *
+ * Le nom d'une page de vente change au gre des campagnes, et il suffit
+ * d'un espace pour qu'il ne ressemble plus a celui du catalogue : la
+ * commande arrivait alors sans photo ni code transporteur. Le code,
+ * lui, ne bouge pas. Il est cherche parmi tous ceux qu'un produit
+ * porte — reference interne, code transporteur, SKU de la boutique —
+ * puisque le vendeur colle celui qu'il a sous les yeux.
+ */
+export function produitParCode(
+  catalogue: ProduitCatalogue[],
+  code: string
+): ProduitCatalogue | undefined {
+  const cle = code.trim().toLowerCase();
+  if (!cle) return undefined;
+  return catalogue.find((p) =>
+    [p.forcelogRef, p.ref, p.wooSku].some(
+      (c) => c && c.trim().toLowerCase() === cle
+    )
+  );
+}
+
 export type Reception =
   | { ok: true; lead: Partial<Lead> }
   | { ok: false; erreur: string };
@@ -140,7 +176,8 @@ export type Reception =
 export function receptionCommande(
   corps: Record<string, unknown>,
   maintenant = new Date(),
-  alea = Math.random
+  alea = Math.random,
+  catalogue: ProduitCatalogue[] = []
 ): Reception {
   const client = lire(corps, ALIAS.client);
   const phoneBrut = lire(corps, ALIAS.phone);
@@ -155,8 +192,21 @@ export function receptionCommande(
     };
   }
 
-  const productName = lire(corps, ALIAS.productName);
   const quantite = Number(lire(corps, ALIAS.quantite)) || undefined;
+
+  /*
+   * Un code article connu nomme la commande, comme pour une boutique
+   * WooCommerce : le nom vient du catalogue, et avec lui la photo. Un
+   * produit gere en stock part en colis de stock, avec son code
+   * transporteur. Un code inconnu laisse le nom envoye par la page —
+   * mieux vaut son nom que pas de nom.
+   */
+  const produit = produitParCode(catalogue, lire(corps, ALIAS.code));
+  const productName = produit?.name ?? lire(corps, ALIAS.productName);
+  const stock =
+    produit?.defaultParcelType === "stock" && produit.forcelogRef
+      ? produit.forcelogRef
+      : undefined;
   const montant = Number(lire(corps, ALIAS.montant).replace(",", ".")) || 0;
 
   return {
@@ -169,6 +219,12 @@ export function receptionCommande(
       productName,
       productLabel: etiquette(productName),
       itemCount: quantite,
+      ...(produit
+        ? {
+            parcelType: stock ? ("stock" as const) : ("simple" as const),
+            stockItems: stock ? `${stock}:${quantite ?? 1}` : undefined,
+          }
+        : {}),
       // Zero dirham reste zero : une commande sans prix se rattrape a
       // l'appel, et inventer un montant fausserait le chiffre du jour.
       amount: `${Math.round(montant)} MAD`,
