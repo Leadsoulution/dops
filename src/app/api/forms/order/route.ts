@@ -1,7 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { isSupabaseServerConfigured } from "@/lib/supabase/server";
+import {
+  getSupabaseServerClient,
+  isSupabaseServerConfigured,
+} from "@/lib/supabase/server";
 import { createLead } from "@/lib/supabase/leads";
-import { receptionCommande } from "@/lib/web-forms";
+import { receptionCommande, type ProduitCatalogue } from "@/lib/web-forms";
 import {
   getWebFormsSettings,
   origineAutorisee,
@@ -114,7 +117,7 @@ export async function POST(request: NextRequest) {
    */
   const champs = Object.keys(brut).filter((c) => c !== "key");
 
-  const reception = receptionCommande(brut);
+  const reception = receptionCommande(brut, new Date(), Math.random, await catalogue());
   if (!reception.ok) {
     await recordWebFormCall(champs, false, reception.erreur);
     return NextResponse.json(
@@ -139,6 +142,35 @@ export async function POST(request: NextRequest) {
       { ok: false, error: "Enregistrement impossible." },
       { status: 500, headers: entetes }
     );
+  }
+}
+
+/**
+ * Les produits auxquels un code article peut renvoyer.
+ *
+ * Un catalogue illisible ne doit pas couter la commande : elle entre
+ * alors sous le nom envoye par la page, comme avant les codes.
+ */
+async function catalogue(): Promise<ProduitCatalogue[]> {
+  try {
+    const { data } = await getSupabaseServerClient()
+      .from("products")
+      .select("name,ref,forcelog_ref,woo_sku,default_parcel_type");
+    return ((data ?? []) as {
+      name: string;
+      ref: string;
+      forcelog_ref: string | null;
+      woo_sku: string | null;
+      default_parcel_type: string | null;
+    }[]).map((p) => ({
+      name: p.name,
+      ref: p.ref,
+      forcelogRef: p.forcelog_ref ?? undefined,
+      wooSku: p.woo_sku ?? undefined,
+      defaultParcelType: p.default_parcel_type === "stock" ? "stock" : "simple",
+    }));
+  } catch {
+    return [];
   }
 }
 
