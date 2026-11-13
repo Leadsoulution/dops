@@ -84,6 +84,28 @@ export type PushResult = {
   failures: { status?: number; message: string; removed: boolean }[];
 };
 
+/**
+ * L'alerte d'une livraison.
+ *
+ * Trois chemins apprennent qu'un colis est remis : le suivi ForceLog,
+ * le suivi Speedaf, et les notifications que Speedaf pousse. Ils
+ * doivent annoncer la meme chose sous la meme etiquette, parce que
+ * c'est elle qui fait qu'une seule alerte s'affiche quand deux d'entre
+ * eux voient la livraison coup sur coup.
+ */
+export function sendDeliveredPush(lead: {
+  client: string;
+  amount: string;
+  reference: string;
+}): Promise<PushResult> {
+  return sendPushToAll({
+    title: "Commande livree",
+    body: `${lead.client} - ${lead.amount} encaisse`,
+    tag: `livree-${lead.reference}`,
+    kind: "payment",
+  });
+}
+
 export async function sendPushToAll(payload: PushPayload): Promise<PushResult> {
   if (!isSupabaseServerConfigured || !ensureConfigured()) {
     return { sent: 0, failures: [{ message: "Clefs push non configurees.", removed: false }] };

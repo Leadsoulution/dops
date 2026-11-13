@@ -2,7 +2,7 @@ import { addParcel, getRecentParcelStatuses, getParcelDetail } from "./client";
 import { mapOrderToParcel } from "./mapping";
 import { ForceLogApiError } from "./types";
 import type { Lead } from "@/components/dashboard/leads-data";
-import { sendPushToAll } from "@/lib/push";
+import { sendDeliveredPush } from "@/lib/push";
 import { carrierCity, dispatchBlocker } from "./eligibility";
 import { resolveParcelType, type ParcelChoice } from "./parcel-type";
 import { deliverableCities } from "@/lib/supabase/cities";
@@ -309,14 +309,7 @@ export async function collectStatusUpdates(
     if (stampsDelivery) delivered.push(lead);
   }
 
-  for (const lead of delivered) {
-    await sendPushToAll({
-      title: "Commande livree",
-      body: `${lead.client} - ${lead.amount} encaisse`,
-      tag: `livree-${lead.reference}`,
-      kind: "payment",
-    });
-  }
+  for (const lead of delivered) await sendDeliveredPush(lead);
 
   return { updates, checked: tracked.length };
 }

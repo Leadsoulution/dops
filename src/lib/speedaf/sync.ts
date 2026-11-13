@@ -3,6 +3,7 @@ import type { Lead } from "@/components/dashboard/leads-data";
 import { trackParcels, type SpeedafTrack } from "./client";
 import { getSpeedafSettings } from "@/lib/supabase/speedaf-settings";
 import { enOrdre, latestStatus } from "./status";
+import { sendDeliveredPush } from "@/lib/push";
 
 /**
  * Rafraichir les colis confies a Speedaf.
@@ -63,6 +64,7 @@ export async function collectSpeedafUpdates(leads: Lead[]): Promise<{
   error?: string;
 }> {
   const updates = new Map<string, Partial<Lead>>();
+  const livrees: Lead[] = [];
   const config = await getSpeedafSettings();
   if (!config) return { updates, checked: 0 };
 
@@ -106,6 +108,13 @@ export async function collectSpeedafUpdates(leads: Lead[]): Promise<{
       const remise = tracks.filter((t) => t.action === "5").at(-1);
       changes.deliveryDate = horodatage(remise?.time) ?? horodatage(tracks.at(-1)?.time);
     }
+    // Une remise merite une alerte, pas les autres changements de
+    // statut : c'est elle qui appelle un encaissement. Le colis doit
+    // changer d'etat a ce passage-ci, sinon chaque tour de
+    // synchronisation reannoncerait la meme livraison.
+    if (etat.code === "DELIVERED" && lead.deliveryStatusCode !== "DELIVERED") {
+      livrees.push(lead);
+    }
     const livreur = delivererFrom(tracks);
     if (livreur && livreur.name !== lead.deliverer) {
       changes.deliverer = livreur.name;
@@ -114,6 +123,8 @@ export async function collectSpeedafUpdates(leads: Lead[]): Promise<{
 
     if (Object.keys(changes).length > 0) updates.set(lead.id, changes);
   }
+
+  for (const lead of livrees) await sendDeliveredPush(lead);
 
   return { updates, checked: suivis.length };
 }

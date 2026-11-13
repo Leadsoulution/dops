@@ -5,6 +5,7 @@ import { isSupabaseServerConfigured } from "@/lib/supabase/server";
 import { verifyWebhook } from "@/lib/speedaf/client";
 import { enOrdre, latestStatus } from "@/lib/speedaf/status";
 import { delivererFrom } from "@/lib/speedaf/sync";
+import { sendDeliveredPush } from "@/lib/push";
 
 /**
  * Les changements de statut pousses par Speedaf.
@@ -97,6 +98,14 @@ export async function POST(request: NextRequest) {
 
     const apres = await updateLead(lead.id, changes);
     await recordLeadChanges(lead, apres, { name: "Speedaf" });
+
+    // La remise est le seul changement qui sonne sur les telephones :
+    // c'est elle qui appelle un encaissement. La condition porte sur
+    // l'etat d'avant, parce que Speedaf rejoue ses notifications et
+    // qu'une livraison ne doit s'annoncer qu'une fois.
+    if (etat.code === "DELIVERED" && lead.deliveryStatusCode !== "DELIVERED") {
+      await sendDeliveredPush(lead);
+    }
     return recu(true);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erreur inattendue.";
