@@ -190,6 +190,7 @@ export default function ConfirmationHome() {
         key: c.carrier,
         label: c.label,
         rate: c.delivery.rate,
+        rateFinal: c.delivery.rateFinal,
         values: [c.delivery.shipped, c.delivery.delivered, c.delivery.returned],
       })),
       platformRows: (stats?.platforms ?? [])
@@ -305,19 +306,55 @@ export default function ConfirmationHome() {
                     className={`grid gap-4 border-t pt-4 sm:grid-cols-2 ${a.line}`}
                   >
                     {card.carrierRows.map((c) => (
-                      <div key={c.key} className="flex items-center gap-3">
+                      <div
+                        key={c.key}
+                        className="flex flex-col items-center gap-2 sm:flex-row sm:items-center sm:gap-3"
+                      >
                         <div className="flex shrink-0 flex-col items-center gap-1.5">
-                          <DonutRing
-                            percent={c.rate}
-                            size={54}
-                            strokeWidth={6}
-                            color={c.rate === 0 ? "#d1d5db" : a.ring}
-                          />
+                          <div className="flex items-start gap-2">
+                            <div className="flex flex-col items-center gap-1">
+                              <DonutRing
+                                percent={c.rate}
+                                size={54}
+                                strokeWidth={6}
+                                color={c.rate === 0 ? "#d1d5db" : a.ring}
+                              />
+                              <p className="text-[10px] text-gray-400">
+                                Expediees
+                              </p>
+                            </div>
+                            {/*
+                              Le taux final du transporteur.
+
+                              C'est lui qui departage : le taux
+                              ordinaire divise par tout ce qui est
+                              parti, y compris les colis de ce matin
+                              qui n'ont pas encore eu l'occasion
+                              d'echouer. Un transporteur qui vient
+                              d'etre branche parait donc mauvais tant
+                              que sa premiere vague roule encore.
+                            */}
+                            {isAdmin && (
+                              <div className="flex flex-col items-center gap-1">
+                                <DonutRing
+                                  percent={c.rateFinal}
+                                  size={54}
+                                  strokeWidth={6}
+                                  color={
+                                    c.rateFinal === 0 ? "#d1d5db" : a.ring
+                                  }
+                                />
+                                <p className="text-[10px] text-gray-400">
+                                  Abouties
+                                </p>
+                              </div>
+                            )}
+                          </div>
                           <p className="text-[11px] font-medium text-gray-600">
                             {c.label}
                           </p>
                         </div>
-                        <div className="grid flex-1 grid-cols-3 gap-1.5">
+                        <div className="grid w-full flex-1 grid-cols-3 gap-1.5">
                           {c.values.map((v, i) => (
                             <div key={card.columns[i]} className="min-w-0">
                               <p className="font-mono text-[15px] font-semibold text-gray-900">
@@ -334,7 +371,17 @@ export default function ConfirmationHome() {
                   </div>
                 )}
 
-                <div className={`flex items-center gap-4 border-t pt-4 ${a.line}`}>
+                {/*
+                  Sur telephone, les deux anneaux et les trois chiffres
+                  ne tiennent pas cote a cote : les libelles se
+                  reduisaient a "Expe...". Ils passent donc l'un
+                  au-dessus de l'autre, ce qui rend aux chiffres toute
+                  la largeur.
+                */}
+                <div
+                  className={`flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:gap-4 ${a.line}`}
+                >
+                  <div className="flex shrink-0 items-start justify-center gap-4">
                   <div className="flex shrink-0 flex-col items-center gap-1.5">
                     <DonutRing
                       percent={card.percent}
@@ -367,6 +414,7 @@ export default function ConfirmationHome() {
                     </p>
                   </div>
                   )}
+                  </div>
 
                   <div className="grid flex-1 grid-cols-3 gap-2">
                     {card.figures.map((f) => (
