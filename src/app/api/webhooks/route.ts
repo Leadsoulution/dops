@@ -28,13 +28,28 @@ export async function GET() {
     return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   const supabase = getSupabaseServerClient();
+  /*
+   * Le nombre d'envois voyage avec chaque abonnement.
+   *
+   * Retirer un abonnement emporte son journal, et l'ecran doit pouvoir
+   * dire combien de lignes disparaissent : "quatorze mille envois"
+   * n'engage pas le meme geste que "quatre".
+   */
   const { data, error } = await supabase
     .from("webhooks")
-    .select("id,name,url,secret,events,active,last_success_at,last_error,created_at")
+    .select(
+      "id,name,url,secret,events,active,last_success_at,last_error,created_at,webhook_deliveries(count)"
+    )
     .order("created_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ webhooks: data ?? [], events: WEBHOOK_EVENTS });
+  type Ligne = { webhook_deliveries?: { count: number }[] };
+  const webhooks = ((data ?? []) as Ligne[]).map(({ webhook_deliveries, ...hook }) => ({
+    ...hook,
+    envois: webhook_deliveries?.[0]?.count ?? 0,
+  }));
+
+  return NextResponse.json({ webhooks, events: WEBHOOK_EVENTS });
 }
 
 export async function POST(request: NextRequest) {

@@ -13,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import Switch from "./Switch";
+import ConfirmDialog from "./ConfirmDialog";
 
 /**
  * Abonnements sortants vers n8n.
@@ -33,6 +34,8 @@ type Webhook = {
   last_success_at: string | null;
   last_error: string | null;
   created_at: string;
+  /** Lignes de journal attachees : ce que le retrait emportera. */
+  envois?: number;
 };
 
 const LIBELLES: Record<string, string> = {
@@ -61,6 +64,7 @@ export default function WebhooksPanel({ isAdmin }: { isAdmin: boolean }) {
   const [revealed, setRevealed] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [essai, setEssai] = useState<Record<string, string>>({});
+  const [aRetirer, setARetirer] = useState<Webhook | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -130,6 +134,7 @@ export default function WebhooksPanel({ isAdmin }: { isAdmin: boolean }) {
       await recharge();
     } finally {
       setBusy(null);
+      setARetirer(null);
     }
   }
 
@@ -310,7 +315,7 @@ export default function WebhooksPanel({ isAdmin }: { isAdmin: boolean }) {
                 </button>
 
                 <button
-                  onClick={() => void supprime(h)}
+                  onClick={() => setARetirer(h)}
                   disabled={busy === h.id}
                   className="ml-auto flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[12px] font-medium text-red-600 hover:bg-red-50 disabled:opacity-60"
                 >
@@ -353,6 +358,35 @@ export default function WebhooksPanel({ isAdmin }: { isAdmin: boolean }) {
         <p className="mt-3 text-[12px] text-gray-400">
           Seul un administrateur peut gerer les abonnements.
         </p>
+      )}
+
+      {/*
+        Le retrait emporte le journal de l'abonnement, et rien ne le
+        rendra : la base de ce projet n'a pas de sauvegarde. On nomme
+        donc ce qui part avant de le faire.
+      */}
+      {aRetirer && (
+        <ConfirmDialog
+          title="Retirer cet abonnement ?"
+          message={
+            <>
+              <span className="font-medium text-gray-700">{aRetirer.name}</span>{" "}
+              ne recevra plus rien, et son journal
+              {aRetirer.envois
+                ? ` de ${aRetirer.envois.toLocaleString("fr-FR")} envoi${
+                    aRetirer.envois > 1 ? "s" : ""
+                  }`
+                : ""}{" "}
+              sera efface avec lui. C&apos;est definitif. Pour garder la trace
+              de ce qui est parti, suspendez-le plutot avec son interrupteur.
+            </>
+          }
+          confirmLabel="Retirer"
+          danger
+          pending={busy === aRetirer.id}
+          onConfirm={() => void supprime(aRetirer)}
+          onCancel={() => setARetirer(null)}
+        />
       )}
     </div>
   );

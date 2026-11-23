@@ -5,9 +5,10 @@ import { getSessionProfile } from "@/lib/supabase/auth";
 /**
  * Activer, desactiver ou retirer un abonnement.
  *
- * Retirer n'efface pas le journal : la table des envois le retient par
- * une contrainte `restrict`, et c'est voulu. Un abonnement se desactive
- * donc plutot qu'il ne se supprime des qu'il a servi.
+ * Retirer emporte le journal de ses envois. La table des envois
+ * retient l'abonnement par une contrainte `restrict` : sans ce
+ * menage, "Retirer" ne retirait plus rien des le premier evenement
+ * parti, et il ne restait qu'a desactiver.
  */
 async function requireAdmin() {
   const profile = await getSessionProfile();
@@ -64,18 +65,42 @@ export async function DELETE(
 
   const { id } = await ctx.params;
   const supabase = getSupabaseServerClient();
-  const { error } = await supabase.from("webhooks").delete().eq("id", id);
 
+  /*
+   * Eteint d'abord, efface ensuite.
+   *
+   * Un evenement ne part qu'aux abonnements actifs. Couper celui-ci
+   * avant de vider son journal evite qu'une commande arrivee entre
+   * les deux y pose une ligne, qui ferait echouer la suppression.
+   */
+  await supabase.from("webhooks").update({ active: false }).eq("id", id);
+
+  /*
+   * Le journal part avec l'abonnement.
+   *
+   * Il ne sert qu'a reprendre les envois en attente et a expliquer une
+   * panne : d'un abonnement retire, plus personne ne le lit. Le garder
+   * conserverait surtout, dans ses charges utiles, les coordonnees des
+   * clients envoyees a une adresse qu'on vient de retirer.
+   */
+  const { count, error: journal } = await supabase
+    .from("webhook_deliveries")
+    .delete({ count: "exact" })
+    .eq("webhook_id", id);
+  if (journal)
+    return NextResponse.json({ error: journal.message }, { status: 500 });
+
+  const { error } = await supabase.from("webhooks").delete().eq("id", id);
   if (error) {
-    // La contrainte `restrict` refuse tant que des envois existent :
-    // le dire plutot que d'afficher un message de base de donnees.
+    // Reste la course perdue : un envoi enregistre a l'instant.
+    // L'abonnement est deja eteint, donc un second essai aboutira.
     return NextResponse.json(
       {
         error:
-          "Cet abonnement a deja servi : son journal d'envois le retient. Desactivez-le plutot que de le supprimer.",
+          "Un envoi vient d'etre enregistre pour cet abonnement. Il est desactive : reessayez pour le retirer.",
       },
       { status: 409 }
     );
   }
-  return NextResponse.json({ deleted: true });
+  return NextResponse.json({ deleted: true, envois: count ?? 0 });
 }
