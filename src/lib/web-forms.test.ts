@@ -231,3 +231,32 @@ describe("code article", () => {
     expect(r.lead.parcelType).toBeUndefined();
   });
 });
+
+describe("origine du trafic", () => {
+  const BASE = { nom: "Amine", telephone: "0612345678" };
+
+  it("garde la source et la campagne envoyees par la page", () => {
+    const r = receptionCommande({
+      ...BASE,
+      utm_source: "tiktok",
+      utm_medium: "paid",
+      utm_campaign: "1789",
+      utm_content: "1790",
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.lead.utmSource).toBe("tiktok");
+    expect(r.lead.utmMedium).toBe("paid");
+    expect(r.lead.utmCampaign).toBe("1789");
+    expect(r.lead.utmContent).toBe("1790");
+    // La boutique reste une page faite main : seule la plateforme change
+    expect(r.lead.source).toBe("Landing page");
+  });
+
+  it("laisse la case vide quand la page ne dit rien", () => {
+    const r = receptionCommande(BASE);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.lead.utmSource).toBeUndefined();
+  });
+});
