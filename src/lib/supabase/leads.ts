@@ -158,6 +158,12 @@ export function toRow(lead: Partial<Lead>): Partial<LeadRow> {
   // l'import ; une commande saisie a la main le tient de l'agent, qui
   // sait par quel canal le client est arrive.
   if (lead.utmSource !== undefined) row.utm_source = lead.utmSource || null;
+  // Le reste du lien publicitaire, quand la commande l'apporte (page
+  // faite main) : la campagne et l'annonce qui l'ont payee.
+  if (lead.utmMedium !== undefined) row.utm_medium = lead.utmMedium || null;
+  if (lead.utmCampaign !== undefined)
+    row.utm_campaign = lead.utmCampaign || null;
+  if (lead.utmContent !== undefined) row.utm_content = lead.utmContent || null;
   return row;
 }
 

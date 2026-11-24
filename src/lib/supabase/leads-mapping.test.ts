@@ -25,6 +25,13 @@ describe("toRow", () => {
     expect(toRow({ utmSource: "tiktok" })).toEqual({ utm_source: "tiktok" });
   });
 
+  it("garde tout le lien publicitaire d'une page faite main", () => {
+    expect(
+      toRow({ utmSource: "facebook", utmMedium: "paid", utmCampaign: "120200", utmContent: "120201" })
+    ).toEqual({ utm_source: "facebook", utm_medium: "paid", utm_campaign: "120200", utm_content: "120201" });
+    expect(toRow({ client: "Hind" })).not.toHaveProperty("utm_campaign");
+  });
+
   it("n'inscrit pas une source vide", () => {
     // "Aucune" ne doit pas devenir une plateforme inconnue dans la
     // colonne : la case reste vide, ce qui se voit et se corrige.

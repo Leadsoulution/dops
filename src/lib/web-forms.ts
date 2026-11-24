@@ -51,6 +51,13 @@ const ALIAS = {
     "sku", "code_article", "product_code", "article_code",
     "ref_article", "product_sku",
   ],
+  // L'origine du trafic, aux noms des liens publicitaires : la meme que
+  // WooCommerce enregistre, pour que la colonne Plateforme montre le
+  // logo, que la commande vienne d'une boutique ou d'une page faite main.
+  utmSource: ["utm_source", "traffic_source", "source_trafic"],
+  utmMedium: ["utm_medium"],
+  utmCampaign: ["utm_campaign"],
+  utmContent: ["utm_content"],
 } as const;
 
 function lire(corps: Record<string, unknown>, noms: readonly string[]): string {
@@ -236,6 +243,10 @@ export function receptionCommande(
       quartier: lire(corps, ALIAS.quartier) || undefined,
       adresse: lire(corps, ALIAS.adresse) || undefined,
       customerNote: lire(corps, ALIAS.note) || undefined,
+      utmSource: lire(corps, ALIAS.utmSource) || undefined,
+      utmMedium: lire(corps, ALIAS.utmMedium) || undefined,
+      utmCampaign: lire(corps, ALIAS.utmCampaign) || undefined,
+      utmContent: lire(corps, ALIAS.utmContent) || undefined,
     },
   };
 }
