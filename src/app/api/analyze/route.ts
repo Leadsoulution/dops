@@ -14,7 +14,6 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const file = formData.get("image") as File | null;
-    const style = formData.get("style") as string | null;
 
     if (!file) {
       return NextResponse.json(
@@ -55,7 +54,7 @@ export async function POST(request: NextRequest) {
     const description = data.result.description;
 
     return NextResponse.json({ prompt: description });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Unexpected server error" },
       { status: 500 }

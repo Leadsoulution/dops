@@ -3,6 +3,7 @@ import { findLeadByTrackingNumber, updateLead } from "@/lib/supabase/leads";
 import { recordLeadChanges } from "@/lib/supabase/lead-events";
 import { isSupabaseServerConfigured } from "@/lib/supabase/server";
 import { verifyWebhook } from "@/lib/speedaf/client";
+import { getSpeedafSettings } from "@/lib/supabase/speedaf-settings";
 import { enOrdre, latestStatus } from "@/lib/speedaf/status";
 import { delivererFrom } from "@/lib/speedaf/sync";
 import { sendDeliveredPush } from "@/lib/push";
@@ -45,14 +46,42 @@ export async function POST(request: NextRequest) {
 
   const brut = await request.text();
 
-  const secret = process.env.SPEEDAF_SECRET_KEY;
+  /*
+   * La cle de signature se lit d'abord dans les reglages.
+   *
+   * Elle y est saisie depuis l'ecran des integrations, chiffree comme
+   * les jetons publicitaires ; l'environnement du serveur, lui, ne la
+   * porte que sur une installation d'avant cet ecran. Ne regarder que
+   * l'environnement revenait donc a n'avoir aucune cle ici — et a
+   * accepter sans rien verifier n'importe quel appel a cette adresse,
+   * qui marque des commandes livrees, donc encaissees.
+   *
+   * Une notification refusee n'est pas une perte : la synchronisation
+   * repasse toutes les deux minutes et lit les memes statuts chez
+   * Speedaf. Le webhook fait gagner ces deux minutes, pas la verite.
+   */
+  const secret =
+    process.env.SPEEDAF_SECRET_KEY ||
+    (await getSpeedafSettings().catch(() => null))?.secretKey;
+
   if (secret) {
     const signature = request.headers.get("x-speedaf-signature") ?? "";
     const horodatage = request.headers.get("x-speedaf-timestamp") ?? "";
     if (!verifyWebhook(secret, horodatage, brut, signature)) {
-      console.error("[speedaf] notification refusee : signature invalide");
+      // Les deux cas se corrigent differemment : une signature absente
+      // dit que Speedaf n'en envoie pas, une signature invalide dit
+      // que notre cle n'est pas la leur.
+      console.error(
+        signature
+          ? "[speedaf] notification refusee : signature invalide"
+          : "[speedaf] notification refusee : signature absente"
+      );
       return recu(false, "Signature invalide.");
     }
+  } else {
+    console.error(
+      "[speedaf] aucune cle de signature : notification acceptee sans verification"
+    );
   }
 
   let charge: Charge;
