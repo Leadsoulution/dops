@@ -1,6 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   /*
+   * Marque que cette application est tenue a jour par la mise a niveau
+   * de securite de Next.js. L'outil la lit pour savoir qu'il n'a pas a
+   * reproposer le meme travail a chaque build.
+   */
+  experimental: { agentUpgrade: "security" },
+
+  /*
    * L'adresse de suivi envoyee aux clients est "/suivi-F-XXXX" : un
    * seul segment, tiret compris. Next.js ne sait pas rendre une partie
    * de segment dynamique — "[code]" prend le segment entier — donc la
