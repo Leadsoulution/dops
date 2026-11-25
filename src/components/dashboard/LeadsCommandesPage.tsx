@@ -74,7 +74,7 @@ import {
 import { PlatformLogo, SourceLogo, platformLabel } from "./PlatformLogo";
 import { currentProfile } from "@/lib/session";
 import RowActionsMenu from "./RowActionsMenu";
-import CreateCommandeModal from "./CreateCommandeModal";
+import CreateCommandeModal, { generateReference } from "./CreateCommandeModal";
 import OrderDetailsModal from "./OrderDetailsModal";
 import EditOrderModal from "./EditOrderModal";
 import ChangeStatusModal from "./ChangeStatusModal";
@@ -281,6 +281,8 @@ export default function LeadsCommandesPage() {
   const [modal, setModal] = useState<ModalState>(null);
   const [confirmDelete, setConfirmDelete] = useState<Lead | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<Lead | null>(null);
+  const [confirmDuplicate, setConfirmDuplicate] = useState<Lead | null>(null);
+  const [duplicating, setDuplicating] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -797,6 +799,71 @@ export default function LeadsCommandesPage() {
     }
   }
 
+  /**
+   * Recree la commande a l'identique pour le meme client.
+   *
+   * Un client qui recommande, un colis refuse qu'on represente : tout
+   * est deja connu, et ressaisir le nom, le numero, l'adresse, le
+   * produit et le prix est long et se trompe.
+   *
+   * Est copie ce qui decrit la commande : le client, ou il habite, ce
+   * qu'il achete, combien il paye. N'est pas copie ce que la premiere
+   * a vecu : ni sa reference, ni son numero de suivi, ni son statut de
+   * livraison, ni son transporteur. La copie repart a "Nouveau", comme
+   * une commande qu'on vient de saisir.
+   *
+   * L'origine devient "Agent Manual" et la campagne n'est pas reprise :
+   * la copie ne vient pas d'une publicite, et la lui attribuer ferait
+   * porter deux commandes a une annonce qui n'en a amene qu'une.
+   */
+  async function duplicateLead(lead: Lead) {
+    setDuplicating(true);
+    try {
+      const res = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reference: generateReference(),
+          client: lead.client,
+          phone: lead.phone,
+          ville: lead.ville,
+          quartier: lead.quartier,
+          adresse: lead.adresse,
+          customerNote: lead.customerNote,
+          productName: lead.productName,
+          productLabel: lead.productLabel,
+          itemCount: lead.itemCount,
+          parcelType: lead.parcelType,
+          stockItems: lead.stockItems,
+          amount: lead.amount,
+          assignedTo: lead.assignedTo,
+          status: "Nouveau",
+          shipping: "En attente",
+          source: "Agent Manual",
+          date: new Date().toLocaleDateString("fr-FR", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Duplication impossible.");
+      // En tete de liste : c'est la plus recente, et c'est elle qu'on
+      // vient de creer.
+      setLeadsState((prev) => [data.lead, ...prev]);
+      setConfirmDuplicate(null);
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "Duplication impossible."
+      );
+    } finally {
+      setDuplicating(false);
+    }
+  }
+
   async function deleteLead(id: string) {
     const previous = leadsState;
     setLeadsState((prev) => prev.filter((l) => l.id !== id));
@@ -884,6 +951,7 @@ export default function LeadsCommandesPage() {
       onCopyContact: () => {
         navigator.clipboard?.writeText(lead.phone);
       },
+      onDuplicate: () => setConfirmDuplicate(lead),
       onAssign: () => setModal({ type: "assign", leadIds: [lead.id] }),
       onChangeStatus: () => setModal({ type: "status", leadIds: [lead.id] }),
       onDelete: isAdmin ? () => setConfirmDelete(lead) : undefined,
@@ -1828,6 +1896,30 @@ export default function LeadsCommandesPage() {
             }
           }}
           onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+
+      {confirmDuplicate && (
+        <ConfirmDialog
+          title="Dupliquer la commande"
+          message={
+            <>
+              Creer une nouvelle commande pour{" "}
+              <span className="font-medium text-gray-700">
+                {confirmDuplicate.client}
+              </span>
+              , avec le meme produit et le meme prix (
+              <span className="font-medium text-gray-700">
+                {confirmDuplicate.amount}
+              </span>
+              ) ? Elle repart a &laquo;&nbsp;Nouveau&nbsp;&raquo;, sans numero de suivi,
+              sous une nouvelle reference.
+            </>
+          }
+          confirmLabel="Dupliquer"
+          pending={duplicating}
+          onConfirm={() => void duplicateLead(confirmDuplicate)}
+          onCancel={() => setConfirmDuplicate(null)}
         />
       )}
 

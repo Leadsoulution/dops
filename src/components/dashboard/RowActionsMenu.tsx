@@ -6,6 +6,7 @@ import {
   Eye,
   Pencil,
   Copy,
+  CopyPlus,
   Phone,
   Contact,
   UserPlus,
@@ -24,6 +25,8 @@ type RowActionsMenuProps = {
   onCopyContact: () => void;
   onAssign: () => void;
   onChangeStatus: () => void;
+  /** Recreer la meme commande pour le meme client. */
+  onDuplicate: () => void;
   /** Absente pour qui n'a pas le droit de supprimer. */
   onDelete?: () => void;
   onSendToForceLog?: () => void;
@@ -42,6 +45,7 @@ export default function RowActionsMenu({
   onCopyContact,
   onAssign,
   onChangeStatus,
+  onDuplicate,
   onDelete,
   onSendToForceLog,
   onCancelShipment,
@@ -58,6 +62,7 @@ export default function RowActionsMenu({
       { label: "Copier le contact", icon: Contact, onClick: onCopyContact },
     ],
     [
+      { label: "Dupliquer la commande", icon: CopyPlus, onClick: onDuplicate },
       { label: "Assigner", icon: UserPlus, onClick: onAssign },
       { label: "Changer statut", icon: RefreshCw, onClick: onChangeStatus },
       ...(onSendToForceLog

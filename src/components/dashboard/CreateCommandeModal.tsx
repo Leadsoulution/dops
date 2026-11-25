@@ -85,7 +85,7 @@ const SOURCES: { label: string; value: string }[] = [
 ];
 
 /** Reference auto si l'utilisateur n'en saisit pas, au format des existantes. */
-function generateReference() {
+export function generateReference() {
   const now = new Date();
   const suffix = `${String(now.getMonth() + 1).padStart(2, "0")}${String(
     now.getDate()
