@@ -282,6 +282,10 @@ export default function LeadsCommandesPage() {
   const [confirmDelete, setConfirmDelete] = useState<Lead | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<Lead | null>(null);
   const [confirmDuplicate, setConfirmDuplicate] = useState<Lead | null>(null);
+  const [confirmRenvoi, setConfirmRenvoi] = useState<string[] | null>(null);
+  const [renvoi, setRenvoi] = useState(false);
+  /** Resultat d'un renvoi : ce qui est reparti, ce qui ne pouvait pas. */
+  const [notice, setNotice] = useState<string | null>(null);
   const [duplicating, setDuplicating] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -800,6 +804,54 @@ export default function LeadsCommandesPage() {
   }
 
   /**
+   * Renvoie au transporteur des colis qui sont revenus.
+   *
+   * Un colis refuse ou rentre au depot est clos : son numero de suivi
+   * ne bougera plus. Pour que le client soit servi il faut un colis
+   * neuf — mais la commande, elle, reste la meme ici. En creer une
+   * deuxieme compterait deux ventes et deux unites sorties du stock
+   * pour un seul client.
+   *
+   * Les commandes qui ne peuvent pas repartir — colis encore en route,
+   * commande deja livree, ville refusee — sont nommees dans le
+   * compte rendu plutot que silencieusement ignorees.
+   */
+  async function renvoyer(ids: string[]) {
+    setRenvoi(true);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/leads/reship", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Renvoi impossible.");
+
+      const repartis = (data.leads ?? []) as Lead[];
+      setLeadsState((prev) =>
+        prev.map((l) => repartis.find((r) => r.id === l.id) ?? l)
+      );
+
+      const refus = (data.refus ?? []) as { reference: string; raison: string }[];
+      setNotice(
+        [
+          repartis.length > 0
+            ? `${repartis.length} colis reparti${repartis.length > 1 ? "s" : ""}.`
+            : "Aucun colis n'est reparti.",
+          ...refus.map((r) => `${r.reference} : ${r.raison}`),
+        ].join(" ")
+      );
+      setSelectedIds(new Set());
+      setConfirmRenvoi(null);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Renvoi impossible.");
+    } finally {
+      setRenvoi(false);
+    }
+  }
+
+  /**
    * Recree la commande a l'identique pour le meme client.
    *
    * Un client qui recommande, un colis refuse qu'on represente : tout
@@ -1030,6 +1082,19 @@ export default function LeadsCommandesPage() {
           <button
             onClick={() => setLoadError(null)}
             className="shrink-0 rounded-md p-1 text-red-400 hover:bg-red-100"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {notice && (
+        <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-emerald-100 bg-emerald-50 px-3.5 py-2.5">
+          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
+          <p className="min-w-0 flex-1 text-[12.5px] text-emerald-700">{notice}</p>
+          <button
+            onClick={() => setNotice(null)}
+            className="shrink-0 rounded-md p-1 text-emerald-400 hover:bg-emerald-100"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -1306,6 +1371,18 @@ export default function LeadsCommandesPage() {
               {selectedCount > 1 ? "s" : ""}
             </p>
             <div className="flex items-center gap-2">
+              {/*
+                Le renvoi en premier : c'est le geste qu'on vient faire
+                apres avoir coche des colis revenus, les deux autres
+                servent a tout moment.
+              */}
+              <button
+                onClick={() => setConfirmRenvoi(Array.from(selectedIds))}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-[12.5px] font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <Truck className="h-3.5 w-3.5" />
+                Renvoyer
+              </button>
               <button
                 onClick={() =>
                   setModal({ type: "assign", leadIds: Array.from(selectedIds) })
@@ -1896,6 +1973,31 @@ export default function LeadsCommandesPage() {
             }
           }}
           onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+
+      {confirmRenvoi && (
+        <ConfirmDialog
+          title="Renvoyer au transporteur"
+          message={
+            <>
+              Creer un nouveau colis pour{" "}
+              <span className="font-medium text-gray-700">
+                {confirmRenvoi.length}
+              </span>{" "}
+              commande{confirmRenvoi.length > 1 ? "s" : ""} ? Le transporteur
+              recoit un colis neuf, avec son propre code de suivi ; la commande
+              reste la meme ici, seuls son suivi et son livreur changent.
+              <span className="mt-1.5 block text-gray-400">
+                Seuls les colis revenus repartent. Ceux qui sont encore en route
+                sont laisses tels quels, et le compte rendu le dira.
+              </span>
+            </>
+          }
+          confirmLabel="Renvoyer"
+          pending={renvoi}
+          onConfirm={() => void renvoyer(confirmRenvoi)}
+          onCancel={() => setConfirmRenvoi(null)}
         />
       )}
 
