@@ -54,6 +54,12 @@ export const APP_SECTIONS: AppSection[] = [
   { key: "fournisseurs", label: "Fournisseurs", href: "/fournisseurs", group: "OPERATIONS" },
   { key: "villes", label: "Villes de livraison", href: "/villes", group: "DONNEES MAITRES" },
   { key: "finance", label: "Finance", href: "/finance", group: "GESTION" },
+  {
+    key: "multi-agents",
+    label: "Systeme multi-agents",
+    href: "/multi-agents",
+    group: "GESTION",
+  },
   { key: "utilisateurs", label: "Utilisateurs", href: "/utilisateurs", group: "GESTION" },
   { key: "parametres", label: "Parametres", href: "/parametres", group: "GESTION" },
 ];

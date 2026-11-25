@@ -18,6 +18,7 @@ import {
   Wallet,
   UserCog,
   MapPin,
+  Bot,
   Settings,
   LogOut,
   Loader2,
@@ -48,6 +49,7 @@ const ICONS: Record<string, ComponentType<{ className?: string }>> = {
   fournisseurs: Users,
   villes: MapPin,
   finance: Wallet,
+  "multi-agents": Bot,
   utilisateurs: UserCog,
   parametres: Settings,
 };
