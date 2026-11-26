@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAuthClient } from "@/lib/supabase/auth";
 import { getSupabaseServerClient, isSupabaseServerConfigured } from "@/lib/supabase/server";
+import { refusDeConnexion } from "@/lib/supabase/login-error";
 
 /**
  * Connexion par email et mot de passe.
@@ -35,10 +36,25 @@ export async function POST(request: Request) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error || !data.user) {
-    return NextResponse.json(
-      { error: "Email ou mot de passe incorrect." },
-      { status: 401 }
-    );
+    /*
+     * Un refus n'est pas toujours un mauvais mot de passe.
+     *
+     * Quota Supabase depasse, service en panne, trop de tentatives :
+     * tout cela echoue ici aussi. Tout annoncer comme "mot de passe
+     * incorrect" a deja envoye chercher au clavier pendant que
+     * l'application entiere etait hors service.
+     */
+    const refus = refusDeConnexion(error?.status);
+    if (refus.http !== 401) {
+      // La vraie raison reste cote serveur : elle nomme le service en
+      // cause, ce que la page n'a pas a dire a un visiteur.
+      console.error(
+        "[login] Supabase a refuse la connexion :",
+        error?.status,
+        error?.message
+      );
+    }
+    return NextResponse.json({ error: refus.message }, { status: refus.http });
   }
 
   const admin = getSupabaseServerClient();
