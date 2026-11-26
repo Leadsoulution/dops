@@ -195,6 +195,59 @@ export async function listLeads(): Promise<Lead[]> {
 }
 
 /**
+ * Ce que l'ecran surveille d'une commande, et rien d'autre.
+ *
+ * La liste se rafraichissait en relisant les deux mille commandes avec
+ * leurs quarante colonnes, toutes les vingt secondes et pour chaque
+ * onglet ouvert — deux megaoctets a chaque tour pour decouvrir, le
+ * plus souvent, que rien n'avait bouge. Le projet y a laisse son quota
+ * de trafic.
+ *
+ * Six colonnes suffisent a savoir qu'il faut relire : les cinq que la
+ * liste compare, et l'identifiant qui les rattache. Le reste n'est
+ * demande que lorsque quelque chose a change.
+ *
+ * L'ordre est celui de `listLeads`, sans quoi la comparaison rang par
+ * rang verrait changer des commandes qui n'ont fait que se croiser.
+ */
+export type LeadApercu = Pick<
+  Lead,
+  | "id"
+  | "status"
+  | "deliveryStatus"
+  | "paymentStatus"
+  | "trackingNumber"
+  | "assignedTo"
+>;
+
+export async function listLeadApercus(): Promise<LeadApercu[]> {
+  const supabase = getSupabaseServerClient();
+  const data = await fetchAll<{
+    id: string;
+    status: string;
+    delivery_status: string | null;
+    payment_status: string | null;
+    tracking_number: string | null;
+    assigned_to: string | null;
+  }>(() =>
+    supabase
+      .from("leads")
+      .select("id,status,delivery_status,payment_status,tracking_number,assigned_to")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+  );
+
+  return data.map((r) => ({
+    id: r.id,
+    status: r.status as Lead["status"],
+    deliveryStatus: r.delivery_status ?? undefined,
+    paymentStatus: r.payment_status ?? undefined,
+    trackingNumber: r.tracking_number ?? undefined,
+    assignedTo: r.assigned_to ?? "",
+  }));
+}
+
+/**
  * Le nom de chaque campagne et de chaque publicite, par identifiant.
  *
  * Les commandes ne portent que des identifiants numeriques, venus du

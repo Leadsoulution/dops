@@ -255,6 +255,17 @@ export default function LeadsCommandesPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [leadsState, setLeadsState] = useState<Lead[]>([]);
+  /*
+   * L'etat courant, lisible depuis le minuteur.
+   *
+   * Le rafraichissement est installe une seule fois ; sans cette
+   * reference il comparerait toujours la liste du premier rendu, et
+   * redemanderait tout a chaque tour.
+   */
+  const leadsRef = useRef<Lead[]>([]);
+  useEffect(() => {
+    leadsRef.current = leadsState;
+  }, [leadsState]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("Tous");
@@ -365,10 +376,17 @@ export default function LeadsCommandesPage() {
    * Rafraichissement periodique.
    *
    * Une commande arrivee de la boutique, ou un statut change par un
-   * collegue, doit apparaitre sans qu'on recharge la page. On relit la
-   * base toutes les vingt secondes -- une lecture, pas une
+   * collegue, doit apparaitre sans qu'on recharge la page. On regarde
+   * donc toutes les vingt secondes -- une lecture, pas une
    * synchronisation : c'est la surveillance de l'en-tete qui interroge
    * la boutique et le transporteur, plus lentement.
+   *
+   * Ce qu'on relit est un apercu : six colonnes au lieu de quarante.
+   * La liste entiere n'est redemandee que lorsque cet apercu differe
+   * de ce qui est affiche. Relire deux mille commandes completes trois
+   * fois par minute pour constater que rien n'avait bouge a coute au
+   * projet son quota de trafic, et l'application s'est retrouvee
+   * coupee.
    *
    * Rien ne tourne quand l'onglet est en arriere-plan : personne ne
    * regarde, et le telephone a mieux a faire.
@@ -378,31 +396,40 @@ export default function LeadsCommandesPage() {
 
     const timer = setInterval(() => {
       if (document.hidden) return;
-      fetch("/api/leads")
+      fetch("/api/leads/apercu")
         .then((res) => res.json())
-        .then((data) => {
-          if (cancelled || !data.leads) return;
-          setLeadsState((prev) => {
-            const fresh = data.leads as Lead[];
-            // Ne remplace que si quelque chose a change : un nouveau
-            // tableau a chaque tour ferait clignoter la liste et
-            // perdrait la position de defilement.
-            const identique =
-              prev.length === fresh.length &&
-              prev.every((lead, i) => {
-                const f = fresh[i];
-                return (
-                  f &&
-                  f.id === lead.id &&
-                  f.status === lead.status &&
-                  f.deliveryStatus === lead.deliveryStatus &&
-                  f.paymentStatus === lead.paymentStatus &&
-                  f.trackingNumber === lead.trackingNumber &&
-                  f.assignedTo === lead.assignedTo
-                );
-              });
-            return identique ? prev : fresh;
-          });
+        .then(async (data) => {
+          if (cancelled || !data.apercus) return;
+          const apercus = data.apercus as {
+            id: string;
+            status: string;
+            deliveryStatus?: string;
+            paymentStatus?: string;
+            trackingNumber?: string;
+            assignedTo: string;
+          }[];
+
+          // La comparaison porte sur les memes champs qu'avant, rang
+          // par rang : l'apercu arrive dans l'ordre de la liste.
+          const identique =
+            leadsRef.current.length === apercus.length &&
+            leadsRef.current.every((lead, i) => {
+              const a = apercus[i];
+              return (
+                a &&
+                a.id === lead.id &&
+                a.status === lead.status &&
+                a.deliveryStatus === lead.deliveryStatus &&
+                a.paymentStatus === lead.paymentStatus &&
+                a.trackingNumber === lead.trackingNumber &&
+                a.assignedTo === lead.assignedTo
+              );
+            });
+          if (identique) return;
+
+          const complet = await fetch("/api/leads").then((r) => r.json());
+          if (cancelled || !complet.leads) return;
+          setLeadsState(complet.leads as Lead[]);
         })
         .catch(() => {
           /* Reseau coupe : on reessaiera au prochain tour. */

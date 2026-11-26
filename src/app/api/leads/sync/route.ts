@@ -83,7 +83,18 @@ export async function POST() {
      * une fois connu. Le rattrapage s'etale donc sur plusieurs passages
      * plutot que d'inonder l'API a chacun.
      */
-    const livreurs = await collectDeliverers(await listLeads());
+    /*
+     * La liste deja lue, rafraichie de ce qu'on vient d'ecrire.
+     *
+     * Elle etait relue entierement a cet endroit : deux mille
+     * commandes traversaient le reseau une seconde fois, toutes les
+     * deux minutes et pour chaque onglet ouvert. C'est ce genre de
+     * relecture qui a brule le quota de sortie du projet.
+     */
+    const rafraichies = leads.map(
+      (l) => updated.find((u) => u.id === l.id) ?? l
+    );
+    const livreurs = await collectDeliverers(rafraichies);
     for (const [id, changes] of livreurs) await updateLead(id, changes);
 
     void retryPending();

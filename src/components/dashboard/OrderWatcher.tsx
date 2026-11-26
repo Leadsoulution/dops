@@ -17,9 +17,20 @@ import { notify, unlockAudio } from "@/lib/notifications";
  * liste des commandes.
  */
 
-/** Deux minutes : assez pour prevenir vite, assez peu pour ne pas
- * harceler le transporteur et la boutique. */
-const INTERVAL_MS = 120_000;
+/**
+ * Cinq minutes.
+ *
+ * C'etait deux, et chaque tour relit la liste des commandes en entier
+ * — deux mille lignes, pour chaque onglet ouvert. Le projet a fini par
+ * depasser son quota de trafic et par etre coupe.
+ *
+ * Rien n'est perdu a attendre trois minutes de plus : Speedaf pousse
+ * desormais ses changements de statut des qu'ils arrivent, et c'est
+ * lui qui porte tous les colis. Ce tour-ci ne sert plus qu'a rattraper
+ * ce que la notification aurait manque, et a reperer les commandes
+ * nouvelles de la boutique.
+ */
+const INTERVAL_MS = 300_000;
 
 type Snapshot = { status: string; delivered: boolean };
 
@@ -35,7 +46,26 @@ export default function OrderWatcher() {
     const unlock = () => unlockAudio();
     window.addEventListener("pointerdown", unlock, { once: true });
 
+    function programme(delai: number) {
+      clearTimeout(timer);
+      timer = setTimeout(check, delai);
+    }
+
     async function check() {
+      /*
+       * Onglet au second plan : on ne releve rien.
+       *
+       * Un onglet oublie derriere les autres, ou laisse ouvert toute
+       * la nuit, relisait la base toutes les deux minutes pour
+       * personne. C'est la principale depense inutile de
+       * l'application, et elle ne manque a personne : ce qui compte
+       * arrive par notification, et le premier releve se fait des que
+       * l'onglet revient devant.
+       */
+      if (typeof document !== "undefined" && document.hidden) {
+        if (!cancelled) programme(INTERVAL_MS);
+        return;
+      }
       try {
         // Les deux sources d'evenements : la boutique apporte des
         // commandes, le transporteur fait avancer les livraisons.
@@ -96,19 +126,27 @@ export default function OrderWatcher() {
       } catch {
         /* Reseau coupe : on reessaiera au prochain tour. */
       } finally {
-        if (!cancelled) timer = setTimeout(check, INTERVAL_MS);
+        if (!cancelled) programme(INTERVAL_MS);
       }
     }
 
     // Laisse la page s'afficher avant d'aller interroger la boutique et
     // le transporteur : ces deux appels durent plusieurs secondes et
     // retarderaient les commandes qu'on attend a l'ecran.
-    timer = setTimeout(check, 4000);
+    programme(4000);
+
+    // L'onglet revient devant : on reprend sans attendre le tour
+    // suivant, sinon il afficherait jusqu'a cinq minutes de retard.
+    const retour = () => {
+      if (!document.hidden && !cancelled) programme(1500);
+    };
+    document.addEventListener("visibilitychange", retour);
 
     return () => {
       cancelled = true;
       clearTimeout(timer);
       window.removeEventListener("pointerdown", unlock);
+      document.removeEventListener("visibilitychange", retour);
     };
   }, []);
 
