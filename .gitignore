@@ -42,3 +42,6 @@ next-env.d.ts
 
 # claude code runtime state
 .claude/scheduled_tasks.lock
+
+# Identifiants du projet Supabase de remplacement, le temps de la migration.
+.env.nouveau
